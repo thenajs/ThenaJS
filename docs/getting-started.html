@@ -50,41 +50,39 @@
 
       <h2 id="install">Instalação</h2>
       <p>
-        O MimirJs é um monorepo (npm workspaces). Clone o repositório, instale e
-        compile os pacotes:
+        Instale o CLI globalmente e crie um projeto — ele já vem apontando para
+        os pacotes <code>@mimir-js/*</code> (npm público, sem token):
       </p>
-      <pre><code>git clone https://github.com/mimirjs/MimirJS
-cd mimirjs
+      <pre><code>npm install -g @mimir-js/cli
+mimir create my-agent
+cd my-agent
 npm install
-npm run build</code></pre>
-      <p>Requer Node 18+ (recomendado 20+). Não há dependência externa privada.</p>
+npm start                 <span class="cm"># roda o assistente de exemplo</span></code></pre>
+      <p>
+        Requer Node 18+ (recomendado 20+) e um modelo local (ex.:
+        <a href="https://ollama.com">Ollama</a>) — ajuste o provider em
+        <code>src/providers/</code>.
+      </p>
 
       <h2 id="structure">Estrutura do projeto</h2>
       <p>
-        <code>packages/</code> contém o framework; <code>src/</code> é o seu app
-        (por convenção: você escreve agentes, tools, providers e
-        workflows).
+        O <code>mimir create</code> gera um projeto por convenção — você escreve
+        agentes, tools, providers e workflows:
       </p>
-      <pre><code>packages/
-  agentflow/   <span class="cm"># engine: pipeline, providers, estado, tools</span>
-  core/        <span class="cm"># decorators (@Agent/@Workflow/@Tool) + runtime</span>
-  tools/       <span class="cm"># tools prontas (ex.: ShellTool)</span>
-  cli/         <span class="cm"># gerador "mimir g agent &lt;nome&gt;"</span>
-
-src/
+      <pre><code>src/
   agents/
-    explorer/
-      explorer.agent.ts   <span class="cm"># só a lógica</span>
-      explorer.agent.md   <span class="cm"># só o prompt</span>
-  tools/        <span class="cm"># suas tools</span>
-  providers/    <span class="cm"># seus providers</span>
-  workflows/    <span class="cm"># seus workflows</span>
-  config.ts     <span class="cm"># config (report, etc.)</span>
-  main.ts       <span class="cm"># bootstrap</span></code></pre>
+    assistant/
+      assistant.agent.ts   <span class="cm"># só a lógica</span>
+      assistant.agent.md    <span class="cm"># só o prompt</span>
+  tools/         <span class="cm"># suas tools</span>
+  providers/     <span class="cm"># seus providers</span>
+  workflows/     <span class="cm"># seus workflows</span>
+  config.ts      <span class="cm"># log / report</span>
+  main.ts        <span class="cm"># ponto de entrada</span></code></pre>
 
       <h2 id="agents">Criando um agente</h2>
       <p>Gere o esqueleto com a CLI:</p>
-      <pre><code>npx mimir g agent explorer</code></pre>
+      <pre><code>mimir g agent explorer</code></pre>
       <p>
         Isso cria <code>src/agents/explorer/explorer.agent.ts</code> e o
         <code>explorer.agent.md</code> irmão. Um agente é uma classe decorada com
