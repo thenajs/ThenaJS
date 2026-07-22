@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/agentflow" },
+    { "path": "packages/core" },
+    { "path": "packages/tools" },
+    { "path": "packages/cli" }
+  ]
+}

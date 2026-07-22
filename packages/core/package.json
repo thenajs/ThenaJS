@@ -1,0 +1,14 @@
+{
+  "name": "@mimir/core",
+  "version": "0.1.0",
+  "description": "Camada de DX do MimirJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @mimir/agentflow.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "dependencies": {
+    "@mimir/agentflow": "*"
+  }
+}

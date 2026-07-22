@@ -1,0 +1,10 @@
+{
+  "name": "@mimir/cli",
+  "version": "0.1.0",
+  "description": "Gerador de agentes MimirJs (mimir g agent <nome>).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "mimir": "./dist/index.js"
+  }
+}

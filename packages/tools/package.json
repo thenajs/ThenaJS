@@ -1,0 +1,15 @@
+{
+  "name": "@mimir/tools",
+  "version": "0.1.0",
+  "description": "Tools prontas para agentes Mimir (ex.: ShellTool).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "dependencies": {
+    "@mimir/core": "*",
+    "zod": "^4.0.0"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# report de execução gerado (só na raiz — não o código em packages/core/src/report)
+/report/

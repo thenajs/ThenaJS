@@ -1,0 +1,27 @@
+{
+  "name": "mimirjs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "clean": "tsc -b tsconfig.build.json --clean",
+    "typecheck": "npm run build && tsc --noEmit -p tsconfig.json",
+    "start": "npm run build && tsx src/main.ts",
+    "mimir": "node packages/cli/dist/index.js"
+  },
+  "dependencies": {
+    "@mimir/core": "*",
+    "@mimir/tools": "*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@mimir/cli": "*",
+    "@types/node": "^20.19.43",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

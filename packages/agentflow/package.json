@@ -1,0 +1,14 @@
+{
+  "name": "@mimir/agentflow",
+  "version": "0.1.0",
+  "description": "Engine de execução do Mimir: pipeline, providers (Ollama/OpenAI), estado e tools (Zod).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  }
+}

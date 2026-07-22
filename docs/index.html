@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MimirJs — framework para agentes de IA</title>
+<meta name="description" content="MimirJs é um framework em TypeScript para construir agentes de IA de forma declarativa: decorators, prompts em markdown, workflows, hooks e report de execução." />
+<link rel="icon" href="assets/logo.png" />
+<link rel="stylesheet" href="assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <img src="assets/logo.png" alt="MimirJs" />
+      <b>MimirJs</b>
+    </a>
+    <span class="spacer"></span>
+    <a class="link" href="getting-started.html">Documentação</a>
+    <a class="link" href="getting-started.html#hooks">Hooks</a>
+    <a class="link" href="getting-started.html#use-cases">Casos de uso</a>
+    <a class="link" href="https://github.com/castroneto/mimirjs">GitHub</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <img class="hero-logo" src="assets/logo.png" alt="MimirJs" />
+    <div class="eyebrow">TypeScript · declarativo · agentes de IA</div>
+    <h1>MimirJs</h1>
+    <p class="lede">
+      Um framework para construir agentes de IA de forma declarativa:
+      <b>decorators</b>, prompts em <b>markdown</b>,
+      <b>workflows</b> compostos, <b>hooks</b> e report de execução.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="getting-started.html">Começar →</a>
+      <a class="btn" href="https://github.com/castroneto/mimirjs">Ver no GitHub</a>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="code-card" style="max-width:720px;margin:0 auto">
+      <div class="code-head">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span style="margin-left:8px">explorer.agent.ts</span>
+      </div>
+<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@mimir/core"</span>;
+<span class="kw">import</span> { ShellTool } <span class="kw">from</span> <span class="st">"@mimir/tools"</span>;
+<span class="kw">import</span> { LocalOllamaProvider } <span class="kw">from</span> <span class="st">"../../providers/ollama.provider.js"</span>;
+
+<span class="kw">@Agent</span>({
+  provider: LocalOllamaProvider,
+  tools: [ShellTool],
+  prompt: <span class="st">"./explorer.agent.md"</span>, <span class="cm">// o prompt vive no markdown</span>
+})
+<span class="kw">export class</span> ExplorerAgent {}</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="section-title">Por que MimirJs</h2>
+    <p class="section-sub">A lógica no <code>.ts</code>, o prompt no <code>.md</code>, e o framework une os dois.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="ic">🧩</div>
+        <h3>Decorators</h3>
+        <p><code>@Agent</code>, <code>@Tool</code> e <code>@Workflow</code> — declarativo: cada peça em seu lugar.</p>
+      </div>
+      <div class="card">
+        <div class="ic">📝</div>
+        <h3>Prompt em markdown</h3>
+        <p>O <code>.agent.md</code> ao lado do <code>.agent.ts</code> é carregado automaticamente. Sem prompt hardcoded.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🔀</div>
+        <h3>Workflows compostos</h3>
+        <p>Orquestre agentes com <code>parallel([...])</code> e <code>loop({...})</code>, aninhados à vontade.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🪝</div>
+        <h3>Hooks opcionais</h3>
+        <p><code>beforePrompt</code>, <code>beforeTool</code>, <code>afterTool</code>, <code>afterResponse</code>, <code>onError</code> — intercepte o fluxo.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🛠️</div>
+        <h3>Tools com Zod</h3>
+        <p>Uma tool é uma classe <code>@Tool</code> com schema Zod; pode até disparar outro workflow via DI.</p>
+      </div>
+      <div class="card">
+        <div class="ic">📊</div>
+        <h3>Report de execução</h3>
+        <p>Com <code>report: true</code>, gera um HTML estilo Playwright da run — árvore, decisões e I/O.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="section-title">Como funciona</h2>
+    <p class="section-sub">Uma camada de DX sobre o engine <code>@mimir/agentflow</code> (pipeline, providers, estado, tools).</p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">arquitetura</span></div>
+<pre><code>@Workflow  →  orquestra os agentes (sequência / parallel / loop)
+   └─ @Agent    →  lógica no .ts + prompt no .md
+        └─ provider.chat  →  chama o modelo (Ollama / OpenAI)
+             └─ @Tool     →  executa a ação (schema Zod)</code></pre>
+    </div>
+    <div style="margin-top:22px;display:flex;gap:12px;flex-wrap:wrap">
+      <a class="btn primary" href="getting-started.html">Ler a documentação →</a>
+      <a class="btn" href="getting-started.html#best-practices">Boas práticas</a>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>MimirJs — framework para agentes de IA em TypeScript.</span>
+    <span><a href="getting-started.html">Documentação</a> · <a href="https://github.com/castroneto/mimirjs">GitHub</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
