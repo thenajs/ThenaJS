@@ -1,4 +1,4 @@
-import { Agent } from "@mimir/core";
+import { Agent } from "@mimir-js/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 
 @Agent({

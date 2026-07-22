@@ -1,14 +1,26 @@
 {
-  "name": "@mimir/core",
+  "name": "@mimir-js/core",
   "version": "0.1.0",
-  "description": "Camada de DX do MimirJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @mimir/agentflow.",
+  "description": "Camada de DX do MimirJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @mimir-js/agentflow.",
+  "license": "MIT",
+  "author": "castroneto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mimirjs/MimirJS.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/mimirjs/MimirJS#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js"
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@mimir/agentflow": "*"
+    "@mimir-js/agentflow": "^0.1.0"
   }
 }

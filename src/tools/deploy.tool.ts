@@ -1,4 +1,4 @@
-import { Tool, WorkflowRuntime } from "@mimir/core";
+import { Tool, WorkflowRuntime } from "@mimir-js/core";
 import { z } from "zod";
 
 import { DeployWorkflow } from "../workflows/deploy.workflow.js";

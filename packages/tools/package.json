@@ -1,15 +1,27 @@
 {
-  "name": "@mimir/tools",
+  "name": "@mimir-js/tools",
   "version": "0.1.0",
-  "description": "Tools prontas para agentes Mimir (ex.: ShellTool).",
+  "description": "Tools prontas para agentes MimirJs (ex.: ShellTool).",
+  "license": "MIT",
+  "author": "castroneto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mimirjs/MimirJS.git",
+    "directory": "packages/tools"
+  },
+  "homepage": "https://github.com/mimirjs/MimirJS#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js"
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@mimir/core": "*",
+    "@mimir-js/core": "^0.1.0",
     "zod": "^4.0.0"
   }
 }

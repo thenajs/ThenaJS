@@ -1,4 +1,4 @@
-import { Workflow, parallel, loop } from "@mimir/core";
+import { Workflow, parallel, loop } from "@mimir-js/core";
 import { ExplorerAgent } from "../agents/explorer/explorer.agent.js";
 import { PlannerAgent } from "../agents/planner/planner.agent.js";
 import { ReviewerAgent } from "../agents/reviewer/reviewer.agent.js";

@@ -1,4 +1,4 @@
-import { Tool } from "@mimir/core";
+import { Tool } from "@mimir-js/core";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 

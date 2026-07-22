@@ -1,4 +1,4 @@
-import { OllamaProvider } from "@mimir/core";
+import { OllamaProvider } from "@mimir-js/core";
 
 /**
  * Exemplo de provider. Um provider é uma classe (aqui, subclasse de um

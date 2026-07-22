@@ -1,4 +1,4 @@
-import type { PipelineContext, Providers, ToolType } from "@mimir/agentflow";
+import type { PipelineContext, Providers, ToolType } from "@mimir-js/agentflow";
 
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
@@ -25,7 +25,7 @@ export type ToolInput = ToolType | ToolClass;
 
 /** Configuração passada para `@Agent({ ... })`. */
 export interface AgentConfig {
-  /** Provider criado/utilizado através do `@mimir/agentflow`. */
+  /** Provider criado/utilizado através do `@mimir-js/agentflow`. */
   provider: ProviderInput;
   /** Tools injetadas para o agente. */
   tools?: ToolInput[];

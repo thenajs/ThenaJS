@@ -1,12 +1,24 @@
 {
-  "name": "@mimir/agentflow",
+  "name": "@mimir-js/agentflow",
   "version": "0.1.0",
-  "description": "Engine de execução do Mimir: pipeline, providers (Ollama/OpenAI), estado e tools (Zod).",
+  "description": "Engine de execução do MimirJs: pipeline, providers (Ollama/OpenAI), estado e tools (Zod).",
+  "license": "MIT",
+  "author": "castroneto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mimirjs/MimirJS.git",
+    "directory": "packages/agentflow"
+  },
+  "homepage": "https://github.com/mimirjs/MimirJS#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "zod": "^4.0.0"

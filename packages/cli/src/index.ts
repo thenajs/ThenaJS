@@ -1,40 +1,100 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
-import { agentMdTemplate, agentTsTemplate } from "./templates.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  agentMdTemplate,
+  agentTsTemplate,
+  projectFiles,
+} from "./templates.js";
+
+function version(): string {
+  try {
+    const pkg = fileURLToPath(new URL("../package.json", import.meta.url));
+    return JSON.parse(readFileSync(pkg, "utf-8")).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 function usage(): void {
-  console.log(`Mimir CLI
+  console.log(`MimirJs CLI
 
 Uso:
-  mimir g agent <nome>       Gera um agente em src/agents/<nome>/
+  mimir create <nome>        Cria um projeto novo em ./<nome>
+  mimir g agent <nome>       Gera um agente em src/agents/<nome>/ (dentro do projeto)
 
-Exemplo:
+Opções:
+  -v, --version              Mostra a versão
+  -h, --help                 Mostra esta ajuda
+
+Exemplos:
+  mimir create my-agent
   mimir g agent explorer
 `);
 }
 
-function generateAgent(name: string): void {
-  const dir = join(process.cwd(), "src", "agents", name);
+/** Escreve um arquivo criando as pastas necessárias e loga o caminho. */
+function write(root: string, path: string, content: string): void {
+  const full = join(root, path);
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, content);
+  console.log(`  CREATE ${relative(process.cwd(), full)}`);
+}
+
+function create(name: string): void {
+  const dir = join(process.cwd(), name);
   if (existsSync(dir)) {
-    console.error(`Erro: o agente já existe em ${relative(process.cwd(), dir)}`);
+    console.error(`Erro: o diretório "${name}" já existe.`);
     process.exit(1);
   }
+  console.log(`Criando o projeto MimirJs "${name}"…\n`);
+  for (const file of projectFiles(name)) {
+    write(dir, file.path, file.content);
+  }
+  console.log(`\n✔ Pronto! Próximos passos:
 
-  mkdirSync(dir, { recursive: true });
-  const tsFile = join(dir, `${name}.agent.ts`);
-  const mdFile = join(dir, `${name}.agent.md`);
-  writeFileSync(tsFile, agentTsTemplate(name));
-  writeFileSync(mdFile, agentMdTemplate(name));
+  cd ${name}
+  npm install
+  npm start
+`);
+}
 
-  console.log(`CREATE ${relative(process.cwd(), tsFile)}`);
-  console.log(`CREATE ${relative(process.cwd(), mdFile)}`);
+function generateAgent(name: string): void {
+  const base = join(process.cwd(), "src", "agents", name);
+  if (existsSync(base)) {
+    console.error(`Erro: o agente já existe em ${relative(process.cwd(), base)}`);
+    process.exit(1);
+  }
+  write(base, `${name}.agent.ts`, agentTsTemplate(name));
+  write(base, `${name}.agent.md`, agentMdTemplate(name));
 }
 
 function main(): void {
-  const [command, type, name] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const [command, ...rest] = args;
+
+  if (command === "-v" || command === "--version") {
+    console.log(version());
+    return;
+  }
+  if (!command || command === "-h" || command === "--help") {
+    usage();
+    process.exit(command ? 0 : 1);
+  }
+
+  if (command === "create" || command === "new") {
+    const name = rest[0];
+    if (!name) {
+      console.error("Erro: informe o nome do projeto. Ex.: mimir create my-agent");
+      process.exit(1);
+    }
+    create(name);
+    return;
+  }
 
   if (command === "g" || command === "generate") {
+    const [type, name] = rest;
     if (type === "agent" && name) {
       generateAgent(name);
       return;
@@ -42,7 +102,7 @@ function main(): void {
   }
 
   usage();
-  process.exit(command ? 1 : 0);
+  process.exit(1);
 }
 
 main();

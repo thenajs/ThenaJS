@@ -15,7 +15,7 @@
     <span class="spacer"></span>
     <a class="link" href="../getting-started.html">Documentação</a>
     <a class="link" href="index.html">Conceitos</a>
-    <a class="link" href="https://github.com/castroneto/mimirjs">GitHub</a>
+    <a class="link" href="https://github.com/mimirjs/MimirJS">GitHub</a>
   </div>
 </header>
 
@@ -33,13 +33,13 @@
 <pre><code>seu app (src/)            agents · tools · providers · workflows · config · main
      │  usa
      ▼
-@mimir/core   (DX)        @Agent · @Tool · @Workflow · hooks · bootstrap · report
+@mimir-js/core   (DX)        @Agent · @Tool · @Workflow · hooks · bootstrap · report
      │  usa
      ▼
-@mimir/agentflow (engine) Pipeline · Providers · StateManager · tools · markdown</code></pre>
+@mimir-js/agentflow (engine) Pipeline · Providers · StateManager · tools · markdown</code></pre>
     </div>
 
-    <h3>@mimir/agentflow — o engine</h3>
+    <h3>@mimir-js/agentflow — o engine</h3>
     <p>
       Faz o trabalho pesado e não conhece decorators. Expõe o <code>Pipeline</code>
       (com <code>parallel</code>/<code>loop</code>), o <code>StateManager</code>
@@ -48,7 +48,7 @@
       <code>messages</code> e devolve um turno.
     </p>
 
-    <h3>@mimir/core — a camada de DX</h3>
+    <h3>@mimir-js/core — a camada de DX</h3>
     <p>
       É o que você importa. Transforma classes decoradas em execução: o
       <code>@Agent</code> carrega o prompt, o <code>@Tool</code> vira uma

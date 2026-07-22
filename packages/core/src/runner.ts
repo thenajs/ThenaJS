@@ -1,5 +1,5 @@
-import { Pipeline, Providers, StateManager } from "@mimir/agentflow";
-import type { Message, PipelineContext, Step, ToolType } from "@mimir/agentflow";
+import { Pipeline, Providers, StateManager } from "@mimir-js/agentflow";
+import type { Message, PipelineContext, Step, ToolType } from "@mimir-js/agentflow";
 import {
   getAgentMetadata,
   getToolMetadata,
@@ -64,7 +64,7 @@ function resolveTool(input: ToolInput): ToolType {
   const config = getToolMetadata(input);
   if (!config) {
     throw new Error(
-      `[Mimir] A classe "${input.name}" não está decorada com @Tool().`,
+      `[mimir] A classe "${input.name}" não está decorada com @Tool().`,
     );
   }
   const instance = new (input as ToolClass)(workflowRuntime);
@@ -220,7 +220,7 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
 
 /**
  * Executa um único agente. Toda a orquestração (pipeline, estado, contexto)
- * fica no `@mimir/agentflow`; o framework só monta as peças a partir
+ * fica no `@mimir-js/agentflow`; o framework só monta as peças a partir
  * dos metadados do `@Agent`.
  */
 export async function run<T = string>(
