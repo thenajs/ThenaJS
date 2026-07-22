@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workflows — MimirJs</title>
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="MimirJs" /><b>MimirJs</b></a>
+    <span class="spacer"></span>
+    <a class="link" href="../getting-started.html">Documentação</a>
+    <a class="link" href="index.html">Conceitos</a>
+    <a class="link" href="https://github.com/castroneto/mimirjs">GitHub</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap" style="max-width:840px;padding-top:32px">
+    <p><a href="index.html">← Conceitos</a></p>
+    <h2 class="section-title">Workflows</h2>
+    <p class="section-sub">
+      Um workflow <b>orquestra</b> vários agentes num único pipeline, que
+      compartilha o mesmo estado. Os passos ficam em <code>steps</code> e são
+      combináveis e aninháveis.
+    </p>
+
+    <h3>Os três tipos de passo</h3>
+    <ul>
+      <li><b>agente</b> (a classe) — passo <b>sequencial</b>; a saída de um alimenta o próximo;</li>
+      <li><code>parallel([...])</code> — passos <b>concorrentes</b> sobre o mesmo contexto;</li>
+      <li><code>loop({ steps, until, maxIterations })</code> — <b>repete</b> até <code>until(ctx)</code> ou o limite.</li>
+    </ul>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">explorer.workflow.ts</span></div>
+<pre><code><span class="kw">@Workflow</span>({
+  steps: [
+    PlannerAgent,
+    loop({
+      maxIterations: 5,
+      until: (ctx) =&gt; ctx.reviewApproved,
+      steps: [ parallel([ExplorerAgent, ReviewerAgent]) ],
+    }),
+  ],
+})
+<span class="kw">export class</span> ExplorerWorkflow {}</code></pre>
+    </div>
+
+    <h3>Estado compartilhado</h3>
+    <p>
+      Todos os passos rodam sobre o mesmo <a href="state-memory.html">estado</a>.
+      Cada agente adiciona seu turno ao <code>history</code>, então o próximo
+      agente já "vê" a conversa até ali. O <code>memory</code> inicial é semeado
+      pelo <code>input</code>/<code>memory</code> do <code>run</code>.
+    </p>
+
+    <h3>Condição do loop</h3>
+    <p>
+      O <code>until</code> lê o <code>ctx</code>. Para pará-lo por lógica (e não só
+      por <code>maxIterations</code>), um agente precisa <b>gravar</b> o campo lido
+      — por exemplo, um <code>run(input, ctx)</code> que faz
+      <code>ctx.reviewApproved = true</code>. O <code>maxIterations</code> é a rede
+      de segurança.
+    </p>
+
+    <h3>Paralelo: cuidado com a saída</h3>
+    <div class="note">
+      No <code>parallel</code>, os agentes rodam sobre a <b>mesma</b> entrada e
+      todos escrevem em <code>ctx.output</code> (a última escrita vence). Para ler
+      resultados de agentes paralelos, use o <code>ctx.state</code> (o
+      <code>history</code> acumula os turnos de todos).
+    </div>
+
+    <h3>Workflows aninhados</h3>
+    <p>
+      Uma <a href="tools.html">tool</a> pode receber o <code>WorkflowRuntime</code>
+      e disparar outro workflow — útil quando uma decisão do agente inicia um
+      processo inteiro (ex.: um deploy).
+    </p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>MimirJs</span>
+    <span><a href="providers.html">← Providers</a> · <a href="state-memory.html">Estado &amp; memória →</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

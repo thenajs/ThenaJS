@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hooks — MimirJs</title>
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="MimirJs" /><b>MimirJs</b></a>
+    <span class="spacer"></span>
+    <a class="link" href="../getting-started.html">Documentação</a>
+    <a class="link" href="index.html">Conceitos</a>
+    <a class="link" href="https://github.com/castroneto/mimirjs">GitHub</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap" style="max-width:840px;padding-top:32px">
+    <p><a href="index.html">← Conceitos</a></p>
+    <h2 class="section-title">Hooks</h2>
+    <p class="section-sub">
+      Métodos <b>opcionais</b> que a classe do agente declara para interceptar e
+      manipular o fluxo padrão. O runtime chama só o que existir.
+    </p>
+
+    <table>
+      <tr><th>Hook</th><th>Quando</th><th>Contrato</th></tr>
+      <tr><td><code>beforePrompt(prompt, ctx)</code></td><td>antes de enviar ao modelo</td><td>retorna o prompt (transforma)</td></tr>
+      <tr><td><code>beforeTool(call, ctx)</code></td><td>antes da tool</td><td>troca os args, ou <code>throw</code> cancela</td></tr>
+      <tr><td><code>afterTool(result, ctx)</code></td><td>depois da tool</td><td>retorno substitui o output</td></tr>
+      <tr><td><code>afterResponse(response, ctx)</code></td><td>na resposta do passo</td><td>retorna a resposta (transforma)</td></tr>
+      <tr><td><code>onError(error, ctx)</code></td><td>em erro no fluxo</td><td>retorno vira fallback</td></tr>
+    </table>
+
+    <div class="note">
+      <b>Contrato dos transformadores:</b> retornou um valor → <b>substitui</b>;
+      retornou <code>undefined</code> → <b>mantém</b> o original.
+    </div>
+
+    <h3>Exemplo</h3>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">com hooks</span></div>
+<pre><code><span class="kw">export class</span> ExplorerAgent <span class="kw">implements</span> AgentHooks {
+  <span class="kw">async</span> beforePrompt(prompt: string) {
+    <span class="kw">return</span> `${prompt}\n\n[data] ${<span class="kw">new</span> Date().toISOString().slice(0, 10)}`;
+  }
+  <span class="kw">async</span> beforeTool(call: ToolCall) {
+    <span class="kw">const</span> { command } = call.args <span class="kw">as</span> { command: string };
+    <span class="kw">if</span> (/\brm\b|sudo/.test(command)) <span class="kw">throw new</span> Error(<span class="st">"bloqueado"</span>); <span class="cm">// guardrail</span>
+  }
+  <span class="kw">async</span> onError() {
+    <span class="kw">return</span> <span class="st">"Não consegui completar agora."</span>; <span class="cm">// fallback</span>
+  }
+}</code></pre>
+    </div>
+
+    <h3>Ordem de disparo</h3>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">fluxo</span></div>
+<pre><code>beforePrompt → chat [ beforeTool → execute → afterTool ] → afterResponse
+                                   (qualquer throw) → onError</code></pre>
+    </div>
+
+    <h3>Escape hatch</h3>
+    <p>
+      Se a classe define <code>run(input, ctx)</code>, ela assume o <b>controle
+      total</b> do passo e os hooks automáticos não são chamados. Use quando
+      quiser orquestrar você mesmo.
+    </p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>MimirJs</span>
+    <span><a href="state-memory.html">← Estado &amp; memória</a> · <a href="report.html">Report →</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

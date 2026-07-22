@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arquitetura — MimirJs</title>
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="MimirJs" /><b>MimirJs</b></a>
+    <span class="spacer"></span>
+    <a class="link" href="../getting-started.html">Documentação</a>
+    <a class="link" href="index.html">Conceitos</a>
+    <a class="link" href="https://github.com/castroneto/mimirjs">GitHub</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap" style="max-width:840px;padding-top:32px">
+    <p><a href="index.html">← Conceitos</a></p>
+    <h2 class="section-title">Arquitetura</h2>
+    <p class="section-sub">
+      O MimirJs é dividido em três camadas: um <b>engine</b> de execução, uma
+      camada de <b>DX</b> (decorators + runtime) por cima, e o <b>seu app</b>.
+    </p>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">camadas</span></div>
+<pre><code>seu app (src/)            agents · tools · providers · workflows · config · main
+     │  usa
+     ▼
+@mimir/core   (DX)        @Agent · @Tool · @Workflow · hooks · bootstrap · report
+     │  usa
+     ▼
+@mimir/agentflow (engine) Pipeline · Providers · StateManager · tools · markdown</code></pre>
+    </div>
+
+    <h3>@mimir/agentflow — o engine</h3>
+    <p>
+      Faz o trabalho pesado e não conhece decorators. Expõe o <code>Pipeline</code>
+      (com <code>parallel</code>/<code>loop</code>), o <code>StateManager</code>
+      (estado da conversa), os <code>Providers</code> (Ollama/OpenAI) e o tipo
+      <code>ToolType</code>. É <b>baseado em mensagens</b>: o provider recebe
+      <code>messages</code> e devolve um turno.
+    </p>
+
+    <h3>@mimir/core — a camada de DX</h3>
+    <p>
+      É o que você importa. Transforma classes decoradas em execução: o
+      <code>@Agent</code> carrega o prompt, o <code>@Tool</code> vira uma
+      <code>ToolType</code>, o <code>@Workflow</code> monta os passos, e o runtime
+      (<code>bootstrapWorkflow</code>/<code>runWorkflow</code>) roda tudo sobre o
+      engine — chamando os <a href="hooks.html">hooks</a> e, opcionalmente,
+      gerando o <a href="report.html">report</a>.
+    </p>
+
+    <h3>Seu app — <code>src/</code></h3>
+    <p>
+      Onde você escreve agentes, tools, providers e workflows por convenção. O
+      framework é uma dependência; você só declara as peças.
+    </p>
+
+    <h3>O caminho de uma execução</h3>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">fluxo</span></div>
+<pre><code>bootstrapWorkflow(WF, config)
+  → runWorkflow  →  Pipeline com os steps do @Workflow
+       para cada agente:
+         monta messages = [system (prompt do .md), ...estado]
+         provider.chat({ tools, messages })  →  { assistant, tool? }
+         anexa os turnos ao history  →  alimenta o próximo passo</code></pre>
+    </div>
+    <div class="note">
+      Como o provider é <b>baseado em mensagens</b> e os turnos vão para o
+      <code>history</code>, os agentes de um workflow conversam entre si pelo
+      estado — não por variáveis soltas. Veja
+      <a href="state-memory.html">Estado &amp; memória</a>.
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>MimirJs</span>
+    <span><a href="index.html">Conceitos</a> · <a href="agents.html">Agentes →</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
