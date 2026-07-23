@@ -23,25 +23,25 @@ export function consoleLogger(verbose = false): (event: ExecutionEvent) => void 
   return (e) => {
     const indent = "  ".repeat(e.depth);
     if (e.phase === "start") {
-      console.log(`[mimir] ${indent}▸ ${label(e)}`);
+      console.log(`[thena] ${indent}▸ ${label(e)}`);
       return;
     }
     const mark = e.status === "error" ? "✗" : "✓";
-    console.log(`[mimir] ${indent}◂ ${label(e)}  ${ms(e.durationMs)} ${mark}`);
+    console.log(`[thena] ${indent}◂ ${label(e)}  ${ms(e.durationMs)} ${mark}`);
 
     if (!verbose || !e.data) return;
     const d = e.data;
     if (e.kind === "chat") {
-      if (d.toolCall != null) console.log(`[mimir] ${indent}  ↳ decisão: ${short(d.toolCall)}`);
+      if (d.toolCall != null) console.log(`[thena] ${indent}  ↳ decisão: ${short(d.toolCall)}`);
       if (d.response != null && String(d.response).length)
-        console.log(`[mimir] ${indent}  ↳ resposta: ${short(d.response)}`);
+        console.log(`[thena] ${indent}  ↳ resposta: ${short(d.response)}`);
     }
     if (e.kind === "tool") {
-      if (d.input != null) console.log(`[mimir] ${indent}  ↳ input: ${short(d.input)}`);
-      if (d.output != null) console.log(`[mimir] ${indent}  ↳ output: ${short(d.output)}`);
+      if (d.input != null) console.log(`[thena] ${indent}  ↳ input: ${short(d.input)}`);
+      if (d.output != null) console.log(`[thena] ${indent}  ↳ output: ${short(d.output)}`);
     }
     if (e.status === "error" && e.error) {
-      console.log(`[mimir] ${indent}  ↳ erro: ${short(e.error)}`);
+      console.log(`[thena] ${indent}  ↳ erro: ${short(e.error)}`);
     }
   };
 }

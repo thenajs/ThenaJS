@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { Tool } from "@mimir-js/core";
+import { Tool } from "@thenajs/core";
 import { z } from "zod";
 
 const run = promisify(exec);

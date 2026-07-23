@@ -14,7 +14,7 @@ function extractPath(frame: string): string | null {
 /**
  * Descobre o arquivo `.agent.ts` que chamou o decorator, inspecionando o
  * stack trace. Pula os frames internos do framework e os do Node, retornando
- * o primeiro arquivo do usuário. É assim que o Mimir encontra o `.agent.md`
+ * o primeiro arquivo do usuário. É assim que o Thena encontra o `.agent.md`
  * irmão sem que o caminho seja informado.
  *
  * Filtra por nome de arquivo (não por diretório) para ser imune a source maps,

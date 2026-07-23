@@ -13,13 +13,13 @@ export function classNameFromAgent(name: string): string {
 }
 
 // --------------------------------------------------------------------------
-// `mimir generate agent <nome>` — arquivos de um agente (dentro de um projeto)
+// `thena generate agent <nome>` — arquivos de um agente (dentro de um projeto)
 // --------------------------------------------------------------------------
 
 /** Conteúdo inicial do `<name>.agent.ts` — a classe decorada com @Agent. */
 export function agentTsTemplate(name: string): string {
   const className = classNameFromAgent(name);
-  return `import { Agent } from "@mimir-js/core";
+  return `import { Agent } from "@thenajs/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 
 @Agent({
@@ -42,7 +42,7 @@ Descreva aqui, em linguagem natural, o objetivo e o comportamento do agente.
 }
 
 // --------------------------------------------------------------------------
-// `mimir create <nome>` — projeto novo completo
+// `thena create <nome>` — projeto novo completo
 // --------------------------------------------------------------------------
 
 export interface ScaffoldFile {
@@ -50,10 +50,10 @@ export interface ScaffoldFile {
   content: string;
 }
 
-/** Versões dos pacotes @mimir-js referenciadas pelo projeto gerado. */
-const MIMIR_VERSION = "^0.1.0";
+/** Versões dos pacotes @thenajs referenciadas pelo projeto gerado. */
+const THENA_VERSION = "^0.1.0";
 
-/** Todos os arquivos de um projeto MimirJs novo. */
+/** Todos os arquivos de um projeto ThenaJs novo. */
 export function projectFiles(name: string): ScaffoldFile[] {
   const pkg = {
     name,
@@ -68,8 +68,8 @@ export function projectFiles(name: string): ScaffoldFile[] {
       "start:prod": "node dist/main.js",
     },
     dependencies: {
-      "@mimir-js/core": MIMIR_VERSION,
-      "@mimir-js/tools": MIMIR_VERSION,
+      "@thenajs/core": THENA_VERSION,
+      "@thenajs/tools": THENA_VERSION,
       zod: "^4.0.0",
     },
     devDependencies: {
@@ -109,7 +109,7 @@ export function projectFiles(name: string): ScaffoldFile[] {
       path: "README.md",
       content: `# ${name}
 
-Projeto MimirJs. Um assistente pronto para editar.
+Projeto ThenaJs. Um assistente pronto para editar.
 
 ## Rodando
 
@@ -143,12 +143,12 @@ src/
   main.ts                 # ponto de entrada
 \`\`\`
 
-Gere mais agentes com \`mimir g agent <nome>\`.
+Gere mais agentes com \`thena g agent <nome>\`.
 `,
     },
     {
       path: "src/main.ts",
-      content: `import { bootstrapWorkflow } from "@mimir-js/core";
+      content: `import { bootstrapWorkflow } from "@thenajs/core";
 import { AssistantWorkflow } from "./workflows/assistant.workflow.js";
 import { config } from "./config.js";
 
@@ -161,9 +161,9 @@ await app.run({ input: { message } });
     },
     {
       path: "src/config.ts",
-      content: `import type { MimirConfig } from "@mimir-js/core";
+      content: `import type { ThenaConfig } from "@thenajs/core";
 
-export const config: MimirConfig = {
+export const config: ThenaConfig = {
   // Loga ao vivo o que está sendo executado. Use "verbose" para incluir o
   // conteúdo, ou uma função (event) => void como sink customizado.
   log: true,
@@ -174,7 +174,7 @@ export const config: MimirConfig = {
     },
     {
       path: "src/providers/ollama.provider.ts",
-      content: `import { OllamaProvider } from "@mimir-js/core";
+      content: `import { OllamaProvider } from "@thenajs/core";
 
 /** Ajuste o host/model para o seu ambiente. */
 export class LocalOllamaProvider extends OllamaProvider {
@@ -186,7 +186,7 @@ export class LocalOllamaProvider extends OllamaProvider {
     },
     {
       path: "src/agents/assistant/assistant.agent.ts",
-      content: `import { Agent } from "@mimir-js/core";
+      content: `import { Agent } from "@thenajs/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 
 @Agent({
@@ -207,7 +207,7 @@ concisa e objetiva.
     },
     {
       path: "src/workflows/assistant.workflow.ts",
-      content: `import { Workflow } from "@mimir-js/core";
+      content: `import { Workflow } from "@thenajs/core";
 import { AssistantAgent } from "../agents/assistant/assistant.agent.js";
 
 @Workflow({

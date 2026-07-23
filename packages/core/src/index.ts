@@ -1,4 +1,4 @@
-// API pública do @mimir-js/core — a camada de DX sobre o @mimir-js/agentflow.
+// API pública do @thenajs/core — a camada de DX sobre o @thenajs/agentflow.
 
 export { Agent } from "./agent.decorator.js";
 export { Workflow } from "./workflow.decorator.js";
@@ -6,7 +6,7 @@ export { Tool } from "./tool.decorator.js";
 export { parallel, loop } from "./steps.js";
 export { run, runWorkflow, buildAgentStep, WorkflowRuntime } from "./runner.js";
 export { bootstrapWorkflow } from "./bootstrap.js";
-export type { MimirConfig, ReportOptions, LogConfig } from "./report/config.js";
+export type { ThenaConfig, ReportOptions, LogConfig } from "./report/config.js";
 export type { ExecutionEvent, ExecutionNode, ExecutionKind } from "./report/recorder.js";
 export { getAgentMetadata, getWorkflowMetadata } from "./metadata.js";
 
@@ -42,7 +42,7 @@ export {
   StateManager,
   Pipeline,
   md,
-} from "@mimir-js/agentflow";
+} from "@thenajs/agentflow";
 
 export type {
   ToolType,
@@ -54,4 +54,4 @@ export type {
   ChatTurn,
   OllamaCredentials,
   OpenAICredentials,
-} from "@mimir-js/agentflow";
+} from "@thenajs/agentflow";

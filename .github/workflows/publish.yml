@@ -1,10 +1,10 @@
 name: Publish packages
 
-# Publica os pacotes @mimir-js/* no npm público quando você cria uma tag "v*"
+# Publica os pacotes @thenajs/* no npm público quando você cria uma tag "v*"
 # (ex.: git tag v0.1.1 && git push --tags) ou manualmente pela aba Actions.
 #
 # Pré-requisitos:
-#   - Secret NPM_TOKEN (npm automation token, com acesso à org mimir-js).
+#   - Secret NPM_TOKEN (npm automation token, com acesso à org thenajs).
 #   - Bump da versão nos package.json antes de taggar (versão já publicada falha).
 
 on:
@@ -37,8 +37,8 @@ jobs:
       - name: Publish (na ordem de dependência)
         run: |
           for pkg in agentflow core tools cli; do
-            echo "→ publicando @mimir-js/$pkg"
-            npm publish --workspace "@mimir-js/$pkg" --provenance --access public
+            echo "→ publicando @thenajs/$pkg"
+            npm publish --workspace "@thenajs/$pkg" --provenance --access public
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,6 +1,6 @@
-import type { MimirConfig } from "@mimir-js/core";
+import type { ThenaConfig } from "@thenajs/core";
 
-export const config: MimirConfig = {
+export const config: ThenaConfig = {
   // Loga ao vivo o que está sendo executado (agentes, chats, tools).
   // Use "verbose" para incluir o conteúdo, ou uma função como sink customizado.
   log: true,

@@ -1,20 +1,20 @@
 {
-  "name": "@mimir-js/cli",
+  "name": "@thenajs/cli",
   "version": "0.1.1",
-  "description": "CLI do MimirJs: cria projetos (mimir create) e gera agentes (mimir g agent).",
+  "description": "CLI do ThenaJs: cria projetos (thena create) e gera agentes (thena g agent).",
   "license": "MIT",
   "author": "castroneto",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mimirjs/MimirJS.git",
+    "url": "git+https://github.com/thenajs/ThenaJS.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/mimirjs/MimirJS#readme",
-  "keywords": ["mimirjs", "ai", "agents", "cli", "scaffold"],
+  "homepage": "https://github.com/thenajs/ThenaJS#readme",
+  "keywords": ["thenajs", "ai", "agents", "cli", "scaffold"],
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "mimir": "./dist/index.js"
+    "thena": "./dist/index.js"
   },
   "files": ["dist"],
   "publishConfig": {

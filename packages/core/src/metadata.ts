@@ -17,7 +17,7 @@ export function getAgentMetadata(target: Function): AgentMetadata {
   const meta = agents.get(target);
   if (!meta) {
     throw new Error(
-      `[mimir] A classe "${target.name}" não está decorada com @Agent().`,
+      `[thena] A classe "${target.name}" não está decorada com @Agent().`,
     );
   }
   return meta;
@@ -34,7 +34,7 @@ export function getWorkflowMetadata(target: Function): WorkflowMetadata {
   const meta = workflows.get(target);
   if (!meta) {
     throw new Error(
-      `[mimir] A classe "${target.name}" não está decorada com @Workflow().`,
+      `[thena] A classe "${target.name}" não está decorada com @Workflow().`,
     );
   }
   return meta;

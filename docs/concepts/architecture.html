@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Arquitetura — MimirJs</title>
+<title>Arquitetura — ThenaJs</title>
 <link rel="icon" href="../assets/logo.png" />
 <link rel="stylesheet" href="../assets/docs.css" />
 </head>
@@ -11,11 +11,11 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="MimirJs" /><b>MimirJs</b></a>
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="ThenaJs" /><b>ThenaJs</b></a>
     <span class="spacer"></span>
     <a class="link" href="../getting-started.html">Documentação</a>
     <a class="link" href="index.html">Conceitos</a>
-    <a class="link" href="https://github.com/mimirjs/MimirJS">GitHub</a>
+    <a class="link" href="https://github.com/thenajs/ThenaJS">GitHub</a>
   </div>
 </header>
 
@@ -24,7 +24,7 @@
     <p><a href="index.html">← Conceitos</a></p>
     <h2 class="section-title">Arquitetura</h2>
     <p class="section-sub">
-      O MimirJs é dividido em três camadas: um <b>engine</b> de execução, uma
+      O ThenaJs é dividido em três camadas: um <b>engine</b> de execução, uma
       camada de <b>DX</b> (decorators + runtime) por cima, e o <b>seu app</b>.
     </p>
 
@@ -33,13 +33,13 @@
 <pre><code>seu app (src/)            agents · tools · providers · workflows · config · main
      │  usa
      ▼
-@mimir-js/core   (DX)        @Agent · @Tool · @Workflow · hooks · bootstrap · report
+@thenajs/core   (DX)        @Agent · @Tool · @Workflow · hooks · bootstrap · report
      │  usa
      ▼
-@mimir-js/agentflow (engine) Pipeline · Providers · StateManager · tools · markdown</code></pre>
+@thenajs/agentflow (engine) Pipeline · Providers · StateManager · tools · markdown</code></pre>
     </div>
 
-    <h3>@mimir-js/agentflow — o engine</h3>
+    <h3>@thenajs/agentflow — o engine</h3>
     <p>
       Faz o trabalho pesado e não conhece decorators. Expõe o <code>Pipeline</code>
       (com <code>parallel</code>/<code>loop</code>), o <code>StateManager</code>
@@ -48,7 +48,7 @@
       <code>messages</code> e devolve um turno.
     </p>
 
-    <h3>@mimir-js/core — a camada de DX</h3>
+    <h3>@thenajs/core — a camada de DX</h3>
     <p>
       É o que você importa. Transforma classes decoradas em execução: o
       <code>@Agent</code> carrega o prompt, o <code>@Tool</code> vira uma
@@ -85,7 +85,7 @@
 
 <footer class="footer">
   <div class="wrap">
-    <span>MimirJs</span>
+    <span>ThenaJs</span>
     <span><a href="index.html">Conceitos</a> · <a href="agents.html">Agentes →</a></span>
   </div>
 </footer>

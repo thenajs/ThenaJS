@@ -1,11 +1,11 @@
-# MimirJs
+# ThenaJs
 
 Framework para desenvolvimento de agentes de IA em TypeScript, de forma
 declarativa. Cada agente é uma classe de lógica (`.agent.ts`) unida
 automaticamente ao seu prompt (`.agent.md`).
 
 O engine de execução (pipeline, providers, tools, contexto e estado) vive no
-próprio monorepo, em `@mimir-js/agentflow`. O `@mimir-js/core` é a camada de DX e
+próprio monorepo, em `@thenajs/agentflow`. O `@thenajs/core` é a camada de DX e
 organização por cima dele.
 
 ## Monorepo
@@ -15,10 +15,10 @@ usuário que o consome.
 
 ```text
 packages/
-  agentflow/   @mimir-js/agentflow   engine: pipeline, providers, estado, tools
-  core/        @mimir-js/core        decorators (@Agent/@Workflow/@Tool) + runtime
-  tools/       @mimir-js/tools       tools prontas (ex.: ShellTool)
-  cli/         @mimir-js/cli         gerador "mimir g agent <nome>"
+  agentflow/   @thenajs/agentflow   engine: pipeline, providers, estado, tools
+  core/        @thenajs/core        decorators (@Agent/@Workflow/@Tool) + runtime
+  tools/       @thenajs/tools       tools prontas (ex.: ShellTool)
+  cli/         @thenajs/cli         gerador "thena g agent <nome>"
 
 src/                              o app (organização por convenção)
   agents/
@@ -35,12 +35,12 @@ externas privadas — nada de registry/token do GitHub Packages.
 
 ## CLI — criar um projeto
 
-O `@mimir-js/cli` é instalado globalmente e faz o scaffolding de um projeto novo,
-já apontando para os pacotes `@mimir-js/*` (publicados no npm público):
+O `@thenajs/cli` é instalado globalmente e faz o scaffolding de um projeto novo,
+já apontando para os pacotes `@thenajs/*` (publicados no npm público):
 
 ```bash
-npm install -g @mimir-js/cli
-mimir create my-agent        # cria ./my-agent
+npm install -g @thenajs/cli
+thena create my-agent        # cria ./my-agent
 cd my-agent
 npm install
 npm start                    # roda o assistente de exemplo
@@ -52,15 +52,15 @@ report) e `main.ts` — pronto para editar.
 ## Desenvolvendo este monorepo
 
 ```bash
-npm install     # instala e cria os symlinks dos @mimir-js/*
+npm install     # instala e cria os symlinks dos @thenajs/*
 npm run build   # tsc -b: compila os pacotes na ordem correta
 ```
 
 ## Criando um agente (dentro de um projeto)
 
 ```bash
-mimir g agent explorer
-# no monorepo: npm run mimir -- g agent explorer
+thena g agent explorer
+# no monorepo: npm run thena -- g agent explorer
 ```
 
 Gera `src/agents/explorer/explorer.agent.ts` e `explorer.agent.md`.
@@ -72,8 +72,8 @@ como `"./explorer.agent.md"` é resolvido em relação ao arquivo do agente.
 ### `explorer.agent.ts`
 
 ```ts
-import { Agent } from "@mimir-js/core";
-import { ShellTool } from "@mimir-js/tools";
+import { Agent } from "@thenajs/core";
+import { ShellTool } from "@thenajs/tools";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 
 @Agent({
@@ -94,7 +94,7 @@ lógica fica no método `execute(input)`. O framework monta a `ToolType` do engi
 a partir disso.
 
 ```ts
-import { Tool } from "@mimir-js/core";
+import { Tool } from "@thenajs/core";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
@@ -110,7 +110,7 @@ export class ReadFileTool {
 }
 ```
 
-O pacote `@mimir-js/tools` já traz a `ShellTool`; tools próprias do app ficam em
+O pacote `@thenajs/tools` já traz a `ShellTool`; tools próprias do app ficam em
 `src/tools/`.
 
 ### Uma tool chamando um workflow
@@ -119,7 +119,7 @@ O construtor da tool pode receber o `WorkflowRuntime` injetado, para disparar
 outro workflow:
 
 ```ts
-import { Tool, WorkflowRuntime } from "@mimir-js/core";
+import { Tool, WorkflowRuntime } from "@thenajs/core";
 import { z } from "zod";
 import { DeployWorkflow } from "../workflows/deploy.workflow.js";
 
@@ -146,7 +146,7 @@ credenciais já configuradas. Veja
 ## Executando um agente
 
 ```ts
-import { run } from "@mimir-js/core";
+import { run } from "@thenajs/core";
 import { ExplorerAgent } from "./agents/explorer/explorer.agent.js";
 
 const output = await run(ExplorerAgent, "Liste os arquivos do diretório atual.");
@@ -176,7 +176,7 @@ e aninháveis:
 
 ```ts
 // src/workflows/explorer.workflow.ts
-import { Workflow, parallel, loop } from "@mimir-js/core";
+import { Workflow, parallel, loop } from "@thenajs/core";
 import { ExplorerAgent } from "../agents/explorer/explorer.agent.js";
 import { PlannerAgent } from "../agents/planner/planner.agent.js";
 import { ReviewerAgent } from "../agents/reviewer/reviewer.agent.js";
@@ -202,7 +202,7 @@ O ponto de entrada da aplicação fica em `src/main.ts`:
 
 ```ts
 // src/main.ts
-import { bootstrapWorkflow } from "@mimir-js/core";
+import { bootstrapWorkflow } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 
 const app = await bootstrapWorkflow(ExplorerWorkflow);
@@ -225,7 +225,7 @@ executa o workflow, imprime a saída final e, em erro, loga e marca
 Para obter o resultado no código, use `runWorkflow` diretamente:
 
 ```ts
-import { runWorkflow } from "@mimir-js/core";
+import { runWorkflow } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 
 const parecer = await runWorkflow(ExplorerWorkflow, "Revise o diretório src/");
@@ -249,9 +249,9 @@ decisão de tool e o I/O das tools).
 
 ```ts
 // src/config.ts
-import type { MimirConfig } from "@mimir-js/core";
+import type { ThenaConfig } from "@thenajs/core";
 
-export const config: MimirConfig = {
+export const config: ThenaConfig = {
   log: true,    // logs ao vivo; ou "verbose", ou (event) => logger.info(event)
   report: true, // ou { dir: "report", format: "html" | "json" | "both" }
 };
@@ -277,12 +277,12 @@ dois "outputs".
 | `npm run build` | Compila todos os pacotes (`tsc -b`) |
 | `npm start` | Build + executa o bootstrap (`src/main.ts`) |
 | `npm run typecheck` | Build + typecheck do app em `src/` |
-| `npm run mimir` | Executa a CLI (`-- g agent <nome>`) |
+| `npm run thena` | Executa a CLI (`-- g agent <nome>`) |
 
 ## Publicação
 
-Os pacotes são publicados no **npm público** (scope `@mimir-js`, org npm
-`mimir-js`) pela GitHub Action
+Os pacotes são publicados no **npm público** (scope `@thenajs`, org npm
+`thenajs`) pela GitHub Action
 [`.github/workflows/publish.yml`](.github/workflows/publish.yml), disparada por
 uma tag `v*`:
 
@@ -294,9 +294,9 @@ git tag v0.1.1 && git push --tags
 A Action roda `npm ci` → `npm run build` → `npm publish` de cada pacote
 (agentflow → core → tools → cli), com provenance. Pré-requisito:
 
-- **Secret `NPM_TOKEN`** (npm automation token com acesso à org `mimir-js`) no
+- **Secret `NPM_TOKEN`** (npm automation token com acesso à org `thenajs`) no
   repositório: npmjs.com › _Access Tokens_ › _Generate_ › _Automation_.
 
-> Sendo npm público, qualquer um instala com `npm i @mimir-js/core` (ou
-> `npm i -g @mimir-js/cli`) **sem autenticação** — por isso não há `.npmrc` no
+> Sendo npm público, qualquer um instala com `npm i @thenajs/core` (ou
+> `npm i -g @thenajs/cli`) **sem autenticação** — por isso não há `.npmrc` no
 > projeto gerado.

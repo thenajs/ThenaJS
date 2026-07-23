@@ -141,7 +141,7 @@ function renderHtml(root: ExecutionNode): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MimirJs Report — ${esc(root.name)}</title>
+<title>ThenaJs Report — ${esc(root.name)}</title>
 <style>
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
@@ -181,7 +181,7 @@ function renderHtml(root: ExecutionNode): string {
 <body>
   <div class="wrap">
     <h1>${esc(root.name)}</h1>
-    <div class="sub">MimirJs · report de execução · ${esc(when)}</div>
+    <div class="sub">ThenaJs · report de execução · ${esc(when)}</div>
     <div class="stats">${stats}</div>
     ${tree}
   </div>

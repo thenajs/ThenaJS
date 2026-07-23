@@ -1,4 +1,4 @@
-import { Workflow } from "@mimir-js/core";
+import { Workflow } from "@thenajs/core";
 import { PlannerAgent } from "../agents/planner/planner.agent.js";
 import { ReviewerAgent } from "../agents/reviewer/reviewer.agent.js";
 

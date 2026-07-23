@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MimirJs — framework para agentes de IA</title>
-<meta name="description" content="MimirJs é um framework em TypeScript para construir agentes de IA de forma declarativa: decorators, prompts em markdown, workflows, hooks e report de execução." />
+<title>ThenaJs — framework para agentes de IA</title>
+<meta name="description" content="ThenaJs é um framework em TypeScript para construir agentes de IA de forma declarativa: decorators, prompts em markdown, workflows, hooks e report de execução." />
 <link rel="icon" href="assets/logo.png" />
 <link rel="stylesheet" href="assets/docs.css" />
 </head>
@@ -13,21 +13,21 @@
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="index.html">
-      <img src="assets/logo.png" alt="MimirJs" />
-      <b>MimirJs</b>
+      <img src="assets/logo.png" alt="ThenaJs" />
+      <b>ThenaJs</b>
     </a>
     <span class="spacer"></span>
     <a class="link" href="getting-started.html">Documentação</a>
     <a class="link" href="concepts/index.html">Conceitos</a>
-    <a class="link" href="https://github.com/mimirjs/MimirJS">GitHub</a>
+    <a class="link" href="https://github.com/thenajs/ThenaJS">GitHub</a>
   </div>
 </header>
 
 <section class="hero">
   <div class="wrap">
-    <img class="hero-logo" src="assets/logo.png" alt="MimirJs" />
+    <img class="hero-logo" src="assets/logo.png" alt="ThenaJs" />
     <div class="eyebrow">TypeScript · declarativo · agentes de IA</div>
-    <h1>MimirJs</h1>
+    <h1>ThenaJs</h1>
     <p class="lede">
       Um framework para construir agentes de IA de forma declarativa:
       <b>decorators</b>, prompts em <b>markdown</b>,
@@ -35,7 +35,7 @@
     </p>
     <div class="cta">
       <a class="btn primary" href="getting-started.html">Começar →</a>
-      <a class="btn" href="https://github.com/mimirjs/MimirJS">Ver no GitHub</a>
+      <a class="btn" href="https://github.com/thenajs/ThenaJS">Ver no GitHub</a>
     </div>
   </div>
 </section>
@@ -51,8 +51,8 @@
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <span style="margin-left:8px">terminal</span>
       </div>
-<pre><code>npm install -g @mimir-js/cli   <span class="cm"># instala o CLI</span>
-mimir create my-agent          <span class="cm"># cria o projeto</span>
+<pre><code>npm install -g @thenajs/cli   <span class="cm"># instala o CLI</span>
+thena create my-agent          <span class="cm"># cria o projeto</span>
 cd my-agent
 npm install
 npm start                      <span class="cm"># roda o assistente</span></code></pre>
@@ -70,8 +70,8 @@ npm start                      <span class="cm"># roda o assistente</span></code
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <span style="margin-left:8px">explorer.agent.ts</span>
       </div>
-<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
-<span class="kw">import</span> { ShellTool } <span class="kw">from</span> <span class="st">"@mimir-js/tools"</span>;
+<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import</span> { ShellTool } <span class="kw">from</span> <span class="st">"@thenajs/tools"</span>;
 <span class="kw">import</span> { LocalOllamaProvider } <span class="kw">from</span> <span class="st">"../../providers/ollama.provider.js"</span>;
 
 <span class="kw">@Agent</span>({
@@ -86,7 +86,7 @@ npm start                      <span class="cm"># roda o assistente</span></code
 
 <section>
   <div class="wrap">
-    <h2 class="section-title">Por que MimirJs</h2>
+    <h2 class="section-title">Por que ThenaJs</h2>
     <p class="section-sub">A lógica no <code>.ts</code>, o prompt no <code>.md</code>, e o framework une os dois.</p>
     <div class="grid">
       <div class="card">
@@ -126,7 +126,7 @@ npm start                      <span class="cm"># roda o assistente</span></code
 <section>
   <div class="wrap">
     <h2 class="section-title">Como funciona</h2>
-    <p class="section-sub">Uma camada de DX sobre o engine <code>@mimir-js/agentflow</code> (pipeline, providers, estado, tools).</p>
+    <p class="section-sub">Uma camada de DX sobre o engine <code>@thenajs/agentflow</code> (pipeline, providers, estado, tools).</p>
     <div class="code-card">
       <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">arquitetura</span></div>
 <pre><code>@Workflow  →  orquestra os agentes (sequência / parallel / loop)
@@ -143,8 +143,8 @@ npm start                      <span class="cm"># roda o assistente</span></code
 
 <footer class="footer">
   <div class="wrap">
-    <span>MimirJs — framework para agentes de IA em TypeScript.</span>
-    <span><a href="getting-started.html">Documentação</a> · <a href="https://github.com/mimirjs/MimirJS">GitHub</a></span>
+    <span>ThenaJs — framework para agentes de IA em TypeScript.</span>
+    <span><a href="getting-started.html">Documentação</a> · <a href="https://github.com/thenajs/ThenaJS">GitHub</a></span>
   </div>
 </footer>
 

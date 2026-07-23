@@ -1,4 +1,4 @@
-import { bootstrapWorkflow } from "@mimir-js/core";
+import { bootstrapWorkflow } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 import { config } from "./config.js";
 

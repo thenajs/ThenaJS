@@ -1,15 +1,15 @@
 {
-  "name": "@mimir-js/tools",
+  "name": "@thenajs/tools",
   "version": "0.1.1",
-  "description": "Tools prontas para agentes MimirJs (ex.: ShellTool).",
+  "description": "Tools prontas para agentes ThenaJs (ex.: ShellTool).",
   "license": "MIT",
   "author": "castroneto",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mimirjs/MimirJS.git",
+    "url": "git+https://github.com/thenajs/ThenaJS.git",
     "directory": "packages/tools"
   },
-  "homepage": "https://github.com/mimirjs/MimirJS#readme",
+  "homepage": "https://github.com/thenajs/ThenaJS#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,7 +21,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@mimir-js/core": "^0.1.1",
+    "@thenajs/core": "^0.1.1",
     "zod": "^4.0.0"
   }
 }

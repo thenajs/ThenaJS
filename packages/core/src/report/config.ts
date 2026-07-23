@@ -17,7 +17,7 @@ export interface ReportOptions {
 export type LogConfig = boolean | "verbose" | ((event: ExecutionEvent) => void);
 
 /** Configuração opcional passada ao `bootstrapWorkflow`. */
-export interface MimirConfig {
+export interface ThenaConfig {
   /**
    * Gera um report da execução (HTML + JSON) ao final da run, estilo Playwright.
    * `true` usa os defaults; um objeto permite ajustar pasta/formato.

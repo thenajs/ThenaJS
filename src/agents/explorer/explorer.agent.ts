@@ -1,5 +1,5 @@
-import { Agent } from "@mimir-js/core";
-import { ShellTool } from "@mimir-js/tools";
+import { Agent } from "@thenajs/core";
+import { ShellTool } from "@thenajs/tools";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 import { ReadFileTool } from "../../tools/read-file.tool.js";
 

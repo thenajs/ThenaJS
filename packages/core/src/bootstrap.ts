@@ -1,13 +1,13 @@
 import { WorkflowRuntime } from "./runner.js";
 import type { WorkflowApp } from "./types.js";
-import type { MimirConfig, ReportOptions } from "./report/config.js";
+import type { ThenaConfig, ReportOptions } from "./report/config.js";
 import type { ExecutionEvent } from "./report/recorder.js";
 import { ReportRecorder, resetRecorder, setRecorder } from "./report/recorder.js";
 import { writeReport } from "./report/report.js";
 import { consoleLogger } from "./report/logger.js";
 
 /**
- * Ponto de entrada de uma aplicação MimirJs. Prepara o workflow e devolve um
+ * Ponto de entrada de uma aplicação ThenaJs. Prepara o workflow e devolve um
  * "app" cujo `run(...)` o executa.
  *
  * - `config.report` — gera um report HTML + JSON ao final da run (estilo Playwright).
@@ -20,7 +20,7 @@ import { consoleLogger } from "./report/logger.js";
  */
 export async function bootstrapWorkflow<T = string>(
   WorkflowClass: Function,
-  config: MimirConfig = {},
+  config: ThenaConfig = {},
 ): Promise<WorkflowApp<T>> {
   if (config.report || config.log) {
     const reportOptions: ReportOptions =
@@ -29,7 +29,7 @@ export async function bootstrapWorkflow<T = string>(
     const onComplete = config.report
       ? (root: import("./report/recorder.js").ExecutionNode) => {
           const path = writeReport(root, reportOptions);
-          console.log(`[mimir] Report gerado: ${path}`);
+          console.log(`[thena] Report gerado: ${path}`);
         }
       : undefined;
 
@@ -55,7 +55,7 @@ export async function bootstrapWorkflow<T = string>(
         console.log(output);
         return output;
       } catch (err: unknown) {
-        console.error("[mimir] Falha ao executar o workflow:", err);
+        console.error("[thena] Falha ao executar o workflow:", err);
         process.exitCode = 1;
       } finally {
         resetRecorder();

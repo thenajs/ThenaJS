@@ -1,15 +1,15 @@
 {
-  "name": "@mimir-js/core",
+  "name": "@thenajs/core",
   "version": "0.1.1",
-  "description": "Camada de DX do MimirJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @mimir-js/agentflow.",
+  "description": "Camada de DX do ThenaJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @thenajs/agentflow.",
   "license": "MIT",
   "author": "castroneto",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mimirjs/MimirJS.git",
+    "url": "git+https://github.com/thenajs/ThenaJS.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/mimirjs/MimirJS#readme",
+  "homepage": "https://github.com/thenajs/ThenaJS#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,6 +21,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@mimir-js/agentflow": "^0.1.1"
+    "@thenajs/agentflow": "^0.1.1"
   }
 }

@@ -18,19 +18,19 @@ function version(): string {
 }
 
 function usage(): void {
-  console.log(`MimirJs CLI
+  console.log(`ThenaJs CLI
 
 Uso:
-  mimir create <nome>        Cria um projeto novo em ./<nome>
-  mimir g agent <nome>       Gera um agente em src/agents/<nome>/ (dentro do projeto)
+  thena create <nome>        Cria um projeto novo em ./<nome>
+  thena g agent <nome>       Gera um agente em src/agents/<nome>/ (dentro do projeto)
 
 Opções:
   -v, --version              Mostra a versão
   -h, --help                 Mostra esta ajuda
 
 Exemplos:
-  mimir create my-agent
-  mimir g agent explorer
+  thena create my-agent
+  thena g agent explorer
 `);
 }
 
@@ -48,7 +48,7 @@ function create(name: string): void {
     console.error(`Erro: o diretório "${name}" já existe.`);
     process.exit(1);
   }
-  console.log(`Criando o projeto MimirJs "${name}"…\n`);
+  console.log(`Criando o projeto ThenaJs "${name}"…\n`);
   for (const file of projectFiles(name)) {
     write(dir, file.path, file.content);
   }
@@ -86,7 +86,7 @@ function main(): void {
   if (command === "create" || command === "new") {
     const name = rest[0];
     if (!name) {
-      console.error("Erro: informe o nome do projeto. Ex.: mimir create my-agent");
+      console.error("Erro: informe o nome do projeto. Ex.: thena create my-agent");
       process.exit(1);
     }
     create(name);

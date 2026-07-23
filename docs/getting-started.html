@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Documentação — MimirJs</title>
-<meta name="description" content="Documentação do MimirJs: instalação, agentes, tools, providers, workflows, hooks, config/report, boas práticas e casos de uso." />
+<title>Documentação — ThenaJs</title>
+<meta name="description" content="Documentação do ThenaJs: instalação, agentes, tools, providers, workflows, hooks, config/report, boas práticas e casos de uso." />
 <link rel="icon" href="assets/logo.png" />
 <link rel="stylesheet" href="assets/docs.css" />
 </head>
@@ -13,13 +13,13 @@
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="index.html">
-      <img src="assets/logo.png" alt="MimirJs" />
-      <b>MimirJs</b>
+      <img src="assets/logo.png" alt="ThenaJs" />
+      <b>ThenaJs</b>
     </a>
     <span class="spacer"></span>
     <a class="link" href="index.html">Início</a>
     <a class="link" href="concepts/index.html">Conceitos</a>
-    <a class="link" href="https://github.com/mimirjs/MimirJS">GitHub</a>
+    <a class="link" href="https://github.com/thenajs/ThenaJS">GitHub</a>
   </div>
 </header>
 
@@ -51,10 +51,10 @@
       <h2 id="install">Instalação</h2>
       <p>
         Instale o CLI globalmente e crie um projeto — ele já vem apontando para
-        os pacotes <code>@mimir-js/*</code> (npm público, sem token):
+        os pacotes <code>@thenajs/*</code> (npm público, sem token):
       </p>
-      <pre><code>npm install -g @mimir-js/cli
-mimir create my-agent
+      <pre><code>npm install -g @thenajs/cli
+thena create my-agent
 cd my-agent
 npm install
 npm start                 <span class="cm"># roda o assistente de exemplo</span></code></pre>
@@ -66,7 +66,7 @@ npm start                 <span class="cm"># roda o assistente de exemplo</span>
 
       <h2 id="structure">Estrutura do projeto</h2>
       <p>
-        O <code>mimir create</code> gera um projeto por convenção — você escreve
+        O <code>thena create</code> gera um projeto por convenção — você escreve
         agentes, tools, providers e workflows:
       </p>
       <pre><code>src/
@@ -82,7 +82,7 @@ npm start                 <span class="cm"># roda o assistente de exemplo</span>
 
       <h2 id="agents">Criando um agente</h2>
       <p>Gere o esqueleto com a CLI:</p>
-      <pre><code>mimir g agent explorer</code></pre>
+      <pre><code>thena g agent explorer</code></pre>
       <p>
         Isso cria <code>src/agents/explorer/explorer.agent.ts</code> e o
         <code>explorer.agent.md</code> irmão. Um agente é uma classe decorada com
@@ -90,8 +90,8 @@ npm start                 <span class="cm"># roda o assistente de exemplo</span>
       </p>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">src/agents/explorer/explorer.agent.ts</span></div>
-<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
-<span class="kw">import</span> { ShellTool } <span class="kw">from</span> <span class="st">"@mimir-js/tools"</span>;
+<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import</span> { ShellTool } <span class="kw">from</span> <span class="st">"@thenajs/tools"</span>;
 <span class="kw">import</span> { LocalOllamaProvider } <span class="kw">from</span> <span class="st">"../../providers/ollama.provider.js"</span>;
 
 <span class="kw">@Agent</span>({
@@ -141,7 +141,7 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       </p>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">src/tools/read-file.tool.ts</span></div>
-<pre><code><span class="kw">import</span> { Tool } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import</span> { Tool } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 <span class="kw">import</span> { readFile } <span class="kw">from</span> <span class="st">"node:fs/promises"</span>;
 <span class="kw">import</span> { z } <span class="kw">from</span> <span class="st">"zod"</span>;
 
@@ -162,7 +162,7 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
         O construtor da tool pode receber o <code>WorkflowRuntime</code> injetado
         (DI), para disparar outro workflow:
       </p>
-<pre><code><span class="kw">import</span> { Tool, WorkflowRuntime } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import</span> { Tool, WorkflowRuntime } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 <span class="kw">import</span> { z } <span class="kw">from</span> <span class="st">"zod"</span>;
 <span class="kw">import</span> { DeployWorkflow } <span class="kw">from</span> <span class="st">"../workflows/deploy.workflow.js"</span>;
 
@@ -184,7 +184,7 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
         Um provider conversa com o modelo. O padrão é criar uma subclasse com as
         credenciais já configuradas, em <code>src/providers/</code>:
       </p>
-<pre><code><span class="kw">import</span> { OllamaProvider } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import</span> { OllamaProvider } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 
 <span class="kw">export class</span> LocalOllamaProvider <span class="kw">extends</span> OllamaProvider {
   <span class="kw">constructor</span>() {
@@ -206,7 +206,7 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       </ul>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">src/workflows/explorer.workflow.ts</span></div>
-<pre><code><span class="kw">import</span> { Workflow, parallel, loop } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import</span> { Workflow, parallel, loop } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 <span class="kw">import</span> { PlannerAgent } <span class="kw">from</span> <span class="st">"../agents/planner/planner.agent.js"</span>;
 <span class="kw">import</span> { ExplorerAgent } <span class="kw">from</span> <span class="st">"../agents/explorer/explorer.agent.js"</span>;
 <span class="kw">import</span> { ReviewerAgent } <span class="kw">from</span> <span class="st">"../agents/reviewer/reviewer.agent.js"</span>;
@@ -237,7 +237,7 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       </p>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">src/main.ts</span></div>
-<pre><code><span class="kw">import</span> { bootstrapWorkflow } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import</span> { bootstrapWorkflow } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 <span class="kw">import</span> { ExplorerWorkflow } <span class="kw">from</span> <span class="st">"./workflows/explorer.workflow.js"</span>;
 <span class="kw">import</span> { config } <span class="kw">from</span> <span class="st">"./config.js"</span>;
 
@@ -272,8 +272,8 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       <p class="section-sub" style="margin-top:8px">Contrato dos transformadores: <b>retornou valor → substitui; retornou <code>undefined</code> → mantém</b>.</p>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">explorer.agent.ts (com hooks)</span></div>
-<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
-<span class="kw">import type</span> { AgentHooks, ToolCall, ToolResult } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import</span> { Agent } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import type</span> { AgentHooks, ToolCall, ToolResult } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 
 <span class="kw">@Agent</span>({ provider: LocalOllamaProvider, tools: [ShellTool], prompt: <span class="st">"./explorer.agent.md"</span> })
 <span class="kw">export class</span> ExplorerAgent <span class="kw">implements</span> AgentHooks {
@@ -317,9 +317,9 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       </p>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">src/config.ts</span></div>
-<pre><code><span class="kw">import type</span> { MimirConfig } <span class="kw">from</span> <span class="st">"@mimir-js/core"</span>;
+<pre><code><span class="kw">import type</span> { ThenaConfig } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
 
-<span class="kw">export const</span> config: MimirConfig = {
+<span class="kw">export const</span> config: ThenaConfig = {
   report: <span class="kw">true</span>, <span class="cm">// ou { dir: "report", format: "html" | "json" | "both" }</span>
 };</code></pre>
       </div>
@@ -342,23 +342,23 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       </table>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">src/config.ts</span></div>
-<pre><code><span class="kw">export const</span> config: MimirConfig = {
+<pre><code><span class="kw">export const</span> config: ThenaConfig = {
   log: <span class="kw">true</span>,       <span class="cm">// ou "verbose", ou (event) =&gt; logger.info(event)</span>
   report: <span class="kw">true</span>,
 };</code></pre>
       </div>
       <div class="code-card">
         <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">saída ao vivo (log: true)</span></div>
-<pre><code>[mimir] ▸ workflow ExplorerWorkflow
-[mimir]   ▸ agent PlannerAgent
-[mimir]     ▸ chat
-[mimir]     ◂ chat  1.01s ✓
-[mimir]   ◂ agent PlannerAgent  1.01s ✓
-[mimir]   ▸ loop
-[mimir]     ▸ parallel
-[mimir]       ▸ agent ExplorerAgent
-[mimir]       ▸ agent ReviewerAgent   <span class="cm"># começam juntos (parallel)</span>
-[mimir]         ...</code></pre>
+<pre><code>[thena] ▸ workflow ExplorerWorkflow
+[thena]   ▸ agent PlannerAgent
+[thena]     ▸ chat
+[thena]     ◂ chat  1.01s ✓
+[thena]   ◂ agent PlannerAgent  1.01s ✓
+[thena]   ▸ loop
+[thena]     ▸ parallel
+[thena]       ▸ agent ExplorerAgent
+[thena]       ▸ agent ReviewerAgent   <span class="cm"># começam juntos (parallel)</span>
+[thena]         ...</code></pre>
       </div>
       <div class="note">
         <b>Log</b> é o que acontece agora (streaming); <b>report</b> é o artefato
@@ -392,7 +392,7 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
       <p>
         Um <code>@Agent</code> com <code>ShellTool</code> + <code>ReadFileTool</code>
         que inspeciona o projeto e responde perguntas — o modelo decide qual tool
-        chamar e o Mimir executa e devolve o resultado.
+        chamar e o Thena executa e devolve o resultado.
       </p>
 
       <h3>3 · Ferramenta que dispara um deploy</h3>
@@ -413,8 +413,8 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
 
 <footer class="footer">
   <div class="wrap">
-    <span>MimirJs — framework para agentes de IA em TypeScript.</span>
-    <span><a href="index.html">Início</a> · <a href="https://github.com/mimirjs/MimirJS">GitHub</a></span>
+    <span>ThenaJs — framework para agentes de IA em TypeScript.</span>
+    <span><a href="index.html">Início</a> · <a href="https://github.com/thenajs/ThenaJS">GitHub</a></span>
   </div>
 </footer>
 
