@@ -1,6 +1,6 @@
 {
   "name": "@mimir-js/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI do MimirJs: cria projetos (mimir create) e gera agentes (mimir g agent).",
   "license": "MIT",
   "author": "castroneto",

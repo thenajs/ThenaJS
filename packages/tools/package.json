@@ -1,6 +1,6 @@
 {
   "name": "@mimir-js/tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tools prontas para agentes MimirJs (ex.: ShellTool).",
   "license": "MIT",
   "author": "castroneto",
@@ -21,7 +21,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@mimir-js/core": "^0.1.0",
+    "@mimir-js/core": "^0.1.1",
     "zod": "^4.0.0"
   }
 }

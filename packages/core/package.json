@@ -1,6 +1,6 @@
 {
   "name": "@mimir-js/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Camada de DX do MimirJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @mimir-js/agentflow.",
   "license": "MIT",
   "author": "castroneto",
@@ -21,6 +21,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@mimir-js/agentflow": "^0.1.0"
+    "@mimir-js/agentflow": "^0.1.1"
   }
 }

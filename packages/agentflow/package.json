@@ -1,6 +1,6 @@
 {
   "name": "@mimir-js/agentflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Engine de execução do MimirJs: pipeline, providers (Ollama/OpenAI), estado e tools (Zod).",
   "license": "MIT",
   "author": "castroneto",
