@@ -7,7 +7,7 @@ import { writeReport } from "./report/report.js";
 import { consoleLogger } from "./report/logger.js";
 
 /**
- * Ponto de entrada de uma aplicação ThenaJs. Prepara o workflow e devolve um
+ * Ponto de entrada de uma aplicação ThenaJS. Prepara o workflow e devolve um
  * "app" cujo `run(...)` o executa.
  *
  * - `config.report` — gera um report HTML + JSON ao final da run (estilo Playwright).

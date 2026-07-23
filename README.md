@@ -1,4 +1,4 @@
-# ThenaJs
+# ThenaJS
 
 Framework para desenvolvimento de agentes de IA em TypeScript, de forma
 declarativa. Cada agente é uma classe de lógica (`.agent.ts`) unida

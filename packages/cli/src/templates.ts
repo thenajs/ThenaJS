@@ -53,7 +53,7 @@ export interface ScaffoldFile {
 /** Versões dos pacotes @thenajs referenciadas pelo projeto gerado. */
 const THENA_VERSION = "^0.1.0";
 
-/** Todos os arquivos de um projeto ThenaJs novo. */
+/** Todos os arquivos de um projeto ThenaJS novo. */
 export function projectFiles(name: string): ScaffoldFile[] {
   const pkg = {
     name,
@@ -109,7 +109,7 @@ export function projectFiles(name: string): ScaffoldFile[] {
       path: "README.md",
       content: `# ${name}
 
-Projeto ThenaJs. Um assistente pronto para editar.
+Projeto ThenaJS. Um assistente pronto para editar.
 
 ## Rodando
 

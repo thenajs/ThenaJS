@@ -1,7 +1,7 @@
 {
   "name": "@thenajs/cli",
   "version": "0.1.1",
-  "description": "CLI do ThenaJs: cria projetos (thena create) e gera agentes (thena g agent).",
+  "description": "CLI do ThenaJS: cria projetos (thena create) e gera agentes (thena g agent).",
   "license": "MIT",
   "author": "castroneto",
   "repository": {

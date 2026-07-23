@@ -1,7 +1,7 @@
 {
   "name": "@thenajs/core",
   "version": "0.1.1",
-  "description": "Camada de DX do ThenaJs: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @thenajs/agentflow.",
+  "description": "Camada de DX do ThenaJS: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @thenajs/agentflow.",
   "license": "MIT",
   "author": "castroneto",
   "repository": {

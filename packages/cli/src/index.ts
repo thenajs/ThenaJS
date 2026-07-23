@@ -18,7 +18,7 @@ function version(): string {
 }
 
 function usage(): void {
-  console.log(`ThenaJs CLI
+  console.log(`ThenaJS CLI
 
 Uso:
   thena create <nome>        Cria um projeto novo em ./<nome>
@@ -48,7 +48,7 @@ function create(name: string): void {
     console.error(`Erro: o diretório "${name}" já existe.`);
     process.exit(1);
   }
-  console.log(`Criando o projeto ThenaJs "${name}"…\n`);
+  console.log(`Criando o projeto ThenaJS "${name}"…\n`);
   for (const file of projectFiles(name)) {
     write(dir, file.path, file.content);
   }
