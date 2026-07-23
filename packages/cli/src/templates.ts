@@ -62,7 +62,10 @@ export function projectFiles(name: string): ScaffoldFile[] {
     type: "module",
     scripts: {
       start: "tsx src/main.ts",
-      build: "tsc",
+      // tsc transpila só os .ts; os prompts .md são copiados para o dist/
+      // preservando a estrutura, senão o @Agent não acha o .md em produção.
+      build: 'tsc && copyfiles -u 1 "src/**/*.md" dist',
+      "start:prod": "node dist/main.js",
     },
     dependencies: {
       "@mimir-js/core": MIMIR_VERSION,
@@ -71,6 +74,7 @@ export function projectFiles(name: string): ScaffoldFile[] {
     },
     devDependencies: {
       "@types/node": "^20.19.0",
+      copyfiles: "^2.4.1",
       tsx: "^4.7.0",
       typescript: "^5.4.0",
     },
@@ -117,6 +121,16 @@ npm install
 npm start                 # usa a mensagem padrão
 npm start -- "Sua pergunta aqui"
 \`\`\`
+
+## Build de produção
+
+\`\`\`bash
+npm run build             # tsc + copia os .md dos prompts para dist/
+npm run start:prod        # node dist/main.js
+\`\`\`
+
+O \`build\` copia os \`*.agent.md\` para o \`dist/\` ao lado dos \`.js\`, para o
+\`@Agent\` encontrar o prompt quando roda a partir do compilado.
 
 ## Estrutura
 
