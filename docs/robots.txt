@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://thenajs.github.io/ThenaJS/sitemap.xml
