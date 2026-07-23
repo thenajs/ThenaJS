@@ -3,7 +3,7 @@
 export { Agent } from "./agent.decorator.js";
 export { Workflow } from "./workflow.decorator.js";
 export { Tool } from "./tool.decorator.js";
-export { parallel, loop } from "./steps.js";
+export { parallel, loop, untilAnswered, calledTool, turnOf } from "./steps.js";
 export { run, runWorkflow, buildAgentStep, WorkflowRuntime } from "./runner.js";
 export { bootstrapWorkflow } from "./bootstrap.js";
 export type { ThenaConfig, ReportOptions, LogConfig } from "./report/config.js";
@@ -16,6 +16,7 @@ export type {
   AgentClass,
   AgentContext,
   AgentHooks,
+  TurnInfo,
   ToolCall,
   ToolResult,
   WorkflowConfig,

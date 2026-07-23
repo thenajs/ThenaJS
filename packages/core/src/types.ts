@@ -52,11 +52,28 @@ export interface AgentMetadata {
 export type AgentClass = new (...args: any[]) => object;
 
 /**
+ * Resumo do último turno do agente, gravado em `ctx.turn` pelo runtime a cada
+ * passo de agente. Deixa o `until` de um loop decidir a parada sem boilerplate
+ * (ex.: `untilAnswered` = parar quando o agente respondeu sem chamar tool).
+ */
+export interface TurnInfo {
+  /** O modelo chamou (e o engine executou) uma tool neste turno? */
+  calledTool: boolean;
+  /** Nome da tool que o modelo chamou, se houve. */
+  toolName?: string;
+  /** Resposta final do turno (conteúdo da tool, ou do assistant). */
+  response: string;
+}
+
+/**
  * Contexto compartilhado do agente/pipeline. Estende o `PipelineContext` do
  * engine com um índice livre, para que os agentes possam gravar campos próprios
- * no ctx (ex.: `ctx.reviewApproved`) e os hooks/`until` possam lê-los.
+ * no ctx (ex.: `ctx.reviewApproved`) e os hooks/`until` possam lê-los. O runtime
+ * grava o resumo do último turno em `ctx.turn` (a prop explícita vence o índice,
+ * então fica tipada).
  */
-export type AgentContext = PipelineContext & Record<string, unknown>;
+export type AgentContext = PipelineContext & { turn?: TurnInfo } &
+  Record<string, unknown>;
 
 /** Alias usado nos `until` de workflow — mesma forma do `AgentContext`. */
 export type WorkflowContext = AgentContext;

@@ -154,6 +154,10 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
       if (typeof instance.run === "function") {
         const out = await instance.run(input, ctx);
         ctx.output = out;
+        // O `run` faz seu próprio loop de tools; do ponto de vista do workflow o
+        // turno já terminou (calledTool: false). Quem precisar de outra parada
+        // grava seu próprio campo no ctx.
+        agentCtx.turn = { calledTool: false, response: String(out ?? "") };
         ctx.state.append("history", {
           role: "assistant",
           content: String(out ?? ""),
@@ -198,6 +202,13 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
           const replaced = await instance.afterResponse(response, agentCtx);
           if (replaced !== undefined) response = replaced;
         }
+
+        // Expõe o resumo do turno para o `until` do loop (ex.: `untilAnswered`).
+        agentCtx.turn = {
+          calledTool: Boolean(turn.tool),
+          toolName: turn.assistant.toolCalls?.[0]?.name,
+          response,
+        };
 
         ctx.output = response;
         return ctx;
