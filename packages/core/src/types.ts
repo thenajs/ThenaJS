@@ -1,4 +1,11 @@
-import type { PipelineContext, Providers, ToolType } from "@thenajs/agentflow";
+import type {
+  PipelineContext,
+  Providers,
+  SamplingParams,
+  ToolOutput,
+  ToolType,
+} from "@thenajs/agentflow";
+import type { BudgetUsage, RunBudget } from "./budget.js";
 
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
@@ -36,6 +43,12 @@ export interface AgentConfig {
    * - `URL` (ex.: `new URL("./explorer.agent.md", import.meta.url)`) — sem stack trace.
    */
   prompt: string | URL;
+  /**
+   * Sampling deste agente. Sobrescreve, chave a chave, o sampling configurado
+   * no provider — útil para deixar um agente determinístico e outro criativo
+   * usando o mesmo provider.
+   */
+  sampling?: SamplingParams;
 }
 
 /**
@@ -46,6 +59,7 @@ export interface AgentMetadata {
   provider: ProviderInput;
   tools: ToolInput[];
   prompt: string;
+  sampling?: SamplingParams;
 }
 
 /** Classe de agente decorada com `@Agent`. */
@@ -61,6 +75,14 @@ export interface TurnInfo {
   calledTool: boolean;
   /** Nome da tool que o modelo chamou, se houve. */
   toolName?: string;
+  /** A tool executada neste turno sinalizou falha. */
+  toolError?: boolean;
+  /**
+   * De onde veio a chamada: `"native"` (o provider trouxe tool calls) ou
+   * `"rescued"` (o runtime extraiu do texto da resposta). Útil para medir o
+   * quanto um modelo depende do resgate.
+   */
+  toolCallSource?: "native" | "rescued";
   /** Resposta final do turno (conteúdo da tool, ou do assistant). */
   response: string;
 }
@@ -72,8 +94,15 @@ export interface TurnInfo {
  * grava o resumo do último turno em `ctx.turn` (a prop explícita vence o índice,
  * então fica tipada).
  */
-export type AgentContext = PipelineContext & { turn?: TurnInfo } &
-  Record<string, unknown>;
+export type AgentContext = PipelineContext & {
+  turn?: TurnInfo;
+  /**
+   * Consumo acumulado da run até aqui. Presente quando há `budget` — é a partir
+   * daqui que se escreve política própria (dedupe, corte por heurística) num
+   * `beforeTool` ou num `until`, sem o framework opinar sobre ela.
+   */
+  budget?: BudgetUsage;
+} & Record<string, unknown>;
 
 /** Alias usado nos `until` de workflow — mesma forma do `AgentContext`. */
 export type WorkflowContext = AgentContext;
@@ -89,6 +118,8 @@ export interface ToolResult {
   name: string;
   args: unknown;
   output: string;
+  /** A tool sinalizou falha (ou lançou, com `toolErrors: "observe"`). */
+  isError?: boolean;
 }
 
 /**
@@ -112,11 +143,19 @@ export interface AgentHooks {
     call: ToolCall,
     ctx: AgentContext,
   ): ToolCall | void | Promise<ToolCall | void>;
-  /** Transforma a saída de uma tool; o retorno substitui o `output`. */
+  /**
+   * Transforma a saída de uma tool; o retorno substitui o `output`. Devolver
+   * uma string troca só o texto e **preserva** o `isError`; para mudar a marca
+   * de erro, devolva um `ToolOutput` completo.
+   */
   afterTool?(
     result: ToolResult,
     ctx: AgentContext,
-  ): string | void | Promise<string | void>;
+  ):
+    | string
+    | ToolOutput
+    | void
+    | Promise<string | ToolOutput | void>;
   /** Transforma a resposta final do passo do agente. */
   afterResponse?(
     response: string,
@@ -144,6 +183,11 @@ export interface LoopStep {
   steps: WorkflowStep[];
   until: (ctx: WorkflowContext) => unknown;
   maxIterations?: number;
+  /** Chamado quando o loop parou por `maxIterations` em vez de por `until`. */
+  onExhausted?: (
+    ctx: WorkflowContext,
+    iterations: number,
+  ) => unknown | Promise<unknown>;
 }
 
 /** Configuração passada para `@Workflow({ ... })`. */
@@ -175,6 +219,11 @@ export interface WorkflowRunOptions {
    * `until` dos loops (ex.: `userId`, `sessionId`).
    */
   memory?: Record<string, unknown>;
+  /**
+   * Teto da execução inteira (tempo, chamadas, tokens, custo). Sem `budget`,
+   * nada é medido nem checado.
+   */
+  budget?: RunBudget;
 }
 
 /** Handle retornado por `bootstrapWorkflow` — o "app" do workflow. */

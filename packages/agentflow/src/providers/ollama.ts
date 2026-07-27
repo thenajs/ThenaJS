@@ -1,12 +1,25 @@
 import z from "zod";
 import { ToolType } from "../tools/index.js";
 import { Message, ToolCall } from "../state/index.js";
-import { Providers, RawAssistant } from "./provider.js";
+import { Providers, RawAssistant, TokenCost } from "./provider.js";
+import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
 export type OllamaCredentials = {
     host: string;
     model: string;
     embedModel?: string;
+    /** Parâmetros de amostragem padrão (`options` do /api/chat). */
+    sampling?: SamplingParams;
+    /** Chaves cruas mescladas no body (ex.: `keep_alive`, `format`, `mirostat`). */
+    raw?: Record<string, unknown>;
+    /**
+     * Resgatar tool calls emitidas como texto (default: `true`). `false` deixa
+     * o texto virar resposta final — útil para expor que o modelo não está
+     * usando o formato nativo, em vez de mascarar.
+     */
+    rescueToolCalls?: boolean;
+    /** Preço por 1k tokens, para o `costUsd` do usage e o orçamento da run. */
+    costPer1kTokens?: TokenCost;
 };
 
 export class OllamaProvider extends Providers {
@@ -20,6 +33,24 @@ export class OllamaProvider extends Providers {
         this.host = credentials.host.replace(/\/$/, "");
         this.model = credentials.model;
         this.embedModel = credentials.embedModel ?? credentials.model;
+        this.sampling = credentials.sampling ?? {};
+        this.raw = credentials.raw ?? {};
+        this.rescueToolCalls = credentials.rescueToolCalls ?? true;
+        this.costPer1kTokens = credentials.costPer1kTokens;
+    }
+
+    // Traduz o shape neutro para as chaves de `options` do Ollama.
+    private toOllamaOptions(sampling: SamplingParams = {}): Record<string, unknown> {
+        return pruneUndefined({
+            temperature: sampling.temperature,
+            top_p: sampling.topP,
+            top_k: sampling.topK,
+            seed: sampling.seed,
+            num_predict: sampling.maxTokens,
+            num_ctx: sampling.numCtx,
+            stop: sampling.stop,
+            repeat_penalty: sampling.repeatPenalty,
+        });
     }
 
     // Formato de tools nativo do Ollama (/api/chat), igual ao da OpenAI.
@@ -51,12 +82,20 @@ export class OllamaProvider extends Providers {
         return { role: message.role, content: message.content };
     }
 
-    protected async chatInternal(tools: ToolType[], messages: Message[]): Promise<RawAssistant> {
+    protected async chatInternal(
+        tools: ToolType[],
+        messages: Message[],
+        sampling?: SamplingParams,
+    ): Promise<RawAssistant> {
+        const options = this.toOllamaOptions(sampling);
         const body = {
             model: this.model,
             messages: messages.map((m) => this.toOllamaMessage(m)),
             tools: tools.length ? this.toTools(tools) : undefined,
             stream: false,
+            // Sem sampling configurado, a chave nem existe — body idêntico ao default.
+            options: Object.keys(options).length ? options : undefined,
+            ...this.raw,
         };
 
         const response = await fetch(`${this.host}/api/chat`, {
@@ -82,6 +121,10 @@ export class OllamaProvider extends Providers {
         return {
             content: message?.content ?? "",
             toolCalls: toolCalls.length ? toolCalls : undefined,
+            usage: {
+                promptTokens: data?.prompt_eval_count,
+                completionTokens: data?.eval_count,
+            },
         };
     }
 

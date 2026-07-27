@@ -127,6 +127,29 @@ export class ReportRecorder {
     }
   }
 
+  /**
+   * Grava metadados estruturados no nó (iterações, exaustão, usage, flags).
+   * Diferente de `capture`: não é conteúdo, então não trunca nem depende de
+   * `captureContent` — é o que torna a telemetria mensurável sem regex.
+   */
+  meta(node: ExecutionNode, data: Record<string, unknown>): void {
+    if (!this.active) return;
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined) continue;
+      node.data[key] = value;
+    }
+  }
+
+  /**
+   * Marca o nó como erro **sem lançar** — para falhas observadas, em que a
+   * execução segue (ex.: tool que devolveu `isError: true`).
+   */
+  markError(node: ExecutionNode, message: string): void {
+    if (!this.active) return;
+    node.status = "error";
+    node.error = message;
+  }
+
   /** Grava conteúdo (prompt/resposta/tool I/O) no nó — truncado. */
   capture(node: ExecutionNode, content: Record<string, string | undefined>): void {
     if (!this.active || !this.captureContent) return;

@@ -5,6 +5,12 @@ export interface ToolCall {
   id?: string;
   name: string;
   arguments: unknown;
+  /**
+   * De onde a chamada veio: `"native"` quando o provider a devolveu pronta,
+   * `"rescued"` quando foi extraída do texto da resposta. Medir isso mostra o
+   * quanto um modelo depende do fallback.
+   */
+  source?: "native" | "rescued";
 }
 
 /** Um turno da conversa, no formato que o modelo entende. */
@@ -17,6 +23,8 @@ export interface Message {
   toolName?: string;
   /** Presente em mensagens 'tool': amarra o resultado ao tool_call (OpenAI exige). */
   toolCallId?: string;
+  /** Presente em mensagens 'tool': a observação é uma falha. */
+  isError?: boolean;
 }
 
 export type State = {

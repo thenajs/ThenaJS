@@ -3,6 +3,7 @@ import {
     parseAsExtractedJson,
     parseAsJson,
     parseAsMarkdownJson,
+    parseAsTaggedJson,
     stripThinkTags
 } from "./parsers.js";
 
@@ -11,5 +12,8 @@ export const parser = {
     parseAsMarkdownJson,
     parseAsExtractedJson,
     parseAsBalancedJson,
+    parseAsTaggedJson,
     stripThinkTags
 };
+
+export * from "./tool-call.js";

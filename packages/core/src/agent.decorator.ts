@@ -47,6 +47,7 @@ export function Agent(config: AgentConfig): ClassDecorator {
       provider: config.provider,
       tools: config.tools ?? [],
       prompt,
+      sampling: config.sampling,
     });
   };
 }

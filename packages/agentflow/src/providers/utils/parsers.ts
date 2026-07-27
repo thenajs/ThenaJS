@@ -71,6 +71,27 @@ export function parseAsBalancedJson(output: string): unknown {
 }
 
 
+/**
+ * Extrai o JSON de dentro de uma marcação de tool call — `<tool_call>`,
+ * `<function_call>`, `<tool_use>` ou `[TOOL_CALL]`. Qwen e vários modelos
+ * instruct usam esse formato quando o servidor não faz o parsing nativo.
+ *
+ * Não exige a tag de fechamento: respostas truncadas ainda são recuperáveis,
+ * porque a leitura balanceada para no `}` que fecha o objeto.
+ */
+export function parseAsTaggedJson(output: string): unknown {
+    const open = output.match(
+        /<(?:tool_call|function_call|tool_use)>|\[TOOL_CALL\]/i,
+    );
+
+    if (!open || open.index === undefined) {
+        throw new Error("No tool call tag found");
+    }
+
+    return parseAsBalancedJson(output.slice(open.index + open[0].length));
+}
+
+
 export function stripThinkTags(text: string): string {
 
     const TAG_PATTERN =

@@ -18,17 +18,26 @@ export function parallel(steps: WorkflowStep[]): ParallelStep {
 /**
  * Bloco de repetição: executa `steps` até `until(ctx)` ser verdadeiro
  * (ou atingir `maxIterations`).
+ *
+ * Quando a parada vem do teto e não da condição, o loop é marcado como
+ * *exausto*: `onExhausted` é chamado, `ctx.loop.exhausted` fica `true` e o nó
+ * `loop` do report registra o mesmo.
  */
 export function loop(options: {
   steps: WorkflowStep[];
   until: (ctx: WorkflowContext) => unknown;
   maxIterations?: number;
+  onExhausted?: (
+    ctx: WorkflowContext,
+    iterations: number,
+  ) => unknown | Promise<unknown>;
 }): LoopStep {
   return {
     kind: "loop",
     steps: options.steps,
     until: options.until,
     maxIterations: options.maxIterations,
+    onExhausted: options.onExhausted,
   };
 }
 
@@ -55,3 +64,12 @@ export function calledTool(ctx: WorkflowContext): boolean {
  * próprio. Sem turno registrado, retorna `true` (para o loop) por segurança.
  */
 export const untilAnswered = (ctx: WorkflowContext): boolean => !calledTool(ctx);
+
+/**
+ * `true` se o loop mais recente parou por `maxIterations`, não porque `until`
+ * ficou verdadeiro. Em loops aninhados o último a terminar vence; para o dado
+ * aninhado, leia `data.exhausted` dos nós `loop` do report.
+ */
+export function wasExhausted(ctx: WorkflowContext): boolean {
+  return ctx.loop?.exhausted ?? false;
+}

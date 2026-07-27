@@ -3,9 +3,18 @@
 export { Agent } from "./agent.decorator.js";
 export { Workflow } from "./workflow.decorator.js";
 export { Tool } from "./tool.decorator.js";
-export { parallel, loop, untilAnswered, calledTool, turnOf } from "./steps.js";
+export {
+  parallel,
+  loop,
+  untilAnswered,
+  calledTool,
+  turnOf,
+  wasExhausted,
+} from "./steps.js";
 export { run, runWorkflow, buildAgentStep, WorkflowRuntime } from "./runner.js";
 export { bootstrapWorkflow } from "./bootstrap.js";
+export { BudgetExceededError } from "./budget.js";
+export type { RunBudget, BudgetUsage, BudgetExceeded } from "./budget.js";
 export type { ThenaConfig, ReportOptions, LogConfig } from "./report/config.js";
 export type { ExecutionEvent, ExecutionNode, ExecutionKind } from "./report/recorder.js";
 export { getAgentMetadata, getWorkflowMetadata } from "./metadata.js";
@@ -42,17 +51,23 @@ export {
   Providers,
   StateManager,
   Pipeline,
+  toToolOutput,
   md,
 } from "@thenajs/agentflow";
 
 export type {
   ToolType,
+  ToolOutput,
   PipelineContext,
+  LoopInfo,
   Step,
   State,
   Message,
   Role,
   ChatTurn,
+  Usage,
+  TokenCost,
   OllamaCredentials,
   OpenAICredentials,
+  SamplingParams,
 } from "@thenajs/agentflow";

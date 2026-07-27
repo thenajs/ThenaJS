@@ -5,6 +5,7 @@ import type { ExecutionEvent } from "./report/recorder.js";
 import { ReportRecorder, resetRecorder, setRecorder } from "./report/recorder.js";
 import { writeReport } from "./report/report.js";
 import { consoleLogger } from "./report/logger.js";
+import { resetRuntimeSettings, setRuntimeSettings } from "./settings.js";
 
 /**
  * Ponto de entrada de uma aplicação ThenaJS. Prepara o workflow e devolve um
@@ -22,6 +23,8 @@ export async function bootstrapWorkflow<T = string>(
   WorkflowClass: Function,
   config: ThenaConfig = {},
 ): Promise<WorkflowApp<T>> {
+  setRuntimeSettings({ toolErrors: config.toolErrors });
+
   if (config.report || config.log) {
     const reportOptions: ReportOptions =
       typeof config.report === "object" ? config.report : {};
@@ -59,6 +62,7 @@ export async function bootstrapWorkflow<T = string>(
         process.exitCode = 1;
       } finally {
         resetRecorder();
+        resetRuntimeSettings();
       }
     },
   };

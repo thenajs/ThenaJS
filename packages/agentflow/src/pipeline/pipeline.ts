@@ -44,7 +44,11 @@ export class Pipeline<C extends PipelineContext> {
 
     loop(options: LoopOptions<C>): Step<C> {
         return async (ctx) => {
+            // `?? Infinity` em vez de guard de truthiness: `maxIterations: 0`
+            // deixa de significar "ilimitado".
+            const max = options.maxIterations ?? Infinity;
             let iterations = 0;
+            let exhausted = false;
 
             while (true) {
                 iterations++;
@@ -55,13 +59,19 @@ export class Pipeline<C extends PipelineContext> {
 
                 if (await options.until(ctx)) break;
 
-                if (
-                    options.maxIterations &&
-                    iterations >= options.maxIterations
-                ) {
+                if (iterations >= max) {
+                    exhausted = true;
                     break;
                 }
             }
+
+            if (exhausted) {
+                await options.onExhausted?.(ctx, iterations);
+            }
+
+            // Torna a parada legível para quem consome o run (telemetria honesta:
+            // "convergiu" e "bateu no teto" deixam de ser indistinguíveis).
+            ctx.loop = { iterations, exhausted, maxIterations: options.maxIterations };
 
             return ctx;
         };

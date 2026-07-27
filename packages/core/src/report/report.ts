@@ -98,15 +98,46 @@ function content(node: ExecutionNode): string {
   if (d.toolCall != null) parts.push(block("Decisão (tool call)", pretty(d.toolCall)));
   if (d.input != null) parts.push(block("Tool · input", pretty(d.input)));
   if (d.output != null) parts.push(block("Tool · output", String(d.output)));
+  const facts = signals(node);
+  if (facts.length) parts.push(block("Sinais", facts.join("\n")));
   if (node.error) parts.push(block("Erro", node.error));
   return parts.join("");
+}
+
+/**
+ * Metadados medíveis do nó (exaustão, origem da tool call, tokens, orçamento).
+ * Ficam sempre visíveis — a intenção é não precisar de regex sobre o texto para
+ * medir uma execução.
+ */
+function signals(node: ExecutionNode): string[] {
+  const d = node.data;
+  const out: string[] = [];
+
+  if (d.exhausted === true)
+    out.push(`loop exausto — parou em ${d.iterations} de ${d.maxIterations} iterações`);
+  if (d.toolCallSource != null) out.push(`tool call: ${d.toolCallSource}`);
+  if (d.isError === true) out.push("tool sinalizou erro (isError)");
+  if (d.promptTokens != null || d.completionTokens != null)
+    out.push(`tokens: ${d.promptTokens ?? "?"} prompt + ${d.completionTokens ?? "?"} completion`);
+  if (d.costUsd != null) out.push(`custo: US$ ${Number(d.costUsd).toFixed(6)}`);
+  if (node.kind === "workflow" && d.chatCalls != null)
+    out.push(
+      `orçamento: ${d.chatCalls} chats · ${d.toolCalls} tools · ${d.tokens} tokens` +
+        (d.exceeded === true ? " · ESTOURADO" : ""),
+    );
+
+  return out;
 }
 
 // ---------- tree ----------
 
 function label(node: ExecutionNode): string {
-  if (node.kind === "loop")
-    return `loop · ${node.children.length} iteraç${node.children.length === 1 ? "ão" : "ões"}`;
+  if (node.kind === "loop") {
+    // `children.length` é iterações × passos; o número real vem do nó.
+    const n = Number(node.data.iterations ?? node.children.length);
+    const exhausted = node.data.exhausted === true ? " · exausto" : "";
+    return `loop · ${n} iteraç${n === 1 ? "ão" : "ões"}${exhausted}`;
+  }
   if (node.kind === "parallel") return "paralelo";
   if (node.kind === "chat") return "chat";
   return node.name;

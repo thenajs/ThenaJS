@@ -1,5 +1,11 @@
-import { Pipeline, Providers, StateManager } from "@thenajs/agentflow";
-import type { Message, PipelineContext, Step, ToolType } from "@thenajs/agentflow";
+import { Pipeline, Providers, StateManager, toToolOutput } from "@thenajs/agentflow";
+import type {
+  Message,
+  PipelineContext,
+  Step,
+  ToolOutput,
+  ToolType,
+} from "@thenajs/agentflow";
 import {
   getAgentMetadata,
   getToolMetadata,
@@ -18,6 +24,9 @@ import type {
   WorkflowStep,
 } from "./types.js";
 import { recorder } from "./report/recorder.js";
+import { settings } from "./settings.js";
+import { BudgetTracker, budget, withBudget } from "./budget.js";
+import type { RunBudget } from "./budget.js";
 
 /** Instância já configurada é usada direto; classe é instanciada. */
 function resolveProvider(input: ProviderInput): Providers {
@@ -44,6 +53,7 @@ export class WorkflowRuntime {
       WorkflowClass,
       toInitial(options.input),
       options.memory,
+      options.budget,
     );
   }
 }
@@ -80,6 +90,10 @@ function resolveTool(input: ToolInput): ToolType {
 /**
  * Envolve o `execute` de uma tool com os hooks `beforeTool`/`afterTool` da
  * instância do agente. Sem hooks, devolve a tool intacta.
+ *
+ * É aqui que `toolErrors` vira comportamento: com `"observe"`, um `throw` do
+ * `execute` é convertido em observação `isError: true` em vez de subir. O
+ * `throw` do `beforeTool` continua propagando — é o cancelamento documentado.
  */
 function wrapToolWithHooks(
   tool: ToolType,
@@ -98,20 +112,48 @@ function wrapToolWithHooks(
           const next = await instance.beforeTool(call, ctx);
           if (next !== undefined) call = next;
         }
-        const output = await tool.execute(call.args);
-        let finalOutput = output;
+
+        budget().addTool();
+
+        let result: ToolOutput;
+        try {
+          result = toToolOutput(await tool.execute(call.args));
+        } catch (err) {
+          if (settings().toolErrors !== "observe") throw err;
+          result = {
+            content: (err as Error)?.message ?? String(err),
+            isError: true,
+          };
+        }
+
         if (hasAfter) {
           const replaced = await instance.afterTool(
-            { name: tool.name, args: call.args, output },
+            {
+              name: tool.name,
+              args: call.args,
+              output: result.content,
+              isError: result.isError,
+            },
             ctx,
           );
-          if (replaced !== undefined) finalOutput = replaced;
+          // String substitui só o texto (preserva o `isError`); para mudar a
+          // marca de erro, o hook devolve um `ToolOutput` completo.
+          if (replaced !== undefined) {
+            result =
+              typeof replaced === "string"
+                ? { ...result, content: replaced }
+                : toToolOutput(replaced);
+          }
         }
+
         recorder().capture(node, {
           input: JSON.stringify(call.args),
-          output: String(finalOutput),
+          output: result.content,
         });
-        return finalOutput;
+        recorder().meta(node, { isError: result.isError });
+        if (result.isError) recorder().markError(node, result.content);
+
+        return result;
       }),
   };
 }
@@ -139,6 +181,11 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
   return (ctx: PipelineContext) =>
     recorder().around("agent", agentName, async () => {
       const agentCtx = ctx as AgentContext;
+
+      // Checagem entre unidades de trabalho: um turno é uma chamada ao modelo
+      // mais, no máximo, uma tool. No modo "stop" o passo é pulado e a run
+      // termina com o output que já tinha; no modo "throw", isto lança.
+      if (budget().checkpoint()) return ctx;
 
       // Texto do último turno — passado ao escape hatch `run`.
       const last = ctx.state.history.at(-1) as Message | string | undefined;
@@ -183,7 +230,7 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
         ];
 
         const turn = await recorder().around("chat", "chat", async (node) => {
-          const t = await provider.chat({ tools, messages });
+          const t = await provider.chat({ tools, messages, sampling: meta.sampling });
           recorder().capture(node, {
             prompt: JSON.stringify(messages),
             response: t.assistant.content,
@@ -191,8 +238,17 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
               ? JSON.stringify(t.assistant.toolCalls[0])
               : undefined,
           });
+          recorder().meta(node, {
+            toolCallSource: t.assistant.toolCalls?.[0]?.source,
+            promptTokens: t.usage?.promptTokens,
+            completionTokens: t.usage?.completionTokens,
+            costUsd: t.usage?.costUsd,
+          });
+          budget().addChat(t.usage);
           return t;
         });
+
+        agentCtx.budget = budget().usage();
 
         ctx.state.append("history", turn.assistant);
         if (turn.tool) ctx.state.append("history", turn.tool);
@@ -207,6 +263,8 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
         agentCtx.turn = {
           calledTool: Boolean(turn.tool),
           toolName: turn.assistant.toolCalls?.[0]?.name,
+          toolError: turn.tool?.isError,
+          toolCallSource: turn.assistant.toolCalls?.[0]?.source,
           response,
         };
 
@@ -268,10 +326,27 @@ function compileStep(
   // step.kind === "loop"
   const loopStep = pipeline.loop({
     steps: step.steps.map((s) => compileStep(s, pipeline)),
-    until: async (ctx) => Boolean(await step.until(ctx as WorkflowContext)),
+    // Mesmo checkpoint do passo de agente: no modo "stop" o orçamento encerra o
+    // loop pela porta da frente (output preservado); no "throw", lança daqui.
+    until: async (ctx) =>
+      budget().checkpoint() || Boolean(await step.until(ctx as WorkflowContext)),
     maxIterations: step.maxIterations,
+    onExhausted: step.onExhausted
+      ? (ctx, iterations) => step.onExhausted!(ctx as WorkflowContext, iterations)
+      : undefined,
   });
-  return (ctx) => recorder().around("loop", "loop", async () => loopStep(ctx));
+  return (ctx) =>
+    recorder().around("loop", "loop", async (node) => {
+      const out = await loopStep(ctx);
+      // Registrado no nó (e não só no ctx) porque aqui o dado fica aninhado
+      // corretamente mesmo com loops dentro de loops.
+      recorder().meta(node, {
+        iterations: out.loop?.iterations,
+        exhausted: out.loop?.exhausted,
+        maxIterations: step.maxIterations,
+      });
+      return out;
+    });
 }
 
 /**
@@ -286,6 +361,7 @@ export async function runWorkflow<T = string>(
   WorkflowClass: Function,
   input: string,
   memory?: unknown,
+  runBudget?: RunBudget,
 ): Promise<T> {
   const meta = getWorkflowMetadata(WorkflowClass);
   const state = new StateManager();
@@ -299,8 +375,17 @@ export async function runWorkflow<T = string>(
   const pipeline = new Pipeline(state);
   pipeline.new(meta.steps.map((s) => compileStep(s, pipeline)));
 
-  return recorder().around("workflow", WorkflowClass.name, async () => {
-    const ctx = await pipeline.run(input);
-    return ctx.output as T;
-  });
+  const tracker = new BudgetTracker(runBudget);
+
+  return withBudget(tracker, () =>
+    recorder().around("workflow", WorkflowClass.name, async (node) => {
+      try {
+        const ctx = await pipeline.run(input);
+        return ctx.output as T;
+      } finally {
+        // No nó raiz mesmo quando a run falha — o consumo já aconteceu.
+        recorder().meta(node, { ...tracker.usage(), exceeded: tracker.exceeded() });
+      }
+    }),
+  );
 }

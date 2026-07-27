@@ -1,13 +1,29 @@
 import z from "zod";
 import { ToolType } from "../tools/index.js";
 import { Message, ToolCall } from "../state/index.js";
-import { Providers, RawAssistant } from "./provider.js";
+import { Providers, RawAssistant, TokenCost } from "./provider.js";
+import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
 export type OpenAICredentials = {
     apiKey: string;
     host?: string;
     model?: string;
     embedModel?: string;
+    /**
+     * Parâmetros de amostragem padrão. `topK`, `numCtx` e `repeatPenalty` não
+     * têm equivalente na API e são ignorados aqui — use `raw` se precisar.
+     */
+    sampling?: SamplingParams;
+    /** Chaves cruas mescladas no body (ex.: `response_format`, `user`). */
+    raw?: Record<string, unknown>;
+    /**
+     * Resgatar tool calls emitidas como texto (default: `true`). `false` deixa
+     * o texto virar resposta final — útil para expor que o modelo não está
+     * usando o formato nativo, em vez de mascarar.
+     */
+    rescueToolCalls?: boolean;
+    /** Preço por 1k tokens, para o `costUsd` do usage e o orçamento da run. */
+    costPer1kTokens?: TokenCost;
 };
 
 export class OpenAIProvider extends Providers {
@@ -23,6 +39,21 @@ export class OpenAIProvider extends Providers {
         this.host = (credentials.host ?? "https://api.openai.com/v1").replace(/\/$/, "");
         this.model = credentials.model ?? "gpt-4o-mini";
         this.embedModel = credentials.embedModel ?? "text-embedding-3-small";
+        this.sampling = credentials.sampling ?? {};
+        this.raw = credentials.raw ?? {};
+        this.rescueToolCalls = credentials.rescueToolCalls ?? true;
+        this.costPer1kTokens = credentials.costPer1kTokens;
+    }
+
+    // Traduz o shape neutro para os campos top-level da Chat Completions.
+    private toOpenAIParams(sampling: SamplingParams = {}): Record<string, unknown> {
+        return pruneUndefined({
+            temperature: sampling.temperature,
+            top_p: sampling.topP,
+            seed: sampling.seed,
+            max_tokens: sampling.maxTokens,
+            stop: sampling.stop,
+        });
     }
 
     private headers(): Record<string, string> {
@@ -64,12 +95,18 @@ export class OpenAIProvider extends Providers {
         return { role: message.role, content: message.content };
     }
 
-    protected async chatInternal(tools: ToolType[], messages: Message[]): Promise<RawAssistant> {
+    protected async chatInternal(
+        tools: ToolType[],
+        messages: Message[],
+        sampling?: SamplingParams,
+    ): Promise<RawAssistant> {
         const body = {
             model: this.model,
             messages: messages.map((m) => this.toOpenAIMessage(m)),
             tools: tools.length ? this.toTools(tools) : undefined,
             tool_choice: tools.length ? "auto" : undefined,
+            ...this.toOpenAIParams(sampling),
+            ...this.raw,
         };
 
         const response = await fetch(`${this.host}/chat/completions`, {
@@ -96,6 +133,10 @@ export class OpenAIProvider extends Providers {
         return {
             content: message?.content ?? "",
             toolCalls: toolCalls.length ? toolCalls : undefined,
+            usage: {
+                promptTokens: data?.usage?.prompt_tokens,
+                completionTokens: data?.usage?.completion_tokens,
+            },
         };
     }
 
