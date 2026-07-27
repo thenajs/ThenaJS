@@ -113,6 +113,12 @@ export class ReadFileTool {
 O pacote `@thenajs/tools` já traz a `ShellTool`; tools próprias do app ficam em
 `src/tools/`.
 
+> ⚠️ O `execute` recebe **só os argumentos** já validados pelo schema — não
+> enxerga `ctx`, `history` nem `memory`. Injeção acontece no construtor, e a
+> única dependência injetável é o `WorkflowRuntime`. Para dar contexto a uma
+> tool: coloque nos args, rederive dentro dela, ou use
+> [Workflow como Tool](#workflow-como-tool).
+
 ### Sinalizando falha
 
 Devolver uma `string` continua sendo o caminho normal. Para marcar que a
@@ -201,6 +207,12 @@ export class LocalOllamaProvider extends OllamaProvider {
 | `numCtx` | `options.num_ctx` | — |
 | `repeatPenalty` | `options.repeat_penalty` | — |
 
+> **Comece em `temperature: 0`.** Agente não é chat: você quer que a mesma
+> entrada produza a mesma decisão de tool. Medimos num `qwen2.5-coder:1.5b`,
+> mesma pergunta 3×: sem `sampling`, **3 respostas diferentes**; com
+> `temperature: 0` + `seed`, **3 idênticas**. O `seed` só tem efeito junto da
+> temperatura baixa. Suba a temperatura depois, por agente, onde quiser variedade.
+
 Um agente pode sobrescrever chave a chave, útil para deixar parte do fluxo
 determinística e parte criativa com o mesmo provider:
 
@@ -247,8 +259,28 @@ A classe do agente pode declarar hooks **opcionais** (`beforePrompt`,
 `beforeTool`, `afterTool`, `afterResponse`, `onError`) para interceptar e
 manipular o fluxo padrão. Veja [docs/concepts/hooks.html](docs/concepts/hooks.html).
 
-Contrato: **retornar um valor substitui, retornar `undefined` mantém**. Dois
-padrões que aparecem com frequência e que os hooks já resolvem, sem API dedicada:
+Contrato: **retornar um valor substitui, retornar `undefined` mantém**.
+
+```ts
+beforePrompt(prompt: string, ctx: AgentContext): string | void
+beforeTool(call: ToolCall, ctx: AgentContext): ToolCall | void
+afterTool(result: ToolResult, ctx: AgentContext): string | ToolOutput | void
+afterResponse(response: string, ctx: AgentContext): string | void
+onError(error: Error, ctx: AgentContext): string | void
+// todos aceitam Promise<…> também
+
+ToolCall   = { name: string; args: unknown }
+ToolResult = { name: string; args: unknown; output: string; isError?: boolean }
+ToolOutput = { content: string; isError?: boolean; data?: unknown }
+```
+
+> ⚠️ Duas pegadinhas de nome. O `ToolCall` dos hooks usa `args`, não `arguments`
+> — e existe um **outro** tipo também chamado `ToolCall`, o do engine
+> (`{ id, name, arguments, source }`), que é o que aparece em `ctx.turn` e no
+> report. E o `afterTool` recebe um `ToolResult` mas não devolve um: devolva uma
+> string (troca só o texto, preserva o `isError`) ou um `ToolOutput` completo.
+
+Dois padrões que aparecem com frequência e que os hooks já resolvem, sem API dedicada:
 
 **A saída de um passo como contexto, não como fala.** Por padrão a resposta de um
 agente entra no transcript do próximo como mensagem `assistant`. Para que um
@@ -342,6 +374,75 @@ const parecer = await runWorkflow(ExplorerWorkflow, "Revise o diretório src/");
 >
 > No `parallel`, os agentes rodam sobre a **mesma** entrada e todos escrevem em
 > `ctx.output` (a última escrita vence); leia os resultados em `ctx.state`.
+
+#### ⚠️ A saída de um step vira fala do próximo agente
+
+O turno de um agente é anexado ao `history` com `role: "assistant"`. Como o
+próximo agente lê o mesmo `history`, ele recebe aquilo **como se ele próprio já
+tivesse respondido** — e um modelo que "já falou" tende a devolver vazio ou a
+encerrar cedo.
+
+É o erro mais silencioso do framework, e aparece no arranjo mais natural:
+`steps: [PlannerAgent, loop([OrchestratorAgent])]`. Se a saída é *contexto* (um
+plano, um resumo) e não fala, promova-a:
+
+```ts
+class PlannerAgent implements AgentHooks {
+  afterResponse(plano: string, ctx: AgentContext) {
+    ctx.state.set("history", ctx.state.history.slice(0, -1)); // tira do transcript
+    ctx.state.append("memory", `Plano a seguir:\n${plano}`);  // vira `system` no topo
+    ctx.plan = plano;
+  }
+}
+```
+
+A alternativa, quando o passo precisa de histórico próprio, é isolá-lo atrás de
+uma tool — veja [Workflow como Tool](#workflow-como-tool).
+
+#### ⚠️ `untilAnswered` trata resposta vazia como resposta
+
+Ele pergunta uma coisa só: "não chamou tool?". Um modelo local que devolve string
+vazia encerra o loop com sucesso aparente. E ele não distingue "terminou" de
+"escreveu o que faria em vez de chamar a tool" — os dois dão `calledTool: false`.
+Para tarefas de várias etapas, escreva o seu:
+
+```ts
+import { turnOf } from "@thenajs/core";
+
+// só encerra se respondeu E disse alguma coisa
+const until = (ctx: WorkflowContext) => {
+  const t = turnOf(ctx);
+  return !!t && !t.calledTool && !!t.response?.trim();
+};
+```
+
+### Workflow como Tool
+
+Uma tool pode disparar um workflow inteiro. O filho roda com **estado próprio** e
+devolve **uma string** ao pai — isolamento de contexto sem escrever nada para isso:
+
+```
+agente pai  (histórico enxuto)
+ └─ tool ──▶ workflow isolado  (StateManager próprio)
+              ├─ 10 turnos de tentativa e erro
+              └─ devolve UMA string ao pai
+```
+
+Isso importa muito com modelo pequeno: dez turnos de tentativa e erro no
+histórico do pai degradam as decisões dele. Passando pelo filho, o pai vê uma linha.
+
+| | sub-agente como **step** | sub-agente como **workflow-tool** |
+| --- | --- | --- |
+| Histórico | compartilhado com o pai | próprio, isolado |
+| A saída vira | mensagem `assistant` | observação `tool` |
+| Quem decide se roda | você, na ordem dos `steps` | o modelo, chamando a tool |
+| Custo de contexto no pai | todos os turnos do filho | uma string |
+| Use quando | é uma conversa só e o pai precisa ver o caminho | a subtarefa é ruidosa, ou só o resultado importa |
+
+O report **aninha** o filho dentro do nó `tool` do pai, então a visibilidade não
+se perde. Já o `budget` **não** atravessa: cada `run` tem o próprio contador, e um
+teto no pai não soma o consumo dos filhos — se o subworkflow é caro, passe um
+`budget` no `runtime.run` dele também.
 
 #### Quando o loop estoura
 
