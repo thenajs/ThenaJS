@@ -113,6 +113,32 @@ export class ReadFileTool {
 O pacote `@thenajs/tools` já traz a `ShellTool`; tools próprias do app ficam em
 `src/tools/`.
 
+### Sinalizando falha
+
+Devolver uma `string` continua sendo o caminho normal. Para marcar que a
+observação é um erro — sem lançar e sem derrubar a run — devolva um `ToolOutput`:
+
+```ts
+async execute({ path }: { path: string }) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (err) {
+    return { content: `Falhou: ${(err as Error).message}`, isError: true };
+  }
+}
+```
+
+O nó `tool` do report fica `status: "error"`, o hook `afterTool` recebe
+`isError`, e `ctx.turn.toolError` fica `true`. Com isso `tool_error_rate` é uma
+contagem de nós, não uma regex sobre o texto de saída.
+
+Uma tool que **lança** continua derrubando a run por padrão. Se preferir que o
+erro volte ao modelo como observação, ligue a política no config:
+
+```ts
+export const config: ThenaConfig = { toolErrors: "observe" }; // default: "throw"
+```
+
 ### Uma tool chamando um workflow
 
 O construtor da tool pode receber o `WorkflowRuntime` injetado, para disparar
@@ -143,6 +169,63 @@ Um provider é uma classe (normalmente subclasse de um provider do engine) com a
 credenciais já configuradas. Veja
 [`src/providers/ollama.provider.ts`](src/providers/ollama.provider.ts).
 
+### Parâmetros de amostragem
+
+`sampling` aceita um shape neutro que cada provider traduz para as chaves
+nativas. Nada tem default: o que você não informar não é enviado, e o modelo
+mantém o comportamento dele.
+
+```ts
+import { OllamaProvider } from "@thenajs/core";
+
+export class LocalOllamaProvider extends OllamaProvider {
+  constructor() {
+    super({
+      host: "http://localhost:11434",
+      model: "qwen2.5-coder:7b",
+      sampling: { temperature: 0, seed: 42, numCtx: 8192 },
+      raw: { keep_alive: "30m" }, // escape hatch: chaves cruas no body
+    });
+  }
+}
+```
+
+| `SamplingParams` | Ollama | OpenAI |
+| --- | --- | --- |
+| `temperature` | `options.temperature` | `temperature` |
+| `topP` | `options.top_p` | `top_p` |
+| `seed` | `options.seed` | `seed` |
+| `maxTokens` | `options.num_predict` | `max_tokens` |
+| `stop` | `options.stop` | `stop` |
+| `topK` | `options.top_k` | — |
+| `numCtx` | `options.num_ctx` | — |
+| `repeatPenalty` | `options.repeat_penalty` | — |
+
+Um agente pode sobrescrever chave a chave, útil para deixar parte do fluxo
+determinística e parte criativa com o mesmo provider:
+
+```ts
+@Agent({ provider: LocalOllamaProvider, prompt: "./writer.agent.md",
+         sampling: { temperature: 0.8 } })
+export class WriterAgent {}
+```
+
+### Tool calls emitidas como texto
+
+Quando o provider não devolve tool calls nativas, o runtime tenta extrair a
+chamada do texto da resposta — o caso comum em modelos locais. São reconhecidos
+`<tool_call>…</tool_call>`, blocos markdown e os envelopes que os modelos de
+fato emitem (`{name, arguments}`, `{name, parameters}`, `{tool, args}`,
+`{function:{…}}`, argumentos como string JSON…).
+
+O nó `chat` do report registra `toolCallSource: "native" | "rescued"`, então dá
+para medir o quanto um modelo depende do resgate. Para desligar — e expor que o
+modelo não está usando o formato nativo em vez de mascarar:
+
+```ts
+super({ host, model, rescueToolCalls: false });
+```
+
 ## Executando um agente
 
 ```ts
@@ -162,7 +245,28 @@ com o prompt do `.md`.
 
 A classe do agente pode declarar hooks **opcionais** (`beforePrompt`,
 `beforeTool`, `afterTool`, `afterResponse`, `onError`) para interceptar e
-manipular o fluxo padrão. Veja [docs/agent-hooks.md](docs/agent-hooks.md).
+manipular o fluxo padrão. Veja [docs/concepts/hooks.html](docs/concepts/hooks.html).
+
+Contrato: **retornar um valor substitui, retornar `undefined` mantém**. Dois
+padrões que aparecem com frequência e que os hooks já resolvem, sem API dedicada:
+
+**A saída de um passo como contexto, não como fala.** Por padrão a resposta de um
+agente entra no transcript do próximo como mensagem `assistant`. Para que um
+plano vire contexto durável, reescreva o history no próprio agente:
+
+```ts
+class PlannerAgent implements AgentHooks {
+  afterResponse(plano: string, ctx: AgentContext) {
+    // tira o turno do transcript e promove para memória (vira `system` no topo)
+    ctx.state.set("history", ctx.state.history.slice(0, -1));
+    ctx.state.append("memory", `Plano:\n${plano}`);
+    ctx.plan = plano;
+  }
+}
+```
+
+**Cortar uma chamada repetida.** `beforeTool` cancela a execução com um `throw` —
+veja o exemplo em [Orçamentos de run](#orçamentos-de-run).
 
 ## Workflows
 
@@ -172,7 +276,7 @@ e aninháveis:
 
 - **agente** (a classe) → passo sequencial; a saída de um alimenta o próximo;
 - **`parallel([...])`** → passos concorrentes sobre o mesmo contexto;
-- **`loop({ steps, until, maxIterations })`** → repete até `until(ctx)` ou o limite.
+- **`loop({ steps, until, maxIterations, onExhausted })`** → repete até `until(ctx)` ou o limite.
 
 ```ts
 // src/workflows/explorer.workflow.ts
@@ -239,6 +343,81 @@ const parecer = await runWorkflow(ExplorerWorkflow, "Revise o diretório src/");
 > No `parallel`, os agentes rodam sobre a **mesma** entrada e todos escrevem em
 > `ctx.output` (a última escrita vence); leia os resultados em `ctx.state`.
 
+#### Quando o loop estoura
+
+Parar por `maxIterations` é diferente de convergir, e o framework diz qual dos
+dois aconteceu:
+
+```ts
+loop({
+  steps: [ExplorerAgent],
+  until: untilAnswered,
+  maxIterations: 10,
+  onExhausted: (ctx, n) => console.warn(`[app] loop estourou em ${n} iterações`),
+})
+```
+
+- `ctx.loop` → `{ iterations, exhausted, maxIterations }`;
+- `wasExhausted(ctx)` → helper para ler isso num `until` ou hook;
+- o nó `loop` do report registra `iterations` e `exhausted`.
+
+Em loops aninhados `ctx.loop` sofre last-writer-wins — para o dado aninhado,
+leia a árvore do report.
+
+### Orçamentos de run
+
+`maxIterations` limita um loop; `budget` limita a **execução inteira**:
+
+```ts
+await app.run({
+  input: { message: "faça o deploy" },
+  budget: {
+    maxDurationMs: 5 * 60_000,
+    maxChatCalls: 30,
+    maxToolCalls: 40,
+    maxTokens: 200_000,
+    maxCostUsd: 1.5,
+    mode: "stop", // ou "throw"; default "stop"
+    onExceeded: (i) => console.warn(`[app] orçamento estourado: ${i.reason}`),
+  },
+});
+```
+
+- **`"stop"`** encerra graciosamente: os passos seguintes são pulados e a run
+  devolve o `output` que já tinha;
+- **`"throw"`** lança `BudgetExceededError`.
+
+Sem `budget`, nada é medido nem checado. Os limites são conferidos **entre
+unidades de trabalho** (um turno = uma chamada ao modelo + no máximo uma tool),
+então o consumo pode passar do teto dentro do turno em que ele é atingido.
+
+`maxTokens` e `maxCostUsd` dependem do que o provider reporta. Tokens vêm de
+graça (Ollama e OpenAI já são lidos); custo exige informar o preço, porque não há
+tabela embutida para envelhecer em silêncio:
+
+```ts
+super({ host, model, costPer1kTokens: { input: 0.0005, output: 0.0015 } });
+```
+
+O consumo acumulado fica em **`ctx.budget`** (`chatCalls`, `toolCalls`, `tokens`,
+`costUsd`, `elapsedMs`). É a partir daí que se escreve política própria — cortar
+uma chamada repetida, aplicar heurística de parada — num `beforeTool` ou num
+`until`, sem o framework opinar sobre ela:
+
+```ts
+class ExplorerAgent implements AgentHooks {
+  private vistas = new Set<string>();
+
+  beforeTool(call: ToolCall) {
+    const assinatura = `${call.name}:${JSON.stringify(call.args)}`;
+    if (this.vistas.has(assinatura)) {
+      throw new Error(`Já chamei ${call.name} com esses argumentos.`);
+    }
+    this.vistas.add(assinatura);
+  }
+}
+```
+
 ## Report de execução
 
 O `bootstrapWorkflow` aceita um `config`. Com `report: true`, ao final da run é
@@ -252,8 +431,9 @@ decisão de tool e o I/O das tools).
 import type { ThenaConfig } from "@thenajs/core";
 
 export const config: ThenaConfig = {
-  log: true,    // logs ao vivo; ou "verbose", ou (event) => logger.info(event)
-  report: true, // ou { dir: "report", format: "html" | "json" | "both" }
+  log: true,          // logs ao vivo; ou "verbose", ou (event) => logger.info(event)
+  report: true,       // ou { dir: "report", format: "html" | "json" | "both" }
+  toolErrors: "throw" // ou "observe" — erro de tool volta ao modelo (default: "throw")
 };
 
 // src/main.ts
@@ -269,6 +449,21 @@ indentada no console, com durações), `"verbose"` (inclui o conteúdo) ou uma
 função `(event) => void` (sink customizado — pino/winston, arquivo, JSON lines).
 Log e report reutilizam a mesma camada de interceptação — uma instrumentação,
 dois "outputs".
+
+### O que dá para medir sem regex
+
+Além de duração e status, cada nó carrega metadados estruturados em `data`:
+
+| Nó | Campos |
+| --- | --- |
+| `workflow` | `chatCalls`, `toolCalls`, `tokens`, `costUsd`, `elapsedMs`, `exceeded` |
+| `loop` | `iterations`, `exhausted`, `maxIterations` |
+| `chat` | `toolCallSource`, `promptTokens`, `completionTokens`, `costUsd` |
+| `tool` | `isError` (e `status: "error"` no nó) |
+
+Ou seja: `tool_error_rate` é contar nós `kind: "tool"` com `status: "error"`; a
+taxa de resgate é contar `toolCallSource === "rescued"`; e loops que não
+convergiram são `exhausted: true`. Nada disso exige parsear o texto de saída.
 
 ## Scripts
 
