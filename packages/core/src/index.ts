@@ -55,6 +55,14 @@ export {
   md,
 } from "@thenajs/agentflow";
 
+// Ferramentas para escrever um provider próprio: parsers de resposta em texto,
+// normalização de envelope de tool call e o helper de mapeamento de sampling.
+export {
+  parser,
+  normalizeToolCallEnvelope,
+  pruneUndefined,
+} from "@thenajs/agentflow";
+
 export type {
   ToolType,
   ToolOutput,
@@ -70,4 +78,19 @@ export type {
   OllamaCredentials,
   OpenAICredentials,
   SamplingParams,
+} from "@thenajs/agentflow";
+
+/**
+ * Tipos para escrever um provider próprio.
+ *
+ * Atenção ao `ProviderToolCall`: é a chamada no formato do provider
+ * (`{ id, name, arguments, source }`), diferente do `ToolCall` dos hooks
+ * (`{ name, args }`) exportado acima.
+ */
+export type {
+  RawAssistant,
+  ChatParams,
+  ProviderCredentials,
+  ProviderToolCall,
+  NormalizedToolCall,
 } from "@thenajs/agentflow";

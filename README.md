@@ -222,6 +222,67 @@ determinística e parte criativa com o mesmo provider:
 export class WriterAgent {}
 ```
 
+### Escrevendo um provider próprio
+
+Qualquer backend vira provider. Tudo o que você precisa sai do `@thenajs/core`,
+sem dependência extra:
+
+```ts
+import { Providers, pruneUndefined } from "@thenajs/core";
+import type {
+  ProviderCredentials, RawAssistant, ProviderToolCall,
+  ToolType, Message, SamplingParams,
+} from "@thenajs/core";
+
+// herda sampling, raw, rescueToolCalls e costPer1kTokens
+type Credentials = ProviderCredentials & { apiKey: string; model?: string };
+
+export class AnthropicProvider extends Providers {
+  private readonly apiKey: string;
+  private readonly model: string;
+
+  constructor(credentials: Credentials) {
+    super();
+    this.configure(credentials);   // os campos comuns, de uma vez
+    this.apiKey = credentials.apiKey;
+    this.model = credentials.model ?? "claude-sonnet-5";
+  }
+
+  protected async chatInternal(
+    tools: ToolType[],
+    messages: Message[],
+    sampling?: SamplingParams,
+  ): Promise<RawAssistant> {
+    // traduz messages/tools, mapeia sampling com pruneUndefined,
+    // e devolve { content, toolCalls?, usage? }
+  }
+}
+```
+
+`chatInternal` é o **único** método obrigatório. O que a base já faz por você:
+
+| A base garante | Você devolve |
+| --- | --- |
+| remover blocos de raciocínio (`<think>` e afins) | `content` — o texto como veio |
+| resgatar a chamada do texto quando não houver `toolCalls`, e marcar `source` | `toolCalls?` — só as **nativas** |
+| validar os args contra o schema e executar a tool | nada — a execução não é sua |
+| mesclar o `sampling` do agente sobre o do provider | o mapeamento para as chaves da sua API |
+| calcular `costUsd` a partir de `costPer1kTokens` | `usage?` — tokens, se a API reportar |
+
+Opcionalmente sobrescreva `embed(input)` se o backend tiver embeddings (o default
+devolve `[]`). Para reaproveitar o parsing de resposta em texto, `parser` e
+`normalizeToolCallEnvelope` também são exportados.
+
+> **Credenciais obrigatórias?** `@Agent({ provider })` aceita a **classe** — e
+> nesse caso a instancia com `new Provider()`, logo ela precisa de construtor sem
+> argumentos. Se o seu provider exige credenciais, passe uma **instância**:
+> `@Agent({ provider: new AnthropicProvider({ apiKey }) })`.
+
+> **Nomes:** `ProviderToolCall` (`{ id, name, arguments, source }`) é o que você
+> devolve em `toolCalls` — não confunda com o `ToolCall` dos hooks
+> (`{ name, args }`). O `ToolCall` do `@thenajs/agentflow` é um alias deprecado
+> do primeiro.
+
 ### Tool calls emitidas como texto
 
 Quando o provider não devolve tool calls nativas, o runtime tenta extrair a

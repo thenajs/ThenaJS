@@ -51,7 +51,7 @@ export interface ScaffoldFile {
 }
 
 /** Versões dos pacotes @thenajs referenciadas pelo projeto gerado. */
-const THENA_VERSION = "^0.2.0";
+const THENA_VERSION = "^0.3.0";
 
 /** Todos os arquivos de um projeto ThenaJS novo. */
 export function projectFiles(name: string): ScaffoldFile[] {

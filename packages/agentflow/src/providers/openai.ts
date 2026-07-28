@@ -1,29 +1,20 @@
 import z from "zod";
 import { ToolType } from "../tools/index.js";
-import { Message, ToolCall } from "../state/index.js";
-import { Providers, RawAssistant, TokenCost } from "./provider.js";
+import { Message, ProviderToolCall } from "../state/index.js";
+import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
-export type OpenAICredentials = {
+/**
+ * Além dos campos abaixo, aceita tudo de `ProviderCredentials`. Note que
+ * `sampling.topK`, `sampling.numCtx` e `sampling.repeatPenalty` não têm
+ * equivalente nesta API e são ignorados — use `raw` se precisar
+ * (ex.: `response_format`, `user`).
+ */
+export type OpenAICredentials = ProviderCredentials & {
     apiKey: string;
     host?: string;
     model?: string;
     embedModel?: string;
-    /**
-     * Parâmetros de amostragem padrão. `topK`, `numCtx` e `repeatPenalty` não
-     * têm equivalente na API e são ignorados aqui — use `raw` se precisar.
-     */
-    sampling?: SamplingParams;
-    /** Chaves cruas mescladas no body (ex.: `response_format`, `user`). */
-    raw?: Record<string, unknown>;
-    /**
-     * Resgatar tool calls emitidas como texto (default: `true`). `false` deixa
-     * o texto virar resposta final — útil para expor que o modelo não está
-     * usando o formato nativo, em vez de mascarar.
-     */
-    rescueToolCalls?: boolean;
-    /** Preço por 1k tokens, para o `costUsd` do usage e o orçamento da run. */
-    costPer1kTokens?: TokenCost;
 };
 
 export class OpenAIProvider extends Providers {
@@ -39,10 +30,7 @@ export class OpenAIProvider extends Providers {
         this.host = (credentials.host ?? "https://api.openai.com/v1").replace(/\/$/, "");
         this.model = credentials.model ?? "gpt-4o-mini";
         this.embedModel = credentials.embedModel ?? "text-embedding-3-small";
-        this.sampling = credentials.sampling ?? {};
-        this.raw = credentials.raw ?? {};
-        this.rescueToolCalls = credentials.rescueToolCalls ?? true;
-        this.costPer1kTokens = credentials.costPer1kTokens;
+        this.configure(credentials);
     }
 
     // Traduz o shape neutro para os campos top-level da Chat Completions.
@@ -124,7 +112,7 @@ export class OpenAIProvider extends Providers {
         const message = data?.choices?.[0]?.message;
 
         // Normaliza eventuais tool calls nativas para { id, name, arguments }.
-        const toolCalls: ToolCall[] = (message?.tool_calls ?? []).map((tc: any) => ({
+        const toolCalls: ProviderToolCall[] = (message?.tool_calls ?? []).map((tc: any) => ({
             id: tc?.id,
             name: tc?.function?.name,
             arguments: safeParse(tc?.function?.arguments),
@@ -140,7 +128,7 @@ export class OpenAIProvider extends Providers {
         };
     }
 
-    protected async embed(input?: string): Promise<number[]> {
+    public async embed(input?: string): Promise<number[]> {
         const response = await fetch(`${this.host}/embeddings`, {
             method: "POST",
             headers: this.headers(),

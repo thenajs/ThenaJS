@@ -1,25 +1,18 @@
 import z from "zod";
 import { ToolType } from "../tools/index.js";
-import { Message, ToolCall } from "../state/index.js";
-import { Providers, RawAssistant, TokenCost } from "./provider.js";
+import { Message, ProviderToolCall } from "../state/index.js";
+import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
-export type OllamaCredentials = {
+/**
+ * Além dos campos abaixo, aceita tudo de `ProviderCredentials`: `sampling`
+ * (vira `options` no /api/chat), `raw` (ex.: `keep_alive`, `format`,
+ * `mirostat`), `rescueToolCalls` e `costPer1kTokens`.
+ */
+export type OllamaCredentials = ProviderCredentials & {
     host: string;
     model: string;
     embedModel?: string;
-    /** Parâmetros de amostragem padrão (`options` do /api/chat). */
-    sampling?: SamplingParams;
-    /** Chaves cruas mescladas no body (ex.: `keep_alive`, `format`, `mirostat`). */
-    raw?: Record<string, unknown>;
-    /**
-     * Resgatar tool calls emitidas como texto (default: `true`). `false` deixa
-     * o texto virar resposta final — útil para expor que o modelo não está
-     * usando o formato nativo, em vez de mascarar.
-     */
-    rescueToolCalls?: boolean;
-    /** Preço por 1k tokens, para o `costUsd` do usage e o orçamento da run. */
-    costPer1kTokens?: TokenCost;
 };
 
 export class OllamaProvider extends Providers {
@@ -33,10 +26,7 @@ export class OllamaProvider extends Providers {
         this.host = credentials.host.replace(/\/$/, "");
         this.model = credentials.model;
         this.embedModel = credentials.embedModel ?? credentials.model;
-        this.sampling = credentials.sampling ?? {};
-        this.raw = credentials.raw ?? {};
-        this.rescueToolCalls = credentials.rescueToolCalls ?? true;
-        this.costPer1kTokens = credentials.costPer1kTokens;
+        this.configure(credentials);
     }
 
     // Traduz o shape neutro para as chaves de `options` do Ollama.
@@ -113,7 +103,7 @@ export class OllamaProvider extends Providers {
         const message = data?.message;
 
         // Normaliza eventuais tool calls nativas para { name, arguments }.
-        const toolCalls: ToolCall[] = (message?.tool_calls ?? []).map((tc: any) => ({
+        const toolCalls: ProviderToolCall[] = (message?.tool_calls ?? []).map((tc: any) => ({
             name: tc?.function?.name,
             arguments: tc?.function?.arguments,
         }));
@@ -128,7 +118,7 @@ export class OllamaProvider extends Providers {
         };
     }
 
-    protected async embed(input?: string): Promise<number[]> {
+    public async embed(input?: string): Promise<number[]> {
         const response = await fetch(`${this.host}/api/embeddings`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

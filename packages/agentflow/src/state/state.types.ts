@@ -1,6 +1,13 @@
 export type Role = "system" | "user" | "assistant" | "tool";
 
-export interface ToolCall {
+/**
+ * A chamada de tool no formato do provider — o que `chatInternal` devolve em
+ * `RawAssistant.toolCalls` e o que aparece em `ctx.turn`/report.
+ *
+ * Não confundir com o `ToolCall` dos hooks (`@thenajs/core`), que é
+ * `{ name, args }`: este usa `arguments`, e traz `id` e `source`.
+ */
+export interface ProviderToolCall {
   /** id nativo (OpenAI) ou sintético; Ollama tolera ausência. */
   id?: string;
   name: string;
@@ -13,12 +20,19 @@ export interface ToolCall {
   source?: "native" | "rescued";
 }
 
+/**
+ * @deprecated Renomeado para `ProviderToolCall` — o nome colidia com o
+ * `ToolCall` dos hooks, que tem formato diferente. Este alias continua
+ * funcionando e será removido numa versão futura.
+ */
+export type ToolCall = ProviderToolCall;
+
 /** Um turno da conversa, no formato que o modelo entende. */
 export interface Message {
   role: Role;
   content: string;
   /** Presente em mensagens 'assistant' que chamam uma tool (no máximo 1 por turno). */
-  toolCalls?: ToolCall[];
+  toolCalls?: ProviderToolCall[];
   /** Presente em mensagens 'tool': qual tool gerou o resultado. */
   toolName?: string;
   /** Presente em mensagens 'tool': amarra o resultado ao tool_call (OpenAI exige). */

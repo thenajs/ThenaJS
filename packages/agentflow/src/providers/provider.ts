@@ -1,6 +1,6 @@
 import { ToolType, toToolOutput } from "../tools/index.js";
 import { normalizeToolCallEnvelope, parser } from "./utils/index.js";
-import { Message, ToolCall } from "../state/index.js";
+import { Message, ProviderToolCall } from "../state/index.js";
 import { SamplingParams } from "./sampling.types.js";
 
 /** Consumo de uma chamada ao modelo, quando o provider o reporta. */
@@ -20,7 +20,7 @@ export interface TokenCost {
 /** O que `chatInternal` (cada subclasse) devolve: a resposta crua do modelo. */
 export interface RawAssistant {
     content: string;
-    toolCalls?: ToolCall[];
+    toolCalls?: ProviderToolCall[];
     usage?: Usage;
 }
 
@@ -36,6 +36,26 @@ export interface ChatParams {
     messages: Message[];
     /** Sampling desta chamada; sobrescreve chave a chave o do provider. */
     sampling?: SamplingParams;
+}
+
+/**
+ * Campos que **todo** provider aceita, independente do backend. Estenda no seu
+ * tipo de credentials e passe o objeto inteiro para `configure()` — assim um
+ * campo novo na classe base chega ao seu provider sem você mexer em nada.
+ *
+ * ```ts
+ * type MinhasCredentials = ProviderCredentials & { apiKey: string };
+ * ```
+ */
+export interface ProviderCredentials {
+    /** Parâmetros de amostragem padrão deste provider. */
+    sampling?: SamplingParams;
+    /** Chaves cruas mescladas no body do request, para o que `sampling` não cobre. */
+    raw?: Record<string, unknown>;
+    /** Resgatar tool calls emitidas como texto (default: `true`). */
+    rescueToolCalls?: boolean;
+    /** Preço por 1k tokens, para o `costUsd` do usage e o orçamento da run. */
+    costPer1kTokens?: TokenCost;
 }
 
 export class Providers {
@@ -63,6 +83,28 @@ export class Providers {
      */
     protected costPer1kTokens?: TokenCost;
 
+    /**
+     * Absorve os campos comuns das credentials. Chame no construtor da sua
+     * subclasse, antes ou depois de guardar os campos próprios:
+     *
+     * ```ts
+     * constructor(credentials: MinhasCredentials) {
+     *     super();
+     *     this.configure(credentials);
+     *     this.apiKey = credentials.apiKey;
+     * }
+     * ```
+     *
+     * Existe para você não repetir (nem esquecer) uma dessas atribuições — e
+     * para que um campo novo na classe base chegue ao seu provider de graça.
+     */
+    protected configure(credentials: ProviderCredentials = {}): void {
+        this.sampling = credentials.sampling ?? {};
+        this.raw = credentials.raw ?? {};
+        this.rescueToolCalls = credentials.rescueToolCalls ?? true;
+        this.costPer1kTokens = credentials.costPer1kTokens;
+    }
+
     // Da estratégia mais específica para a mais permissiva: a extração por regex
     // é gananciosa (`{` … último `}`) e só deve entrar se nada antes casou.
     private extractors: ((input: string) => unknown)[] = [
@@ -82,7 +124,7 @@ export class Providers {
         // tool call: usa o nativo quando o provider o trouxe; senão, tenta
         // extrair do texto (fallback p/ modelos locais que emitem JSON no content).
         const native = raw.toolCalls?.[0];
-        const call: ToolCall | null = native
+        const call: ProviderToolCall | null = native
             ? { ...native, source: "native" }
             : this.rescueToolCalls
                 ? this.extractToolCall(content, tools)
@@ -136,7 +178,7 @@ export class Providers {
      * de onde veio a chamada: um resgate cujos argumentos não passam no schema
      * era, antes, indistinguível de um bug da tool.
      */
-    private parseArguments(tool: ToolType, call: ToolCall): unknown {
+    private parseArguments(tool: ToolType, call: ProviderToolCall): unknown {
         try {
             return tool.schema.parse(call.arguments);
         } catch (error) {
@@ -151,7 +193,7 @@ export class Providers {
     }
 
     // Fallback: extrai uma tool call do texto do modelo (parsing separado da execução).
-    private extractToolCall(content: string, tools: ToolType[]): ToolCall | null {
+    private extractToolCall(content: string, tools: ToolType[]): ProviderToolCall | null {
         for (const extract of this.extractors) {
             let payload: unknown;
 
@@ -179,6 +221,15 @@ export class Providers {
         return null;
     }
 
+    /**
+     * A chamada crua ao modelo — **o único método que uma subclasse precisa
+     * implementar**. Traduza `messages`/`tools` para o formato da API, mapeie o
+     * `sampling` para as chaves nativas e devolva o conteúdo.
+     *
+     * A classe base cuida do resto: remove blocos de raciocínio, decide entre
+     * tool call nativa e resgatada do texto, valida os argumentos contra o
+     * schema, executa a tool e calcula o custo.
+     */
     protected chatInternal(
         _tools: ToolType[],
         _messages: Message[],
@@ -187,7 +238,11 @@ export class Providers {
         return Promise.resolve({ content: "" });
     }
 
-    protected embed(_input?: string): Promise<number[]> {
+    /**
+     * Vetor de embedding do texto. Providers que não suportam devolvem `[]`
+     * (o default desta classe).
+     */
+    public embed(_input?: string): Promise<number[]> {
         return Promise.resolve([]);
     }
 
