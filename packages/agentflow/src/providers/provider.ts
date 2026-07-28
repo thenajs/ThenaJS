@@ -2,6 +2,16 @@ import { ToolType, toToolOutput } from "../tools/index.js";
 import { normalizeToolCallEnvelope, parser } from "./utils/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { SamplingParams } from "./sampling.types.js";
+import {
+    ResolvedRetry,
+    RetryAttempt,
+    RetryPolicy,
+    backoffDelay,
+    isRetryableByDefault,
+    parseRetryAfter,
+    resolveRetry,
+    sleep,
+} from "./retry.js";
 
 /** Consumo de uma chamada ao modelo, quando o provider o reporta. */
 export interface Usage {
@@ -22,6 +32,8 @@ export interface RawAssistant {
     content: string;
     toolCalls?: ProviderToolCall[];
     usage?: Usage;
+    /** Tentativas HTTP gastas nesta chamada (1 = acertou de primeira). */
+    attempts?: number;
 }
 
 /** O que o loop anexa ao history: o turno do modelo e, se houve, o turno da tool. */
@@ -29,6 +41,8 @@ export interface ChatTurn {
     assistant: Message;
     tool?: Message;
     usage?: Usage;
+    /** Tentativas HTTP gastas nesta chamada (1 = acertou de primeira). */
+    attempts?: number;
 }
 
 export interface ChatParams {
@@ -56,6 +70,11 @@ export interface ProviderCredentials {
     rescueToolCalls?: boolean;
     /** Preço por 1k tokens, para o `costUsd` do usage e o orçamento da run. */
     costPer1kTokens?: TokenCost;
+    /**
+     * Retry automático das chamadas HTTP. Vem **ligado** com os defaults
+     * (3 tentativas, backoff exponencial, sem timeout); `false` desliga.
+     */
+    retry?: RetryPolicy | boolean;
 }
 
 export class Providers {
@@ -83,6 +102,9 @@ export class Providers {
      */
     protected costPer1kTokens?: TokenCost;
 
+    /** Política de retry já normalizada, usada pelo `request()`. */
+    protected retry: ResolvedRetry = resolveRetry();
+
     /**
      * Absorve os campos comuns das credentials. Chame no construtor da sua
      * subclasse, antes ou depois de guardar os campos próprios:
@@ -103,6 +125,85 @@ export class Providers {
         this.raw = credentials.raw ?? {};
         this.rescueToolCalls = credentials.rescueToolCalls ?? true;
         this.costPer1kTokens = credentials.costPer1kTokens;
+        this.retry = resolveRetry(credentials.retry);
+    }
+
+    /**
+     * `fetch` com timeout e retry, conforme a política do provider. Use no lugar
+     * do `fetch` cru — é o que faz o seu provider herdar a política sem código.
+     *
+     * Devolve também quantas tentativas foram gastas, para o report. O contador
+     * **não** fica na instância de propósito: o mesmo provider é compartilhado
+     * pelos agentes de um `parallel`, e estado mutável em `this` daria corrida.
+     */
+    protected async request(
+        url: string,
+        init: RequestInit = {},
+    ): Promise<{ response: Response; attempts: number }> {
+        const política = this.retry;
+        let ultimoErro: Error | undefined;
+
+        for (let attempt = 1; attempt <= política.maxAttempts; attempt++) {
+            let response: Response | undefined;
+            let error: Error | undefined;
+
+            try {
+                response = await fetch(url, {
+                    ...init,
+                    signal:
+                        init.signal ??
+                        (política.timeoutMs !== undefined
+                            ? AbortSignal.timeout(política.timeoutMs)
+                            : undefined),
+                });
+
+                if (response.ok) {
+                    return { response, attempts: attempt };
+                }
+            } catch (err) {
+                error = err as Error;
+            }
+
+            const info: RetryAttempt = {
+                attempt,
+                maxAttempts: política.maxAttempts,
+                status: response?.status,
+                error,
+                delayMs: 0,
+            };
+
+            const podeTentar =
+                attempt < política.maxAttempts &&
+                (política.isRetryable ?? isRetryableByDefault)(info);
+
+            if (!podeTentar) {
+                // Devolve a resposta com erro para o provider montar a mensagem
+                // dele (que inclui o corpo); só relança quando nem resposta houve.
+                if (response) return { response, attempts: attempt };
+                throw this.erroDeTransporte(error, attempt);
+            }
+
+            info.delayMs = backoffDelay(
+                attempt,
+                política,
+                parseRetryAfter(response?.headers.get("retry-after") ?? null),
+            );
+            política.onRetry?.(info);
+            ultimoErro = error;
+
+            await sleep(info.delayMs);
+        }
+
+        // Inalcançável: o laço sempre retorna ou lança antes.
+        throw this.erroDeTransporte(ultimoErro, política.maxAttempts);
+    }
+
+    private erroDeTransporte(error: Error | undefined, attempts: number): Error {
+        const sufixo = attempts > 1 ? ` (após ${attempts} tentativas)` : "";
+        const detalhe = error?.message ?? String(error);
+        return new Error(`Falha na chamada ao provider${sufixo}: ${detalhe}`, {
+            cause: error,
+        });
     }
 
     // Da estratégia mais específica para a mais permissiva: a extração por regex
@@ -141,7 +242,7 @@ export class Providers {
         };
 
         if (!call) {
-            return { assistant, usage };
+            return { assistant, usage, attempts: raw.attempts };
         }
 
         // Execução da tool continua no provider (decisão estratégica: evita ifs no agente).
@@ -158,7 +259,7 @@ export class Providers {
             isError: result.isError,
         };
 
-        return { assistant, tool: toolMessage, usage };
+        return { assistant, tool: toolMessage, usage, attempts: raw.attempts };
     }
 
     /** Acrescenta o custo ao usage quando há preço configurado. */

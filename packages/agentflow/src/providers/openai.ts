@@ -97,7 +97,7 @@ export class OpenAIProvider extends Providers {
             ...this.raw,
         };
 
-        const response = await fetch(`${this.host}/chat/completions`, {
+        const { response, attempts } = await this.request(`${this.host}/chat/completions`, {
             method: "POST",
             headers: this.headers(),
             body: JSON.stringify(body),
@@ -125,11 +125,12 @@ export class OpenAIProvider extends Providers {
                 promptTokens: data?.usage?.prompt_tokens,
                 completionTokens: data?.usage?.completion_tokens,
             },
+            attempts,
         };
     }
 
     public async embed(input?: string): Promise<number[]> {
-        const response = await fetch(`${this.host}/embeddings`, {
+        const { response } = await this.request(`${this.host}/embeddings`, {
             method: "POST",
             headers: this.headers(),
             body: JSON.stringify({

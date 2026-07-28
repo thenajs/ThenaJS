@@ -93,4 +93,6 @@ export type {
   ProviderCredentials,
   ProviderToolCall,
   NormalizedToolCall,
+  RetryPolicy,
+  RetryAttempt,
 } from "@thenajs/agentflow";

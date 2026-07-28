@@ -11,9 +11,28 @@ teoria e impossível na prática, porque os tipos necessários não saíam do
 `@thenajs/core` — e o projeto gerado pelo `thena create` não depende do
 `@thenajs/agentflow`.
 
-**Esta release é aditiva.** O `ToolCall` antigo continua funcionando por alias.
+Traz também retry e timeout nas chamadas HTTP dos providers.
+
+**Um único item muda comportamento por padrão: o retry** (ver abaixo). O resto é
+aditivo — o `ToolCall` antigo continua funcionando por alias.
 
 ### Adicionado
+
+- **Retry automático nas chamadas HTTP**, com política configurável em
+  `ProviderCredentials.retry`: `maxAttempts`, `timeoutMs`, backoff exponencial
+  com *full jitter* (`initialDelayMs`, `maxDelayMs`, `factor`), `Retry-After` do
+  servidor respeitado, e os ganchos `isRetryable` e `onRetry`.
+  - Vive na classe base, no método protegido `Providers.request()` — Ollama,
+    OpenAI e qualquer provider de terceiro herdam trocando `fetch` por
+    `this.request()`.
+  - Retenta `408`, `425`, `429` e `5xx`, mais erro de rede e abort por timeout.
+    **Nunca** os demais `4xx`: erro de contrato não melhora repetindo.
+  - `timeoutMs` **não tem default**, de propósito — é o único parâmetro capaz de
+    quebrar um setup que funcionava (abortar modelo local lento). Sem ele, uma
+    requisição pendurada só falha no limite do runtime.
+  - Quando houve retry, o nó `chat` do report registra `attempts`.
+  - As tentativas **não** inflam `maxChatCalls` de um `RunBudget` (são uma
+    chamada lógica só), mas as esperas contam no `maxDurationMs`.
 
 - **`ProviderCredentials`** — os campos que todo provider aceita (`sampling`,
   `raw`, `rescueToolCalls`, `costPer1kTokens`). Estenda no seu tipo de
@@ -33,6 +52,9 @@ teoria e impossível na prática, porque os tipos necessários não saíam do
 
 ### Alterado
 
+- **O retry vem ligado por padrão.** Um `429` ou `503` que antes derrubava a run
+  agora é reexecutado até 3 vezes. É a única mudança de comportamento automático
+  desta release; `retry: false` nas credentials restaura o comportamento anterior.
 - **`Providers.embed()` passou de `protected` para `public`.** O método existia
   e funcionava nos dois providers, mas era inalcançável de fora — nenhum código
   do repositório o chamava. Agora dá para usar embeddings em user-land.
@@ -47,12 +69,17 @@ teoria e impossível na prática, porque os tipos necessários não saíam do
 
 ### Notas de migração
 
-Nada é obrigatório. Dois pontos de atenção:
+Três pontos de atenção, nenhum obrigatório:
 
-1. Se você tem uma subclasse de `Providers` que redeclara `embed` como
+1. **Retry ligado.** Se o seu fluxo é sensível a custo ou latência, ou se você já
+   trata `429`/`5xx` por fora, use `retry: false` — ou `maxAttempts` menor.
+2. Se você tem uma subclasse de `Providers` que redeclara `embed` como
    `protected`, o TypeScript vai reclamar da visibilidade — troque para `public`.
-2. Se você importa `ToolCall` do `@thenajs/agentflow`, continua compilando; para
+3. Se você importa `ToolCall` do `@thenajs/agentflow`, continua compilando; para
    silenciar o aviso de depreciação, troque para `ProviderToolCall`.
+
+Provider próprio: troque `fetch` por `this.request()` para herdar retry e
+timeout. O método devolve `{ response, attempts }`.
 
 ## [0.2.0] — 2026-07-27
 

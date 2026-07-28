@@ -116,6 +116,7 @@ function signals(node: ExecutionNode): string[] {
   if (d.exhausted === true)
     out.push(`loop exausto — parou em ${d.iterations} de ${d.maxIterations} iterações`);
   if (d.toolCallSource != null) out.push(`tool call: ${d.toolCallSource}`);
+  if (d.attempts != null) out.push(`${d.attempts} tentativas HTTP (houve retry)`);
   if (d.isError === true) out.push("tool sinalizou erro (isError)");
   if (d.promptTokens != null || d.completionTokens != null)
     out.push(`tokens: ${d.promptTokens ?? "?"} prompt + ${d.completionTokens ?? "?"} completion`);

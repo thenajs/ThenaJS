@@ -88,7 +88,7 @@ export class OllamaProvider extends Providers {
             ...this.raw,
         };
 
-        const response = await fetch(`${this.host}/api/chat`, {
+        const { response, attempts } = await this.request(`${this.host}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
@@ -115,11 +115,12 @@ export class OllamaProvider extends Providers {
                 promptTokens: data?.prompt_eval_count,
                 completionTokens: data?.eval_count,
             },
+            attempts,
         };
     }
 
     public async embed(input?: string): Promise<number[]> {
-        const response = await fetch(`${this.host}/api/embeddings`, {
+        const { response } = await this.request(`${this.host}/api/embeddings`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

@@ -283,6 +283,49 @@ devolve `[]`). Para reaproveitar o parsing de resposta em texto, `parser` e
 > (`{ name, args }`). O `ToolCall` do `@thenajs/agentflow` é um alias deprecado
 > do primeiro.
 
+### Retry e timeout
+
+Chamadas HTTP falham de formas transitórias. O retry vem **ligado por padrão**:
+sem configurar nada, são 3 tentativas com backoff exponencial e *full jitter*.
+
+```ts
+super({
+  host, model,
+  retry: {
+    maxAttempts: 3,        // default
+    timeoutMs: 120_000,    // sem default — veja abaixo
+    initialDelayMs: 500,   // default
+    maxDelayMs: 8_000,     // default
+    onRetry: (i) => console.warn(`tentativa ${i.attempt} falhou (${i.status})`),
+  },
+});
+
+super({ host, model, retry: false });   // desliga: uma tentativa só
+```
+
+| Situação | Tenta de novo? |
+| --- | --- |
+| `429` rate limit · `408` · `425` | sim |
+| `500` · `502` · `503` · `504` | sim |
+| erro de rede, conexão caída, abort por timeout | sim |
+| `400` · `401` · `403` · `404` e demais 4xx | **não** — erro de contrato não melhora repetindo |
+
+Um `Retry-After` do servidor vence o backoff calculado. Para uma decisão própria,
+passe `isRetryable`.
+
+> ⚠️ **`timeoutMs` não tem default**, de propósito — é o único parâmetro capaz de
+> quebrar setup que já funcionava (abortar um modelo local lento que hoje responde
+> em 200s). Ligue quando quiser que travamento vire falha recuperável: sem ele,
+> uma requisição pendurada só falha no limite do runtime (300s no undici).
+
+> ⚠️ **Custo.** Reexecutar um `5xx` pode cobrar duas vezes se o servidor processou
+> a requisição e só a resposta se perdeu; e um 5xx *permanente* gasta as três
+> tentativas antes de falhar. Em fluxo sensível a custo, use `maxAttempts: 1`.
+
+O retry **não** infla o `maxChatCalls` de um orçamento — as tentativas são uma
+chamada lógica só —, mas as esperas contam no `maxDurationMs`. Quando houve
+retry, o nó `chat` do report registra `attempts`.
+
 ### Tool calls emitidas como texto
 
 Quando o provider não devolve tool calls nativas, o runtime tenta extrair a

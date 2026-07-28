@@ -243,6 +243,8 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
             promptTokens: t.usage?.promptTokens,
             completionTokens: t.usage?.completionTokens,
             costUsd: t.usage?.costUsd,
+            // só quando houve retry — no caminho normal não polui o report
+            attempts: (t.attempts ?? 1) > 1 ? t.attempts : undefined,
           });
           budget().addChat(t.usage);
           return t;
