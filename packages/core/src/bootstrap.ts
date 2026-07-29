@@ -23,7 +23,11 @@ export async function bootstrapWorkflow<T = string>(
   WorkflowClass: Function,
   config: ThenaConfig = {},
 ): Promise<WorkflowApp<T>> {
-  setRuntimeSettings({ toolErrors: config.toolErrors });
+  // Instanciados uma vez, na ordem declarada — que é a ordem em que chegam no
+  // construtor dos agentes.
+  const memory = (config.memory ?? []).map((Store) => new Store());
+
+  setRuntimeSettings({ toolErrors: config.toolErrors, memory });
 
   if (config.report || config.log) {
     const reportOptions: ReportOptions =

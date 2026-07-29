@@ -1,3 +1,4 @@
+import type { VectorStoreCtor } from "@thenajs/agentflow";
 import type { ExecutionEvent } from "./recorder.js";
 
 /** Opções do report de execução. */
@@ -38,4 +39,36 @@ export interface ThenaConfig {
    *   contando nós, sem regex sobre o texto).
    */
   toolErrors?: "throw" | "observe";
+  /**
+   * Bancos vetoriais da aplicação. Cada classe é instanciada **uma vez** e
+   * compartilhada por todos os agentes — uma conexão e um `ensureCollection`
+   * por store, independente de quantos agentes existem.
+   *
+   * A injeção é posicional: a ordem do array é a ordem dos parâmetros do
+   * construtor dos agentes.
+   *
+   * ```ts
+   * export const config: ThenaConfig = {
+   *     memory: [QdrantNomic, QdrantOpenAI],
+   * };
+   *
+   * // no agente:
+   * constructor(
+   *     private readonly nomic: VectorMemory,
+   *     private readonly openai: VectorMemory,
+   * ) {}
+   * ```
+   *
+   * Vários stores fazem sentido quando eles são incompatíveis entre si —
+   * tipicamente modelos de embedding de dimensões diferentes, que não cabem na
+   * mesma collection.
+   *
+   * ⚠️ Reordenar o array troca qual store cada agente usa, e o TypeScript não
+   * acusa — os parâmetros têm o mesmo tipo. Trate a ordem como contrato:
+   * acrescente no fim, nunca no meio.
+   *
+   * Os embeddings saem do `provider` de cada agente, que já tem `embed()`
+   * público e aceita `embedModel` para apontar um modelo dedicado.
+   */
+  memory?: VectorStoreCtor[];
 }

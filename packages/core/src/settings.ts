@@ -1,3 +1,5 @@
+import type { VectorStore } from "@thenajs/agentflow";
+
 /**
  * Ajustes de runtime do processo, definidos pelo `bootstrapWorkflow`.
  *
@@ -6,6 +8,8 @@
  * camada — e o default preserva o comportamento histórico.
  */
 export interface RuntimeSettings {
+  /** Stores vetoriais da aplicação, na ordem em que são injetados. */
+  memory: VectorStore[];
   /**
    * O que fazer quando o `execute` de uma tool lança:
    * - `"throw"` (default) — o erro sobe, passa por `onError` e pode derrubar a run;
@@ -15,7 +19,7 @@ export interface RuntimeSettings {
   toolErrors: "throw" | "observe";
 }
 
-const DEFAULTS: RuntimeSettings = { toolErrors: "throw" };
+const DEFAULTS: RuntimeSettings = { toolErrors: "throw", memory: [] };
 
 let current: RuntimeSettings = DEFAULTS;
 

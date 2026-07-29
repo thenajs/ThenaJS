@@ -1,4 +1,11 @@
-import { Pipeline, Providers, StateManager, toToolOutput } from "@thenajs/agentflow";
+import {
+  Pipeline,
+  Providers,
+  StateManager,
+  VectorMemory,
+  VectorStore,
+  toToolOutput,
+} from "@thenajs/agentflow";
 import type {
   Message,
   PipelineContext,
@@ -31,6 +38,19 @@ import type { RunBudget } from "./budget.js";
 /** Instância já configurada é usada direto; classe é instanciada. */
 function resolveProvider(input: ProviderInput): Providers {
   return input instanceof Providers ? input : new (input as ProviderCtor)();
+}
+
+/**
+ * Monta as memórias vetoriais injetadas no construtor do agente, **na ordem em
+ * que os stores foram registrados** no `ThenaConfig`.
+ *
+ * Os stores são compartilhados por toda a aplicação — uma conexão e um
+ * `ensureCollection` cada, independente de quantos agentes existem. O `embed()`
+ * sai do provider do próprio agente, que já é público e aceita `embedModel`
+ * para apontar um modelo dedicado.
+ */
+function resolveMemory(provider: Providers): VectorMemory[] {
+  return settings().memory.map((store) => new VectorMemory({ store, provider }));
 }
 
 /** Deriva a string inicial do pipeline a partir do `input` do workflow. */
@@ -78,6 +98,15 @@ function resolveTool(input: ToolInput): ToolType {
     );
   }
   const instance = new (input as ToolClass)(workflowRuntime);
+  // Defesa em runtime: o TypeScript já barra isso na declaração (`Tool<T
+  // extends ToolClass>`), mas cobre só quem passa pelo `tsc`. Sem isso, a
+  // falha apareceria como `TypeError: instance.execute is not a function`
+  // lá na frente — genérico, e mascarável por `toolErrors: "observe"`.
+  if (typeof instance.execute !== "function") {
+    throw new Error(
+      `[thena] A classe "${input.name}" não implementa execute(input).`,
+    );
+  }
   return {
     name: config.name,
     description: config.description,
@@ -173,9 +202,14 @@ function wrapToolWithHooks(
 export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
   const meta = getAgentMetadata(AgentClass);
   const provider = resolveProvider(meta.provider);
+  const memorias = resolveMemory(provider);
   const baseTools = meta.tools.map(resolveTool);
   const systemPrompt = meta.prompt;
-  const instance = new (AgentClass as new () => any)();
+  // Injeção posicional no construtor, mesmo padrão do `WorkflowRuntime` nas
+  // tools: agentes sem construtor apenas ignoram o argumento extra. Não usamos
+  // `reflect-metadata`/`design:paramtypes` de propósito — o esbuild (tsx, o
+  // modo dev) não os emite, então DI por tipo quebraria em silêncio no dev.
+  const instance = new (AgentClass as new (...args: any[]) => any)(...memorias);
   const agentName = AgentClass.name;
 
   return (ctx: PipelineContext) =>

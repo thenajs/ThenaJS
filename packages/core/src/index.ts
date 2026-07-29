@@ -53,6 +53,9 @@ export {
   Pipeline,
   toToolOutput,
   md,
+  VectorStore,
+  VectorMemory,
+  HttpTransport,
 } from "@thenajs/agentflow";
 
 // Ferramentas para escrever um provider próprio: parsers de resposta em texto,
@@ -95,4 +98,22 @@ export type {
   NormalizedToolCall,
   RetryPolicy,
   RetryAttempt,
+  TransportCredentials,
+} from "@thenajs/agentflow";
+
+/** Memória vetorial: o contrato do store e o que vira `ctx.memory`. */
+export type {
+  VectorStoreCredentials,
+  VectorStoreCtor,
+  VectorDocument,
+  VectorMatch,
+  VectorSearch,
+  VectorSelector,
+  VectorDistance,
+  CollectionOptions,
+  RecallHit,
+  RecallOptions,
+  RememberOptions,
+  ForgetSelector,
+  VectorMemoryOptions,
 } from "@thenajs/agentflow";
