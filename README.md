@@ -15,10 +15,11 @@ usuário que o consome.
 
 ```text
 packages/
-  agentflow/   @thenajs/agentflow   engine: pipeline, providers, estado, tools
-  core/        @thenajs/core        decorators (@Agent/@Workflow/@Tool) + runtime
-  tools/       @thenajs/tools       tools prontas (ex.: ShellTool)
-  cli/         @thenajs/cli         gerador "thena g agent <nome>"
+  agentflow/       @thenajs/agentflow       engine: pipeline, providers, estado, tools, vetorial
+  core/            @thenajs/core            decorators (@Agent/@Workflow/@Tool) + runtime
+  tools/           @thenajs/tools           tools prontas (ex.: ShellTool)
+  qdrant-client/   @thenajs/qdrant-client   VectorStore para Qdrant, sobre a REST API
+  cli/             @thenajs/cli             gerador "thena g agent <nome>"
 
 src/                              o app (organização por convenção)
   agents/
@@ -30,7 +31,7 @@ src/                              o app (organização por convenção)
   workflows/              # workflows do usuário
 ```
 
-Grafo de dependências: `core`, `tools` → `agentflow` → `zod`. Sem dependências
+Grafo de dependências: `tools`, `qdrant-client` → `core` → `agentflow` → `zod`. Sem dependências
 externas privadas — nada de registry/token do GitHub Packages.
 
 ## CLI — criar um projeto
@@ -340,6 +341,182 @@ modelo não está usando o formato nativo em vez de mascarar:
 
 ```ts
 super({ host, model, rescueToolCalls: false });
+```
+
+## Memória vetorial
+
+Busca semântica: o agente grava textos e recupera por similaridade, não por
+ordem. É o par que faltava para o `embed()` dos providers.
+
+> ⚠️ Não confunda com **`ctx.state.memory`**, que é outra coisa: o bucket
+> `string[]` de contexto durável projetado como mensagem `system` no prompt.
+
+Registre o store **uma vez** no config. Todo agente que declarar `VectorMemory`
+no construtor recebe uma memória sobre ele — mesma conexão, um
+`ensureCollection` só, independente de quantos agentes existem:
+
+```ts
+// src/vector/qdrant.store.ts
+import { QdrantStore } from "@thenajs/qdrant-client";
+
+export class MeuQdrant extends QdrantStore {
+  constructor() {
+    super({
+      url: "http://localhost:6333",
+      collection: "conhecimento",
+      datasets: ["persistent", "sessao"],   // opcional: valida os nomes
+    });
+  }
+}
+```
+
+```ts
+// src/config.ts
+export const config: ThenaConfig = {
+  log: true,
+  report: true,
+  memory: [MeuQdrant],   // as classes — o framework instancia uma vez cada
+};
+```
+
+```ts
+// qualquer agente — nada a declarar no @Agent
+@Agent({
+  provider: LocalOllamaProvider,   // o embed() dele gera os vetores
+  prompt: "./explorer.agent.md",
+})
+export class ExplorerAgent {
+  constructor(private readonly memory: VectorMemory) {}
+
+  async beforePrompt(prompt: string, ctx: AgentContext) {
+    const pergunta = ctx.state.history.at(-1)?.content ?? "";
+    const achados = await this.memory.recall(pergunta, {
+      dataset: "persistent",
+      limit: 3,
+      scoreThreshold: 0.5,
+    });
+
+    if (!achados.length) return;   // undefined mantém o prompt
+
+    return `${prompt}\n\n## Contexto\n${achados.map((a) => `- ${a.text}`).join("\n")}`;
+  }
+
+  async afterResponse(resposta: string) {
+    await this.memory.remember(resposta, { dataset: "sessao" });
+  }
+}
+```
+
+Agentes que não usam memória simplesmente não escrevem construtor — o argumento
+extra é ignorado. Sem `memory` no config, o parâmetro chega `undefined`.
+
+#### Mais de um store
+
+Uma collection guarda **um tamanho de vetor só**. Se dois agentes usam modelos de
+embedding com dimensões diferentes (768 e 1536, por exemplo), eles precisam de
+stores separados — basta acrescentar ao array:
+
+```ts
+export const config: ThenaConfig = {
+  memory: [QdrantNomic, QdrantOpenAI],
+};
+
+@Agent({ provider: LocalOllamaProvider, prompt: "./a.agent.md" })   // 768
+export class AgenteNomic {
+  constructor(private readonly nomic: VectorMemory) {}
+}
+
+@Agent({ provider: OpenAIProvider, prompt: "./b.agent.md" })        // 1536
+export class AgenteOpenAI {
+  constructor(
+    private readonly _naoUso: VectorMemory,   // posição 1
+    private readonly openai: VectorMemory,    // posição 2
+  ) {}
+}
+```
+
+> ⚠️ **A ordem do array é contrato.** Reordenar troca qual store cada agente usa,
+> e o TypeScript não acusa — os parâmetros têm o mesmo tipo `VectorMemory`.
+> Acrescente sempre no fim, nunca no meio. Se as dimensões forem incompatíveis o
+> erro aparece na primeira escrita; se forem iguais, você grava na collection
+> errada em silêncio.
+
+Se você misturar dimensões num store só, a falha é clara e vem antes de gastar o
+embedding:
+
+```
+[thena] Este store já foi preparado com 768 dimensões, mas agora recebeu
+embeddings de 1536. Uma collection aceita um único tamanho de vetor — modelos
+de embedding diferentes precisam de stores diferentes.
+```
+
+> A injeção é **posicional**, não por tipo. `reflect-metadata` foi evitado de
+> propósito: o esbuild (que o `tsx` usa no `npm start`) não emite
+> `design:paramtypes`, então DI por tipo compilaria e quebraria em silêncio no dev.
+
+### Datasets
+
+`dataset` é sempre **opcional** — omitido, usa `"default"`:
+
+```ts
+await ctx.memory.remember("um fato solto");             // grava no "default"
+await ctx.memory.recall("pergunta");                    // busca no "default"
+await ctx.memory.recall("pergunta", { dataset: null }); // busca em TODOS
+await ctx.memory.forget({ dataset: "sessao" });         // limpa um dataset
+```
+
+Datasets **não** são collections separadas: são um campo do payload com índice
+dedicado, que é a recomendação do Qdrant — muitas collections geram overhead, e o
+Qdrant Cloud limita a 1000 por cluster. Por isso `dataset: null` consegue buscar
+através de todos, o que com collections exigiria N buscas e merge manual.
+
+> ⚠️ A collection guarda um **`size` fixo**, descoberto no primeiro `remember`
+> pelo tamanho do vetor (768 com `nomic-embed-text`, 1536 com
+> `text-embedding-3-small`). Dois agentes com modelos de embedding de dimensões
+> diferentes apontando para o mesmo store vão colidir — o Qdrant recusa. Falha
+> barulhenta, que é o certo, mas vale saber.
+
+### Trazendo seu próprio banco
+
+O contrato é o `VectorStore`, e tudo sai do `@thenajs/core`:
+
+```ts
+import { VectorStore } from "@thenajs/core";
+import type { VectorStoreCredentials, VectorDocument, VectorMatch,
+              VectorSearch, CollectionOptions } from "@thenajs/core";
+
+export class PgVectorStore extends VectorStore {
+  constructor(credentials: VectorStoreCredentials) {
+    super();
+    this.configureTransport(credentials);   // ganha retry e timeout
+  }
+
+  async ensureCollection(options: CollectionOptions) { /* … */ }
+  async collectionExists() { /* … */ return false; }
+  async dropCollection() { /* … */ }
+  async upsert(docs: VectorDocument[]) { /* … */ }
+  async search(params: VectorSearch): Promise<VectorMatch[]> { /* … */ return []; }
+  async remove(selector: { ids?: (string | number)[] }) { /* … */ }
+}
+```
+
+Filtros seguem o mesmo padrão de `sampling` + `raw` dos providers: `where` para
+igualdade simples e `rawFilter` para o formato nativo do banco.
+
+### Sem o `@Agent`
+
+`VectorMemory` funciona solto, fora de qualquer agente:
+
+```ts
+import { VectorMemory } from "@thenajs/core";
+
+const memoria = new VectorMemory({
+  store: new MeuQdrant(),
+  provider: new LocalOllamaProvider(),
+});
+
+await memoria.remember("o deploy roda pelo scripts/deploy.sh");
+const achados = await memoria.recall("como faço deploy?", { limit: 3 });
 ```
 
 ## Executando um agente
