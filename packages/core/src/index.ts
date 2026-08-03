@@ -101,7 +101,7 @@ export type {
   TransportCredentials,
 } from "@thenajs/agentflow";
 
-/** Memória vetorial: o contrato do store e o que vira `ctx.memory`. */
+/** Memória vetorial: o contrato do store e o que é injetado nos agentes. */
 export type {
   VectorStoreCredentials,
   VectorStoreCtor,

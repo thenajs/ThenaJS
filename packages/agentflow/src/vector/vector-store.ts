@@ -28,13 +28,6 @@ import type {
  */
 export abstract class VectorStore extends HttpTransport {
 
-    /**
-     * Nomes de dataset válidos, quando declarados nas credentials. O
-     * `VectorMemory` usa para validar o que recebe; vazio significa "aceita
-     * qualquer um".
-     */
-    readonly datasets: readonly string[] = [];
-
     /** Memoização do `ensureCollectionOnce` — uma vez por instância de store. */
     private preparada?: Promise<void>;
     /** Dimensão com que a collection foi preparada, para detectar conflito. */

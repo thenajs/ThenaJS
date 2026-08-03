@@ -364,7 +364,6 @@ export class MeuQdrant extends QdrantStore {
     super({
       url: "http://localhost:6333",
       collection: "conhecimento",
-      datasets: ["persistent", "sessao"],   // opcional: valida os nomes
     });
   }
 }
@@ -459,10 +458,10 @@ de embedding diferentes precisam de stores diferentes.
 `dataset` é sempre **opcional** — omitido, usa `"default"`:
 
 ```ts
-await ctx.memory.remember("um fato solto");             // grava no "default"
-await ctx.memory.recall("pergunta");                    // busca no "default"
-await ctx.memory.recall("pergunta", { dataset: null }); // busca em TODOS
-await ctx.memory.forget({ dataset: "sessao" });         // limpa um dataset
+await this.memory.remember("um fato solto");             // grava no "default"
+await this.memory.recall("pergunta");                    // busca no "default"
+await this.memory.recall("pergunta", { dataset: null }); // busca em TODOS
+await this.memory.forget({ dataset: "sessao" });         // limpa um dataset
 ```
 
 Datasets **não** são collections separadas: são um campo do payload com índice

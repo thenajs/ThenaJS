@@ -4,6 +4,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.4.1] — 2026-07-30
+
+### Depreciado
+
+- **`VectorStoreCredentials.datasets`** — o campo continua aceito, agora
+  **ignorado**, e será removido na 0.5.0.
+
+  Ele validava em runtime se o `dataset` passado em `remember`/`recall`/`forget`
+  estava na lista declarada. Era rede de segurança opcional que não justificava o
+  campo a mais na configuração: um dataset inexistente devolve zero resultados,
+  como qualquer filtro que não casa.
+
+  Pode remover da sua config sem mudar nada no comportamento. O `dataset` de cada
+  chamada continua igual — é ele que particiona.
+
 ## [0.4.0] — 2026-07-29
 
 Memória vetorial. O `embed()` virou público na 0.3.0 e devolvia o vetor, mas não
@@ -55,10 +70,6 @@ uma implementação pronta.
   `recall(query, { dataset })`, com `dataset` opcional (default `"default"`) e
   `dataset: null` para buscar em todos. São um campo do payload com índice
   dedicado, não collections separadas — que é a recomendação do Qdrant.
-
-  Declarar `datasets` nas credentials do store é opcional e faz o runtime recusar
-  um nome não declarado, com mensagem que lista os válidos, em vez de devolver
-  zero resultados em silêncio.
 - **`HttpTransport`** — o `request()` com retry/timeout saiu de `Providers` para
   uma base compartilhada, que `Providers` e `VectorStore` estendem. Refactor puro:
   a superfície de `Providers` não mudou.

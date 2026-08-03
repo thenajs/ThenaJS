@@ -40,7 +40,6 @@ export class QdrantStore extends VectorStore {
     private readonly collection: string;
     /** Público para o `VectorMemory` saber qual campo particiona. */
     public readonly datasetField: string;
-    public override readonly datasets: readonly string[];
 
     constructor(credentials: QdrantCredentials) {
         super();
@@ -49,7 +48,6 @@ export class QdrantStore extends VectorStore {
         this.apiKey = credentials.apiKey;
         this.collection = credentials.collection ?? "thena_memory";
         this.datasetField = credentials.datasetField ?? "dataset";
-        this.datasets = credentials.datasets ?? [];
     }
 
     async ensureCollection(options: CollectionOptions): Promise<void> {

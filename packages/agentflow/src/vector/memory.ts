@@ -52,7 +52,8 @@ export interface ForgetSelector {
 
 /**
  * Memória vetorial: junta o `embed()` de um provider com um `VectorStore`.
- * É o que o runtime coloca em `ctx.memory` quando o agente declara `memory`.
+ * É o que o runtime injeta no construtor do agente quando há `memory` no
+ * `ThenaConfig`.
  *
  * Não confunda com `ctx.state.memory`, que é outra coisa — o bucket `string[]`
  * de contexto durável que vira mensagem `system` no prompt. Este aqui é busca
@@ -87,8 +88,6 @@ export class VectorMemory {
     ): Promise<(string | number)[]> {
         if (!items.length) return [];
 
-        for (const item of items) this.validarDataset(item.dataset);
-
         const vetores = await Promise.all(
             items.map((item) => this.provider.embed(item.text)),
         );
@@ -113,8 +112,6 @@ export class VectorMemory {
 
     /** Busca por similaridade e devolve os textos mais próximos. */
     async recall(query: string, options: RecallOptions = {}): Promise<RecallHit[]> {
-        if (options.dataset !== null) this.validarDataset(options.dataset);
-
         const vector = await this.provider.embed(query);
 
         // `null` explícito busca em todos os datasets; ausente usa o default.
@@ -147,8 +144,6 @@ export class VectorMemory {
 
     /** Remove por id, por dataset inteiro, ou por igualdade no payload. */
     async forget(selector: ForgetSelector = {}): Promise<void> {
-        this.validarDataset(selector.dataset);
-
         const where = {
             ...selector.where,
             ...(selector.dataset !== undefined
@@ -160,24 +155,6 @@ export class VectorMemory {
             ids: selector.ids,
             where: Object.keys(where).length ? where : undefined,
         });
-    }
-
-    /**
-     * Recusa um dataset que não foi declarado. O TypeScript já pega isso quando
-     * o store declara `datasets`, mas só para quem passa pelo `tsc` — aqui pega
-     * JS puro, `any` e valor vindo de variável. Sem `datasets` declarados, tudo
-     * é aceito (o comportamento aberto continua sendo o default).
-     */
-    private validarDataset(dataset: string | undefined): void {
-        const conhecidos = this.store.datasets;
-        if (!conhecidos.length || dataset === undefined) return;
-        if (dataset === this.defaultDataset) return;
-        if (conhecidos.includes(dataset)) return;
-
-        throw new Error(
-            `[thena] Dataset "${dataset}" não declarado. ` +
-            `Conhecidos: ${conhecidos.join(", ")}.`,
-        );
     }
 
     /**

@@ -23,7 +23,6 @@ export class MeuQdrant extends QdrantStore {
     super({
       url: "http://localhost:6333",
       collection: "conhecimento",
-      datasets: ["persistent", "sessao"],   // opcional: só para tipar
       retry: { maxAttempts: 3, timeoutMs: 10_000 },
     });
   }
@@ -67,13 +66,12 @@ Documentação completa em [thenajs.github.io](https://thenajs.github.io/concept
 | `url` | — | Endereço do Qdrant (obrigatório) |
 | `apiKey` | — | Header `api-key`, para Qdrant Cloud |
 | `collection` | `"thena_memory"` | A collection onde tudo é gravado |
-| `datasets` | — | Nomes conhecidos, só para tipagem |
 | `datasetField` | `"dataset"` | Campo do payload que particiona |
 | `retry` | ligado | Política de retry/timeout do `HttpTransport` |
 
 ## Uma collection, vários contextos
 
-Os `datasets` **não** viram collections. São um campo do payload, com índice dedicado — que é a
+O `dataset` **não** vira collection. É um campo do payload, com índice dedicado — que é a
 recomendação do próprio Qdrant: muitas collections geram overhead de recursos, e o Qdrant Cloud
 limita a 1000 por cluster.
 
