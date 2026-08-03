@@ -13,6 +13,7 @@ export {
 } from "./steps.js";
 export { run, runWorkflow, buildAgentStep, WorkflowRuntime } from "./runner.js";
 export { bootstrapWorkflow } from "./bootstrap.js";
+export { input, context, state, memory } from "./inject.js";
 export { BudgetExceededError } from "./budget.js";
 export type { RunBudget, BudgetUsage, BudgetExceeded } from "./budget.js";
 export type { ThenaConfig, ReportOptions, LogConfig } from "./report/config.js";
@@ -30,6 +31,7 @@ export type {
   ToolResult,
   WorkflowConfig,
   WorkflowMetadata,
+  StateCtor,
   WorkflowStep,
   WorkflowContext,
   WorkflowApp,

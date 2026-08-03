@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/qdrant-client",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Cliente Qdrant nativo para ThenaJS — implementação de VectorStore sobre a API REST, sem SDK.",
   "license": "MIT",
   "author": "castroneto",
@@ -22,6 +22,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@thenajs/core": "^0.4.1"
+    "@thenajs/core": "^0.5.0"
   }
 }

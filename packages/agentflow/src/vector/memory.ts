@@ -61,7 +61,8 @@ export interface ForgetSelector {
  */
 export class VectorMemory {
 
-    private readonly store: VectorStore;
+    /** Público para o `@memory(Store)` conseguir identificar qual é qual. */
+    readonly store: VectorStore;
     private readonly provider: Providers;
     private readonly defaultDataset: string;
     private readonly distance: VectorDistance;

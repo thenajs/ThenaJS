@@ -10,6 +10,6 @@ import type { WorkflowConfig } from "./types.js";
  */
 export function Workflow(config: WorkflowConfig): ClassDecorator {
   return (target) => {
-    setWorkflowMetadata(target, { steps: config.steps });
+    setWorkflowMetadata(target, { steps: config.steps, state: config.state });
   };
 }

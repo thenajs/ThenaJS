@@ -24,8 +24,14 @@ export interface ToolConfig {
  * Classe de tool decorada com `@Tool`. Fornece só o método `execute`; nome,
  * descrição e schema vêm do decorator. O construtor pode receber dependências
  * injetadas (ex.: `WorkflowRuntime`).
+ *
+ * O `execute` aceita parâmetros variádicos porque pode ser decorado com
+ * `@input()`, `@context()` e `@state()`. O que a restrição garante é que o
+ * método **existe** — que é o erro que ela foi criada para pegar.
  */
-export type ToolClass = new (...args: any[]) => { execute(input: any): unknown };
+export type ToolClass = new (...args: any[]) => {
+  execute(...args: any[]): unknown;
+};
 
 /** Tool aceita no decorator do agente: um objeto `ToolType` ou a classe da tool. */
 export type ToolInput = ToolType | ToolClass;
@@ -168,6 +174,19 @@ export interface AgentHooks {
   ): string | void | Promise<string | void>;
 }
 
+/**
+ * Classe de estado do workflow. Os valores iniciais são as próprias
+ * inicializações de campo — o framework instancia uma por execução.
+ *
+ * ```ts
+ * export class RevisaoState {
+ *     aprovado = false;
+ *     rodadas = 0;
+ * }
+ * ```
+ */
+export type StateCtor<S extends object = object> = new () => S;
+
 /** Passo de um workflow: um agente, um bloco `parallel` ou um bloco `loop`. */
 export type WorkflowStep = AgentClass | ParallelStep | LoopStep;
 
@@ -181,7 +200,11 @@ export interface ParallelStep {
 export interface LoopStep {
   kind: "loop";
   steps: WorkflowStep[];
-  until: (ctx: WorkflowContext) => unknown;
+  /**
+   * Devolva `true` para **parar**. O segundo parâmetro é o estado declarado em
+   * `@Workflow({ state })`, quando houver.
+   */
+  until: (ctx: WorkflowContext, state?: any) => unknown;
   maxIterations?: number;
   /** Chamado quando o loop parou por `maxIterations` em vez de por `until`. */
   onExhausted?: (
@@ -194,11 +217,18 @@ export interface LoopStep {
 export interface WorkflowConfig {
   /** Passos executados em ordem; podem ser agentes, `parallel` ou `loop`. */
   steps: WorkflowStep[];
+  /**
+   * Estado compartilhado desta execução. O framework instancia a classe uma vez
+   * por `run` e a entrega a quem pedir com `@state()` — e ao `until` dos loops,
+   * como segundo parâmetro.
+   */
+  state?: StateCtor;
 }
 
 /** Metadados que o `@Workflow` registra para a classe. */
 export interface WorkflowMetadata {
   steps: WorkflowStep[];
+  state?: StateCtor;
 }
 
 /**

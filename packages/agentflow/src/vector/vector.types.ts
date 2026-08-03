@@ -18,19 +18,6 @@ export interface VectorStoreCredentials extends TransportCredentials {
     collection?: string;
     /** Campo do payload que particiona os datasets. Default: `"dataset"`. */
     datasetField?: string;
-    /**
-     * @deprecated Não é mais usado — o campo é aceito e ignorado, e será
-     * removido na 0.5.0.
-     *
-     * Validava, em runtime, se o `dataset` informado em
-     * `remember`/`recall`/`forget` estava nesta lista. Era rede de segurança
-     * opcional que não justificava o campo a mais na configuração: um dataset
-     * inexistente simplesmente devolve zero resultados, como qualquer filtro
-     * que não casa.
-     *
-     * Pode remover da sua config — nada muda no comportamento.
-     */
-    datasets?: readonly string[];
 }
 
 /** Um ponto a gravar: vetor mais o payload que volta na busca. */

@@ -25,7 +25,7 @@ export function parallel(steps: WorkflowStep[]): ParallelStep {
  */
 export function loop(options: {
   steps: WorkflowStep[];
-  until: (ctx: WorkflowContext) => unknown;
+  until: (ctx: WorkflowContext, state?: any) => unknown;
   maxIterations?: number;
   onExhausted?: (
     ctx: WorkflowContext,

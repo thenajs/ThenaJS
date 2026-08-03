@@ -114,11 +114,22 @@ export class ReadFileTool {
 O pacote `@thenajs/tools` já traz a `ShellTool`; tools próprias do app ficam em
 `src/tools/`.
 
-> ⚠️ O `execute` recebe **só os argumentos** já validados pelo schema — não
-> enxerga `ctx`, `history` nem `memory`. Injeção acontece no construtor, e a
-> única dependência injetável é o `WorkflowRuntime`. Para dar contexto a uma
-> tool: coloque nos args, rederive dentro dela, ou use
-> [Workflow como Tool](#workflow-como-tool).
+Por padrão o `execute` recebe **só os argumentos** já validados pelo schema — o
+que mantém a tool trivial de testar. Quando precisar de mais, decore os
+parâmetros; a ordem não importa:
+
+```ts
+import { Tool, input, context, state } from "@thenajs/core";
+
+async execute(
+  @input() { path }: { path: string },   // os argumentos validados
+  @context() ctx: AgentContext,           // o contexto da execução
+  @state() s: ExplorerState,              // o estado do workflow
+) {
+  s.arquivosLidos.push(path);
+  return readFile(path, "utf8");
+}
+```
 
 ### Sinalizando falha
 
@@ -591,26 +602,51 @@ e aninháveis:
 - **`loop({ steps, until, maxIterations, onExhausted })`** → repete até `until(ctx)` ou o limite.
 
 ```ts
+// src/workflows/explorer.state.ts — o estado desta execução
+export class ExplorerState {
+  aprovado = false;
+  rodadas = 0;
+}
+```
+
+```ts
 // src/workflows/explorer.workflow.ts
-import { Workflow, parallel, loop } from "@thenajs/core";
-import { ExplorerAgent } from "../agents/explorer/explorer.agent.js";
-import { PlannerAgent } from "../agents/planner/planner.agent.js";
-import { ReviewerAgent } from "../agents/reviewer/reviewer.agent.js";
+import { Workflow, loop } from "@thenajs/core";
+import { ExplorerState } from "./explorer.state.js";
 
 @Workflow({
+  state: ExplorerState,
   steps: [
     PlannerAgent,
     loop({
+      steps: [ExplorerAgent, ReviewerAgent],
+      // `true` significa PARAR; o 2º parâmetro é a instância de ExplorerState
+      until: (_ctx, s: ExplorerState) => s.aprovado,
       maxIterations: 5,
-      until: (ctx) => ctx.reviewApproved,
-      steps: [
-        parallel([ExplorerAgent, ReviewerAgent]),
-      ],
     }),
   ],
 })
-export class CodeReviewWorkflow {}
+export class ExplorerWorkflow {}
 ```
+
+```ts
+// o revisor grava a decisão que o `until` lê
+import { Agent, state } from "@thenajs/core";
+
+@Agent({ provider: LocalOllamaProvider, prompt: "./reviewer.agent.md" })
+export class ReviewerAgent {
+  constructor(@state() private readonly estado: ExplorerState) {}
+
+  async afterResponse(resposta: string) {
+    this.estado.rodadas++;
+    this.estado.aprovado = /\bAPROVADO\b/i.test(resposta);
+  }
+}
+```
+
+O `state` é instanciado **uma vez por execução** e é a mesma instância em todos
+os passos, hooks, tools e no `until`. Sem alguém gravar `aprovado`, a condição
+nunca ficaria verdadeira e o loop rodaria até `maxIterations` toda vez.
 
 ### Bootstrap
 
@@ -647,11 +683,6 @@ import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 const parecer = await runWorkflow(ExplorerWorkflow, "Revise o diretório src/");
 ```
 
-> A condição do `loop` lê campos que os agentes gravam no contexto (ex.:
-> `ctx.reviewApproved`). Para isso um agente precisa de lógica própria — um
-> método `run(input, ctx)` que faça `ctx.reviewApproved = ...`. Sem isso, o
-> `loop` roda até `maxIterations`.
->
 > No `parallel`, os agentes rodam sobre a **mesma** entrada e todos escrevem em
 > `ctx.output` (a última escrita vence); leia os resultados em `ctx.state`.
 

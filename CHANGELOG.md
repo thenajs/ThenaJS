@@ -4,6 +4,81 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.5.0] — 2026-07-30
+
+Vem de feedback de uso real: *"achei muito complexo mexer no contexto dentro dos
+agents"* e *"sinto uma carência de um arquivo de estado"*.
+
+**Release aditiva**, com uma remoção anunciada (`datasets`, deprecado na 0.4.1).
+
+### Adicionado
+
+- **Estado do workflow.** Uma classe declara o formato e os valores iniciais; o
+  framework instancia **uma por execução** e entrega a mesma instância a todos os
+  passos. Substitui o padrão de `ctx.campo` solto com `as unknown as`, que era
+  boilerplate documentado em vez de API.
+
+  ```ts
+  export class RevisaoState {
+      aprovado = false;
+      rodadas = 0;
+  }
+
+  @Workflow({ state: RevisaoState, steps: [ /* … */ ] })
+  ```
+
+- **Injeção por decorator de parâmetro** — `@input()`, `@context()`, `@state()` e
+  `@memory(Store)`. Cada parâmetro diz o que quer, então a ordem deixa de ser
+  contrato:
+
+  ```ts
+  // agente
+  constructor(
+      @state() private readonly s: RevisaoState,
+      @memory(QdrantOpenAI) private readonly vetor: VectorMemory,
+  ) {}
+
+  // tool
+  async execute(@input() args: { path: string }, @context() ctx: AgentContext) {}
+  ```
+
+  Resolve a fragilidade da injeção posicional: antes, alcançar o segundo store
+  exigia um parâmetro morto, e reordenar o array trocava o comportamento sem erro
+  de compilação — os parâmetros têm o mesmo tipo.
+
+  Diferente de `reflect-metadata`, que lê os **tipos** dos parâmetros, aqui cada
+  um se declara. Isso importa porque o esbuild (que o `tsx` usa em dev) não emite
+  `design:paramtypes`, mas **emite** as chamadas dos decorators — verificado nos
+  dois caminhos.
+
+- **`until` recebe o estado** como segundo parâmetro:
+
+  ```ts
+  until: (ctx, s: RevisaoState) => s.aprovado
+  ```
+
+  Aditivo — `until: untilAnswered` e condições que só usam `ctx` seguem iguais.
+
+### Alterado
+
+- **`ToolClass` aceita `execute` com vários parâmetros.** A restrição da 0.4.1
+  declarava um parâmetro só e bloquearia o `execute` decorado. Continua garantindo
+  que o método **existe**, que é o erro que ela foi criada para pegar.
+- `VectorMemory.store` passou a ser público, para o `@memory(Store)` identificar
+  qual memória é qual.
+
+### Removido
+
+- **`VectorStoreCredentials.datasets`**, deprecado na 0.4.1. Não era usado desde
+  então; pode sair da sua config sem mudar nada.
+
+### Notas
+
+`@context()` **não funciona no construtor** de um agente — o contexto ainda não
+existe quando a classe é construída. O runtime falha com mensagem explicando isso,
+em vez de injetar `undefined` em silêncio. Use no `execute` de uma tool, ou receba
+o `ctx` como parâmetro do hook.
+
 ## [0.4.1] — 2026-07-30
 
 ### Depreciado

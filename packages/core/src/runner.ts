@@ -32,6 +32,8 @@ import type {
 } from "./types.js";
 import { recorder } from "./report/recorder.js";
 import { settings } from "./settings.js";
+import { CONSTRUTOR, pontosDe } from "./inject.js";
+import type { PontoDeInjecao } from "./inject.js";
 import { BudgetTracker, budget, withBudget } from "./budget.js";
 import type { RunBudget } from "./budget.js";
 
@@ -86,6 +88,61 @@ export class WorkflowRuntime {
  */
 const workflowRuntime = new WorkflowRuntime();
 
+/** O que está disponível para injetar num dado momento da execução. */
+interface Disponivel {
+  estado?: object;
+  memorias: VectorMemory[];
+  ctx?: AgentContext;
+  args?: unknown;
+}
+
+/**
+ * Resolve um parâmetro decorado. Falha com mensagem que aponta a classe e o
+ * parâmetro — injeção silenciosamente `undefined` é o pior modo de errar aqui.
+ */
+function resolverPonto(
+  ponto: PontoDeInjecao,
+  d: Disponivel,
+  onde: string,
+  indice: number,
+): unknown {
+  switch (ponto.tipo) {
+    case "input":
+      return d.args;
+
+    case "context":
+      if (!d.ctx) {
+        throw new Error(
+          `[thena] @context() em ${onde} (parâmetro ${indice}): o contexto ainda ` +
+          `não existe quando a classe é construída. Use @context() no execute de ` +
+          `uma tool, ou receba o ctx como parâmetro do hook.`,
+        );
+      }
+      return d.ctx;
+
+    case "state":
+      if (!d.estado) {
+        throw new Error(
+          `[thena] @state() em ${onde} (parâmetro ${indice}): nenhum estado ` +
+          `declarado. Acrescente \`state: MinhaClasse\` no @Workflow.`,
+        );
+      }
+      return d.estado;
+
+    case "memory": {
+      if (!ponto.store) return d.memorias[0];
+      const achada = d.memorias.find((m) => m.store instanceof ponto.store!);
+      if (!achada) {
+        throw new Error(
+          `[thena] @memory(${ponto.store.name}) em ${onde}: esse store não está ` +
+          `registrado em ThenaConfig.memory.`,
+        );
+      }
+      return achada;
+    }
+  }
+}
+
 /** Objeto `ToolType` é usado direto; classe `@Tool` vira `ToolType` com DI. */
 function resolveTool(input: ToolInput): ToolType {
   if (typeof input !== "function") {
@@ -107,13 +164,28 @@ function resolveTool(input: ToolInput): ToolType {
       `[thena] A classe "${input.name}" não implementa execute(input).`,
     );
   }
+  const pontos = pontosDe(input, "execute");
+
   return {
     name: config.name,
     description: config.description,
     schema: config.schema,
+    // Sem decorators, o contrato histórico: só os args validados.
     execute: (args: unknown) =>
       Promise.resolve(instance.execute(args)) as Promise<string>,
-  };
+    // Com decorators, a chamada precisa do ctx — montada no wrapToolWithHooks,
+    // que é quem o tem. Guardado aqui para não duplicar a resolução da tool.
+    ...(pontos ? { [PLANO]: { instance, pontos, nome: input.name } } : {}),
+  } as ToolType;
+}
+
+/** Onde o plano de injeção do `execute` viaja até o ponto que tem o ctx. */
+const PLANO = Symbol("thena:plano-de-injecao");
+
+interface PlanoDeInjecao {
+  instance: any;
+  pontos: (PontoDeInjecao | undefined)[];
+  nome: string;
 }
 
 /**
@@ -128,7 +200,22 @@ function wrapToolWithHooks(
   tool: ToolType,
   instance: any,
   ctx: AgentContext,
+  disponivel: Disponivel,
 ): ToolType {
+  // Quando o `execute` tem parâmetros decorados, a chamada é montada aqui —
+  // é o primeiro ponto do caminho que conhece o ctx.
+  const plano = (tool as any)[PLANO] as PlanoDeInjecao | undefined;
+  const executar = plano
+    ? (args: unknown) => {
+        const argumentos = plano.pontos.map((ponto, i) =>
+          ponto
+            ? resolverPonto(ponto, { ...disponivel, ctx, args }, `${plano.nome}.execute`, i)
+            : undefined,
+        );
+        return Promise.resolve(plano.instance.execute(...argumentos));
+      }
+    : (args: unknown) => tool.execute(args);
+
   const hasBefore = typeof instance.beforeTool === "function";
   const hasAfter = typeof instance.afterTool === "function";
   return {
@@ -146,7 +233,7 @@ function wrapToolWithHooks(
 
         let result: ToolOutput;
         try {
-          result = toToolOutput(await tool.execute(call.args));
+          result = toToolOutput(await executar(call.args));
         } catch (err) {
           if (settings().toolErrors !== "observe") throw err;
           result = {
@@ -199,17 +286,31 @@ function wrapToolWithHooks(
  * classe define `run(input, ctx)`, ela assume o controle total e os hooks
  * automáticos não são chamados (escape hatch).
  */
-export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
+export function buildAgentStep(
+  AgentClass: Function,
+  estado?: object,
+): Step<PipelineContext> {
   const meta = getAgentMetadata(AgentClass);
   const provider = resolveProvider(meta.provider);
   const memorias = resolveMemory(provider);
   const baseTools = meta.tools.map(resolveTool);
   const systemPrompt = meta.prompt;
-  // Injeção posicional no construtor, mesmo padrão do `WorkflowRuntime` nas
-  // tools: agentes sem construtor apenas ignoram o argumento extra. Não usamos
-  // `reflect-metadata`/`design:paramtypes` de propósito — o esbuild (tsx, o
-  // modo dev) não os emite, então DI por tipo quebraria em silêncio no dev.
-  const instance = new (AgentClass as new (...args: any[]) => any)(...memorias);
+  const disponivel: Disponivel = { estado, memorias };
+
+  // Com parâmetros decorados, cada um diz o que quer e a ordem não importa.
+  // Sem eles, o contrato histórico: as memórias, na ordem registrada.
+  //
+  // Não usamos `reflect-metadata`/`design:paramtypes` de propósito — o esbuild
+  // (tsx, o modo dev) não os emite, então DI por tipo quebraria em silêncio no
+  // dev. Decorator de parâmetro, por outro lado, é emitido nos dois caminhos.
+  const pontos = pontosDe(AgentClass, CONSTRUTOR);
+  const argumentos = pontos
+    ? pontos.map((ponto, i) =>
+        ponto ? resolverPonto(ponto, disponivel, AgentClass.name, i) : undefined,
+      )
+    : memorias;
+
+  const instance = new (AgentClass as new (...args: any[]) => any)(...argumentos);
   const agentName = AgentClass.name;
 
   return (ctx: PipelineContext) =>
@@ -254,7 +355,7 @@ export function buildAgentStep(AgentClass: Function): Step<PipelineContext> {
         }
 
         const tools = baseTools.map((tool) =>
-          wrapToolWithHooks(tool, instance, agentCtx),
+          wrapToolWithHooks(tool, instance, agentCtx, disponivel),
         );
 
         // system do agente + projeção do estado (memory/tasks + history).
@@ -345,15 +446,16 @@ export async function run<T = string>(
 function compileStep(
   step: WorkflowStep,
   pipeline: Pipeline<PipelineContext>,
+  estado?: object,
 ): Step<PipelineContext> {
   // Classe de agente (construtor) -> passo de agente.
   if (typeof step === "function") {
-    return buildAgentStep(step);
+    return buildAgentStep(step, estado);
   }
 
   if (step.kind === "parallel") {
     const parallelStep = pipeline.parallel({
-      steps: step.steps.map((s) => compileStep(s, pipeline)),
+      steps: step.steps.map((s) => compileStep(s, pipeline, estado)),
     });
     return (ctx) =>
       recorder().around("parallel", "parallel", async () => parallelStep(ctx));
@@ -361,11 +463,13 @@ function compileStep(
 
   // step.kind === "loop"
   const loopStep = pipeline.loop({
-    steps: step.steps.map((s) => compileStep(s, pipeline)),
+    steps: step.steps.map((s) => compileStep(s, pipeline, estado)),
     // Mesmo checkpoint do passo de agente: no modo "stop" o orçamento encerra o
     // loop pela porta da frente (output preservado); no "throw", lança daqui.
+    // O estado vai como 2º parâmetro — `until: (ctx, s) => s.aprovado`.
     until: async (ctx) =>
-      budget().checkpoint() || Boolean(await step.until(ctx as WorkflowContext)),
+      budget().checkpoint() ||
+      Boolean(await step.until(ctx as WorkflowContext, estado)),
     maxIterations: step.maxIterations,
     onExhausted: step.onExhausted
       ? (ctx, iterations) => step.onExhausted!(ctx as WorkflowContext, iterations)
@@ -408,8 +512,12 @@ export async function runWorkflow<T = string>(
       typeof memory === "string" ? memory : JSON.stringify(memory),
     );
   }
+  // Uma instância por execução: os valores iniciais são as inicializações de
+  // campo da classe, e todos os passos veem o mesmo objeto.
+  const estado = meta.state ? new meta.state() : undefined;
+
   const pipeline = new Pipeline(state);
-  pipeline.new(meta.steps.map((s) => compileStep(s, pipeline)));
+  pipeline.new(meta.steps.map((s) => compileStep(s, pipeline, estado)));
 
   const tracker = new BudgetTracker(runBudget);
 
