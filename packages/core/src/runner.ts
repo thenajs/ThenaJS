@@ -462,6 +462,17 @@ function compileStep(
   }
 
   // step.kind === "loop"
+  // Um `until` que declara o 2º parâmetro está pedindo o estado. Sem `state` no
+  // @Workflow ele receberia `undefined`, e o erro sairia como um TypeError cru
+  // na primeira leitura de campo — sem dizer o que faltou.
+  if (step.until.length >= 2 && !estado) {
+    throw new Error(
+      `[thena] O \`until\` deste loop recebe o estado como 2º parâmetro, mas o ` +
+      `workflow não declara \`state\`. Acrescente \`state: MinhaClasse\` no ` +
+      `@Workflow, ou use um \`until\` que só leia o ctx.`,
+    );
+  }
+
   const loopStep = pipeline.loop({
     steps: step.steps.map((s) => compileStep(s, pipeline, estado)),
     // Mesmo checkpoint do passo de agente: no modo "stop" o orçamento encerra o

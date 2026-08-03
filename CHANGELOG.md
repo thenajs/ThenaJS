@@ -74,6 +74,11 @@ agents"* e *"sinto uma carência de um arquivo de estado"*.
 
 ### Notas
 
+Declarar `state` é opcional. Quem pede sem ter declarado recebe erro apontando a
+causa — inclusive no `until`, cuja falta de estado é detectada **antes de rodar**
+pela quantidade de parâmetros que ele declara. Sem essa checagem o estado chegaria
+`undefined` e o erro sairia como um `TypeError` na primeira leitura de campo.
+
 `@context()` **não funciona no construtor** de um agente — o contexto ainda não
 existe quando a classe é construída. O runtime falha com mensagem explicando isso,
 em vez de injetar `undefined` em silêncio. Use no `execute` de uma tool, ou receba
