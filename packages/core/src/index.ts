@@ -14,6 +14,7 @@ export {
 export { run, runWorkflow, buildAgentStep, WorkflowRuntime } from "./runner.js";
 export { bootstrapWorkflow } from "./bootstrap.js";
 export { input, context, state, memory } from "./inject.js";
+export type { ThenaPlugin } from "./plugin.js";
 export { BudgetExceededError } from "./budget.js";
 export type { RunBudget, BudgetUsage, BudgetExceeded } from "./budget.js";
 export type { ThenaConfig, ReportOptions, LogConfig } from "./report/config.js";

@@ -59,7 +59,11 @@ interface Frame {
 export class ReportRecorder {
   private als = new AsyncLocalStorage<Frame>();
   private onComplete?: OnComplete;
-  private onEvent?: OnEvent;
+  /**
+   * Vários ouvintes: o `log` do config é um, e cada plugin registrado por
+   * `app.use()` é outro. Um plugin nunca toma o lugar do seu logger.
+   */
+  private ouvintes: OnEvent[] = [];
   private captureContent: boolean;
   private maxLen: number;
 
@@ -72,13 +76,30 @@ export class ReportRecorder {
     } = {},
   ) {
     this.onComplete = opts.onComplete;
-    this.onEvent = opts.onEvent;
+    if (opts.onEvent) this.ouvintes.push(opts.onEvent);
     this.captureContent = opts.captureContent ?? true;
     this.maxLen = opts.maxContentLength ?? 20000;
   }
 
   get active(): boolean {
-    return this.onComplete != null || this.onEvent != null;
+    return this.onComplete != null || this.ouvintes.length > 0;
+  }
+
+  /**
+   * Liga a captura de conteúdo (prompt, resposta, I/O das tools). Um plugin que
+   * observa a execução precisa disso, senão receberia eventos sem o conteúdo.
+   */
+  capturarConteudo(): void {
+    this.captureContent = true;
+  }
+
+  /** Acrescenta um ouvinte do stream ao vivo. Devolve como removê-lo. */
+  ouvir(ouvinte: OnEvent): () => void {
+    this.ouvintes.push(ouvinte);
+    return () => {
+      const i = this.ouvintes.indexOf(ouvinte);
+      if (i >= 0) this.ouvintes.splice(i, 1);
+    };
   }
 
   async around<T>(
@@ -166,22 +187,29 @@ export class ReportRecorder {
     depth: number,
     parentId?: string,
   ): void {
-    if (!this.onEvent) return;
-    try {
-      this.onEvent({
-        phase,
-        kind: node.kind,
-        name: node.name,
-        depth,
-        id: node.id,
-        parentId,
-        durationMs: phase === "end" ? node.durationMs : undefined,
-        status: phase === "end" ? node.status : undefined,
-        error: phase === "end" ? node.error : undefined,
-        data: phase === "end" ? node.data : undefined,
-      });
-    } catch {
-      // best-effort: falha no logger nunca afeta a execução
+    if (!this.ouvintes.length) return;
+
+    const evento: ExecutionEvent = {
+      phase,
+      kind: node.kind,
+      name: node.name,
+      depth,
+      id: node.id,
+      parentId,
+      durationMs: phase === "end" ? node.durationMs : undefined,
+      status: phase === "end" ? node.status : undefined,
+      error: phase === "end" ? node.error : undefined,
+      data: phase === "end" ? node.data : undefined,
+    };
+
+    // Best-effort e isolado: um ouvinte que lança não afeta a execução nem os
+    // outros ouvintes.
+    for (const ouvinte of this.ouvintes) {
+      try {
+        ouvinte(evento);
+      } catch {
+        /* ignorado de propósito */
+      }
     }
   }
 }

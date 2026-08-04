@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "CLI do ThenaJS: cria projetos (thena create) e gera agentes (thena g agent).",
   "license": "MIT",
   "author": "castroneto",
@@ -10,13 +10,21 @@
     "directory": "packages/cli"
   },
   "homepage": "https://github.com/thenajs/ThenaJS#readme",
-  "keywords": ["thenajs", "ai", "agents", "cli", "scaffold"],
+  "keywords": [
+    "thenajs",
+    "ai",
+    "agents",
+    "cli",
+    "scaffold"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
     "thena": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   }

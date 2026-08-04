@@ -1,7 +1,7 @@
 {
   "name": "@thenajs/qdrant-client",
-  "version": "0.5.0",
-  "description": "Cliente Qdrant nativo para ThenaJS — implementação de VectorStore sobre a API REST, sem SDK.",
+  "version": "0.6.0",
+  "description": "Cliente Qdrant nativo para ThenaJS \u2014 implementa\u00e7\u00e3o de VectorStore sobre a API REST, sem SDK.",
   "license": "MIT",
   "author": "castroneto",
   "repository": {
@@ -10,18 +10,27 @@
     "directory": "packages/qdrant-client"
   },
   "homepage": "https://github.com/thenajs/ThenaJS#readme",
-  "keywords": ["thenajs", "qdrant", "vector-database", "rag", "embeddings"],
+  "keywords": [
+    "thenajs",
+    "qdrant",
+    "vector-database",
+    "rag",
+    "embeddings"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@thenajs/core": "^0.5.0"
+    "@thenajs/core": "^0.6.0"
   }
 }

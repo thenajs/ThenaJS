@@ -1,0 +1,50 @@
+{
+  "name": "@thenajs/flow",
+  "version": "0.6.0",
+  "description": "Visualizador ao vivo da execu\u00e7\u00e3o de agentes ThenaJS \u2014 grafo em tempo real no navegador.",
+  "license": "MIT",
+  "author": "castroneto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thenajs/ThenaJS.git",
+    "directory": "packages/flow"
+  },
+  "homepage": "https://github.com/thenajs/ThenaJS#readme",
+  "keywords": [
+    "thenajs",
+    "agents",
+    "observability",
+    "reactflow",
+    "tracing"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build:ui": "vite build",
+    "build": "vite build && tsc -b tsconfig.json",
+    "prepack": "npm run build:ui"
+  },
+  "dependencies": {
+    "@thenajs/core": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@xyflow/react": "^12.4.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^6.0.11"
+  }
+}

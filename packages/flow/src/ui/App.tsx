@@ -1,0 +1,221 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Background,
+  Controls,
+  Handle,
+  MiniMap,
+  Position,
+  ReactFlow,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import type { FlowEvent, FlowRun, FlowSnapshot } from "../tipos.js";
+import { montarArvore, posicionar, type NoDoFluxo } from "./grafo.js";
+
+const ICONES: Record<string, string> = {
+  workflow: "▣",
+  loop: "↻",
+  parallel: "⇉",
+  agent: "◆",
+  chat: "✦",
+  tool: "⚙",
+};
+
+function NoPasso({ data, selected }: NodeProps<NoDoFluxo>) {
+  return (
+    <div className={`no no--${data.kind} no--${data.estado}`} data-selecionado={selected}>
+      <Handle type="target" position={Position.Left} />
+      <span className="no__icone">{ICONES[data.kind] ?? "•"}</span>
+      <span className="no__texto">
+        <strong>{data.rotulo}</strong>
+        <small>
+          {data.kind}
+          {data.duracaoMs != null && ` · ${formatarDuracao(data.duracaoMs)}`}
+        </small>
+      </span>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+const TIPOS_DE_NO = { passo: NoPasso };
+
+function formatarDuracao(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+}
+
+function formatarHora(epoch: number): string {
+  return new Date(epoch).toLocaleTimeString();
+}
+
+export function App() {
+  const [runs, setRuns] = useState<FlowRun[]>([]);
+  const [runVisivel, setRunVisivel] = useState<string>();
+  const [eventos, setEventos] = useState<FlowEvent[]>([]);
+  const [selecionado, setSelecionado] = useState<string>();
+  const [conectado, setConectado] = useState(false);
+
+  // A run em foco fica numa ref porque o handler do SSE é registrado uma vez.
+  const foco = useRef<string | undefined>(undefined);
+  foco.current = runVisivel;
+  // Segue a run mais nova enquanto o usuário não escolher uma antiga na lista.
+  const seguindo = useRef(true);
+
+  useEffect(() => {
+    const fonte = new EventSource("/api/eventos");
+
+    fonte.addEventListener("open", () => setConectado(true));
+    fonte.addEventListener("error", () => setConectado(false));
+
+    fonte.addEventListener("snapshot", (e) => {
+      const dados: FlowSnapshot = JSON.parse((e as MessageEvent).data);
+      setConectado(true);
+      setRuns(dados.runs);
+      setRunVisivel(dados.runAtual);
+      setEventos(dados.eventos);
+    });
+
+    fonte.addEventListener("run", (e) => {
+      const run: FlowRun = JSON.parse((e as MessageEvent).data);
+      setRuns((atuais) => {
+        const i = atuais.findIndex((r) => r.id === run.id);
+        if (i < 0) return [run, ...atuais];
+        const copia = [...atuais];
+        copia[i] = run;
+        return copia;
+      });
+      // Run nova: só pula para ela se o usuário não estiver revendo uma antiga.
+      if (seguindo.current && run.passos === 0 && foco.current !== run.id) {
+        foco.current = run.id;
+        setRunVisivel(run.id);
+        setEventos([]);
+        setSelecionado(undefined);
+      }
+    });
+
+    fonte.addEventListener("evento", (e) => {
+      const evento: FlowEvent = JSON.parse((e as MessageEvent).data);
+      if (evento.runId !== foco.current) return;
+      setEventos((atuais) => [...atuais, evento]);
+    });
+
+    return () => fonte.close();
+  }, []);
+
+  const abrirRun = useCallback(async (run: FlowRun) => {
+    seguindo.current = run.status === "rodando";
+    foco.current = run.id;
+    setRunVisivel(run.id);
+    setSelecionado(undefined);
+    const resposta = await fetch(`/api/runs/${run.id}`);
+    const { eventos: carregados } = await resposta.json();
+    // Uma corrida com o SSE aqui só aconteceria se o usuário trocasse de run
+    // durante o fetch; o guard devolve o controle a quem chegou por último.
+    if (foco.current === run.id) setEventos(carregados ?? []);
+  }, []);
+
+  const { nodes, edges, mapa } = useMemo(() => {
+    const arvore = montarArvore(eventos);
+    return { ...posicionar(arvore), mapa: arvore };
+  }, [eventos]);
+
+  const detalhe = selecionado ? mapa.get(selecionado)?.dados : undefined;
+  const run = runs.find((r) => r.id === runVisivel);
+
+  return (
+    <div className="app">
+      <aside className="lateral">
+        <header className="marca">
+          <h1>Thena Flow</h1>
+          <span className={`pulso ${conectado ? "pulso--vivo" : ""}`}>
+            {conectado ? "ao vivo" : "desconectado"}
+          </span>
+        </header>
+
+        <h2 className="lateral__titulo">Execuções</h2>
+        {runs.length === 0 && (
+          <p className="vazio">Nada ainda. Rode o seu workflow — ele aparece aqui.</p>
+        )}
+        <ul className="runs">
+          {runs.map((r) => (
+            <li key={r.id}>
+              <button
+                className={`run run--${r.status}`}
+                aria-current={r.id === runVisivel}
+                onClick={() => abrirRun(r)}
+              >
+                <strong>{r.nome}</strong>
+                <small>
+                  {formatarHora(r.inicioEm)} · {r.passos} passos
+                  {r.duracaoMs != null && ` · ${formatarDuracao(r.duracaoMs)}`}
+                </small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      <main className="palco">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={TIPOS_DE_NO}
+          onNodeClick={(_, no) => setSelecionado(no.id)}
+          onPaneClick={() => setSelecionado(undefined)}
+          fitView
+          fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+          proOptions={{ hideAttribution: false }}
+        >
+          <Background gap={18} size={1} />
+          <Controls showInteractive={false} />
+          <MiniMap pannable zoomable />
+        </ReactFlow>
+
+        {run && (
+          <div className="rodape">
+            <strong>{run.nome}</strong>
+            <span className={`etiqueta etiqueta--${run.status}`}>{run.status}</span>
+            {run.duracaoMs != null && <span>{formatarDuracao(run.duracaoMs)}</span>}
+          </div>
+        )}
+      </main>
+
+      {detalhe && (
+        <aside className="detalhe">
+          <header>
+            <h2>{detalhe.rotulo}</h2>
+            <button onClick={() => setSelecionado(undefined)} aria-label="fechar">
+              ✕
+            </button>
+          </header>
+          <dl>
+            <dt>tipo</dt>
+            <dd>{detalhe.kind}</dd>
+            <dt>estado</dt>
+            <dd className={`estado estado--${detalhe.estado}`}>{detalhe.estado}</dd>
+            {detalhe.duracaoMs != null && (
+              <>
+                <dt>duração</dt>
+                <dd>{formatarDuracao(detalhe.duracaoMs)}</dd>
+              </>
+            )}
+          </dl>
+
+          {detalhe.erro && <pre className="erro">{detalhe.erro}</pre>}
+
+          {detalhe.payload &&
+            Object.entries(detalhe.payload).map(([chave, valor]) => (
+              <section key={chave}>
+                <h3>{chave}</h3>
+                <pre>
+                  {typeof valor === "string" ? valor : JSON.stringify(valor, null, 2)}
+                </pre>
+              </section>
+            ))}
+        </aside>
+      )}
+    </div>
+  );
+}

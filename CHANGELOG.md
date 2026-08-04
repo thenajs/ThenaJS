@@ -4,6 +4,61 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.6.0] — 2026-08-04
+
+Observabilidade ao vivo. O report já contava a história depois que ela acabava;
+faltava ver enquanto acontece.
+
+**Release aditiva** — nada do que existia mudou de forma.
+
+### Adicionado
+
+- **`@thenajs/flow`** — pacote novo. Sobe um site local que desenha a árvore da
+  execução em tempo real, com ReactFlow: workflow, loops, agentes, chamadas ao
+  modelo e tools aparecendo conforme acontecem. Clicar num nó abre o prompt
+  enviado, a resposta, o I/O da tool, os tokens e o erro.
+
+  ```ts
+  const app = await bootstrapWorkflow(MeuWorkflow, { log: true });
+  await app.use(thenaFlow());
+  await app.run({ input: { message: "Olá" } });
+  ```
+
+  Escuta só em `127.0.0.1` e não persiste nada — é uma janela para o que está
+  acontecendo agora, não um banco de traces. A interface já vem buildada no
+  pacote; não há passo de build no seu projeto. Sem dependência de runtime: o
+  transporte é SSE em cima do `node:http`.
+
+- **`app.use(plugin)` e `app.dispose()`** — a interface `ThenaPlugin` abre o
+  stream de execução para qualquer destino, não só para o Flow:
+
+  ```ts
+  export function meuPlugin(): ThenaPlugin {
+      return {
+          name: "meu-plugin",
+          setup: () => conectar(),      // se lançar, o `use()` rejeita
+          onEvent: (evento) => enviar(evento),
+          dispose: () => fechar(),
+      };
+  }
+  ```
+
+  Vários plugins convivem e **nenhum toma o lugar do `log`** do config — antes
+  havia um único ouvinte do stream, e quem chegasse por último deslocava o
+  outro. Um plugin que lança no `onEvent` é isolado: nem a execução nem os
+  outros plugins são afetados.
+
+### Corrigido
+
+- **Um segundo `app.run(...)` no mesmo app não era mais instrumentado.** O reset
+  do recorder acontecia no `finally` do `run`, então da segunda execução em
+  diante o `log` e o `report` ficavam mudos. O reset passou para o `dispose()`.
+
+### Documentação
+
+- Guia novo: [Ver a execução ao vivo](https://thenajs.github.io/guias/flow),
+  com a interface do `ThenaPlugin` para quem quiser escrever o seu.
+
 ## [0.5.0] — 2026-07-30
 
 Vem de feedback de uso real: *"achei muito complexo mexer no contexto dentro dos

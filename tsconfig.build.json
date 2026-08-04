@@ -14,6 +14,9 @@
       "path": "packages/qdrant-client"
     },
     {
+      "path": "packages/flow"
+    },
+    {
       "path": "packages/cli"
     }
   ]

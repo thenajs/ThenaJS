@@ -19,6 +19,7 @@ packages/
   core/            @thenajs/core            decorators (@Agent/@Workflow/@Tool) + runtime
   tools/           @thenajs/tools           tools prontas (ex.: ShellTool)
   qdrant-client/   @thenajs/qdrant-client   VectorStore para Qdrant, sobre a REST API
+  flow/            @thenajs/flow            site local que mostra a execução ao vivo
   cli/             @thenajs/cli             gerador "thena g agent <nome>"
 
 src/                              o app (organização por convenção)
@@ -31,7 +32,7 @@ src/                              o app (organização por convenção)
   workflows/              # workflows do usuário
 ```
 
-Grafo de dependências: `tools`, `qdrant-client` → `core` → `agentflow` → `zod`. Sem dependências
+Grafo de dependências: `tools`, `qdrant-client`, `flow` → `core` → `agentflow` → `zod`. Sem dependências
 externas privadas — nada de registry/token do GitHub Packages.
 
 ## CLI — criar um projeto

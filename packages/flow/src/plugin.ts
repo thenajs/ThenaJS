@@ -1,0 +1,35 @@
+import type { ThenaPlugin } from "@thenajs/core";
+import { ServidorFlow } from "./server/servidor.js";
+import type { FlowOptions } from "./tipos.js";
+
+/**
+ * Sobe o site do Flow e transmite a execução para ele ao vivo.
+ *
+ * ```ts
+ * const app = await bootstrapWorkflow(MeuWorkflow, { log: true });
+ * await app.use(thenaFlow({ port: 4100 }));
+ * await app.run({ input: { message: "olá" } });
+ * ```
+ *
+ * O servidor segura o processo aberto depois do `run`, para dar tempo de olhar
+ * o resultado. Feche com `Ctrl+C` ou `await app.dispose()`.
+ */
+export function thenaFlow(options: FlowOptions = {}): ThenaPlugin {
+  const servidor = new ServidorFlow(options);
+
+  return {
+    name: "thena-flow",
+
+    async setup() {
+      await servidor.iniciar();
+    },
+
+    onEvent(evento) {
+      servidor.publicar(evento);
+    },
+
+    async dispose() {
+      await servidor.parar();
+    },
+  };
+}

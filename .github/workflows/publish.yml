@@ -36,7 +36,7 @@ jobs:
 
       - name: Publish (na ordem de dependência)
         run: |
-          for pkg in agentflow core tools qdrant-client cli; do
+          for pkg in agentflow core tools qdrant-client flow cli; do
             echo "→ publicando @thenajs/$pkg"
             npm publish --workspace "@thenajs/$pkg" --provenance --access public
           done

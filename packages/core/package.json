@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Camada de DX do ThenaJS: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @thenajs/agentflow.",
   "license": "MIT",
   "author": "castroneto",
@@ -16,11 +16,13 @@
   "exports": {
     ".": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@thenajs/agentflow": "^0.5.0"
+    "@thenajs/agentflow": "^0.6.0"
   }
 }

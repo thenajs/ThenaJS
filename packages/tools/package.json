@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/tools",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Tools prontas para agentes ThenaJS (ex.: ShellTool).",
   "license": "MIT",
   "author": "castroneto",
@@ -16,12 +16,14 @@
   "exports": {
     ".": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@thenajs/core": "^0.5.0",
+    "@thenajs/core": "^0.6.0",
     "zod": "^4.0.0"
   }
 }

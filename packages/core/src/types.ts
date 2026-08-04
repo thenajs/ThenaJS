@@ -6,6 +6,7 @@ import type {
   ToolType,
 } from "@thenajs/agentflow";
 import type { BudgetUsage, RunBudget } from "./budget.js";
+import type { ThenaPlugin } from "./plugin.js";
 
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
@@ -259,4 +260,11 @@ export interface WorkflowRunOptions {
 /** Handle retornado por `bootstrapWorkflow` — o "app" do workflow. */
 export interface WorkflowApp<T = string> {
   run(options: WorkflowRunOptions): Promise<T | void>;
+  /**
+   * Acopla um observador do stream ao vivo. Vários coexistem, e nenhum toma o
+   * lugar do `log` do config. Chame antes do `run`.
+   */
+  use(plugin: ThenaPlugin): Promise<WorkflowApp<T>>;
+  /** Encerra os plugins e solta o recorder. */
+  dispose(): Promise<void>;
 }
