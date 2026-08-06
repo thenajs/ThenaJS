@@ -4,6 +4,162 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.7.0] — 2026-08-06
+
+Isolamento por execução. O framework guardava três estados mutáveis no escopo de
+módulo, então duas runs concorrentes se sobrescreviam — um servidor HTTP que
+chamasse `app.run()` por request estava quebrado, e uma suíte de testes não
+tinha como existir sem os testes se contaminarem.
+
+**Release com quebras pontuais** — duas, ambas na saída do `app.run()` e no
+caminho do report. O resto da API não mudou de forma.
+
+### Adicionado
+
+- **Middlewares em `ThenaPlugin`.** Além de observar com `onEvent`, um plugin
+  agora **intercepta**: `tool` envolve cada execução de tool e `chat` cada
+  chamada ao modelo, podendo medir, transformar ou curto-circuitar.
+
+  ```ts
+  await app.use({
+    name: "cache",
+    chat: async (inv, next) => {
+      const guardado = cache.get(chave(inv.messages));
+      if (guardado) {
+        inv.meta({ cacheHit: true });   // aparece no report e no grafo do Flow
+        return guardado;                 // o modelo não é chamado
+      }
+      const turno = await next();
+      cache.set(chave(inv.messages), turno);
+      return turno;
+    },
+  });
+  ```
+
+  A posição da camada é contrato: **abaixo** da observação do framework (senão o
+  passo desaparece do report e do grafo) e **acima** da contabilidade (senão um
+  cache que acerta soma tokens já pagos e fura o `maxCostUsd`). Extensão
+  aditiva — plugins existentes seguem funcionando sem mudança.
+
+  Com isso, cache, RBAC, rate limiting, redação de segredo e spans de
+  OpenTelemetry deixam de exigir mudança no core.
+
+- **Freios no `loop()`, ligados por padrão.** Com falha de tool virando
+  observação, um agente preso não morre — ele repete, e cada volta custa uma
+  chamada. Um loop sem teto gasta o cartão de quem usa o framework, então
+  ilimitado deixou de ser o default:
+
+  - **`maxFails` (default `5`)** — falhas de tool **consecutivas** que encerram
+    o loop. Consecutivas, e não totais, porque o sinal de "preso" é a
+    repetição: um agente que erra, corrige e avança tem total alto e
+    consecutivas baixo, e não deve ser punido. Uma tool que funciona zera a
+    contagem.
+  - **`onFail(ctx, { consecutive, total, toolName, message })`** — chamado a
+    **cada** falha, não só no corte, para dar tempo de alertar antes.
+  - **`maxIterations` passou a ter default `10`.** Era `Infinity`.
+
+  `Infinity` desliga qualquer um dos dois. Os defaults ficam no `loop()` do
+  `@thenajs/core`; o `Pipeline.loop` do engine continua sendo a primitiva crua,
+  sem teto.
+
+- **`stoppedBy` no nó `loop` do report** — `"until"`, `"exhausted"`, `"fails"`
+  ou `"budget"`. Um loop cortado por `maxFails` tem `exhausted: false`, então
+  sem isso "convergiu" e "desistiu" ficariam indistinguíveis.
+
+- **`FatalToolError`** — a tool declarando que a falha **não** é recuperável
+  pelo modelo (bug no código, credencial expirada, banco fora). Ela atravessa o
+  agente e encerra a run; o erro original vai em `cause`, fora do contexto do
+  modelo e fora do report.
+
+  ```ts
+  throw new FatalToolError("banco indisponível", { cause: err });
+  ```
+
+- **`RunContext`** — todo o estado de uma execução (id, config, recorder,
+  orçamento) passa por um `AsyncLocalStorage`, o mesmo mecanismo que o `budget`
+  já usava. Com isso:
+  - `app.run()` pode ser chamado de forma **concorrente**, inclusive dentro de
+    um handler HTTP;
+  - **vários apps** coexistem no mesmo processo, e o `dispose()` de um não
+    afeta o outro;
+  - testes rodam em paralelo sem interferência.
+- **Overrides por execução** em `app.run({ ... })`: `report`, `log` e
+  `toolErrors` sobrescrevem o `ThenaConfig` só naquela run.
+- **`runId` em `ExecutionEvent`** — todo evento diz a qual execução pertence.
+  Sem isso, um consumidor que recebe eventos de runs concorrentes não tinha como
+  separá-los.
+- **Suíte de testes (Vitest)**, rodando no CI. `npm test` executa contra o
+  código-fonte, sem build. Inclui um `FakeProvider` para testar agentes sem
+  falar com um modelo. `npm run test:types` faz o typecheck dos testes, que o
+  `tsc -b` não cobria.
+
+### Alterado
+
+- ⚠️ **Falha de tool virou observação por padrão, e `toolErrors` deixou de
+  existir.** Antes, um `throw` do `execute` derrubava a run a menos que você
+  descobrisse o flag `toolErrors: "observe"`.
+
+  O framework tinha três comportamentos para quatro falhas parecidas: tool
+  inexistente já era observação **incondicionalmente**, `throw` no `execute`
+  era configurável, e argumento fora do schema derrubava a run **mesmo com
+  `"observe"`** — porque a validação rodava no provider, antes do `try/catch`
+  que aplicava a política. Agora as quatro são observação:
+
+  | Como a tool falha | Antes (`throw`, o default) | Agora |
+  | --- | --- | --- |
+  | `execute` lança | derrubava a run | observação |
+  | `execute` devolve `isError` | observação | observação |
+  | tool inexistente | observação | observação |
+  | argumentos fora do schema | derrubava a run | observação |
+
+  É o que o protocolo já modelava (`ToolOutput.isError`, `is_error` no
+  `tool_result`) e o que faz um loop ReAct funcionar. Para a falha que o modelo
+  não conserta, use `FatalToolError`. Para escolher o texto que ele lê, devolva
+  `{ content, isError: true }` — que continua sendo o caminho preferível.
+
+  **Migração:** remova `toolErrors` do seu `ThenaConfig`. Se você dependia do
+  `"throw"` para falhar rápido, lance `FatalToolError` nas tools onde isso
+  importa.
+
+- ⚠️ **`app.run()` devolve `Promise<T>` e propaga o erro.** Antes ele engolia a
+  exceção, imprimia a saída com `console.log` e marcava `process.exitCode = 1`.
+  Uma biblioteca não deve escrever o output do usuário no stdout nem decidir o
+  código de saída do processo — e, num handler HTTP, o erro engolido virava um
+  `undefined` silencioso.
+
+  ```ts
+  // antes
+  await app.run({ input });                 // imprimia sozinho
+
+  // agora
+  console.log(await app.run({ input }));    // quem imprime é a aplicação
+  ```
+
+- ⚠️ **O report grava em `report/<runId>/`.** O caminho era fixo, então duas
+  execuções concorrentes sobrescreviam o report uma da outra. O
+  `report/index.html` da raiz passa a ser o índice das runs.
+
+- **`MemoriaDeRuns` (`@thenajs/flow`) atribui por `runId`.** Usava um cursor
+  único com a fronteira inferida por `depth === 0` — o que funcionava com uma
+  execução por vez e embaralhava duas.
+
+### Corrigido
+
+- O `memory` do `ThenaConfig` era resolvido na **compilação** dos passos, que
+  acontecia fora do escopo da execução. Com o `RunContext`, a compilação passou
+  para dentro do escopo; fora dele, o runtime agora falha alto em vez de cair
+  nos defaults em silêncio.
+- O exemplo de `@Agent` no README omitia o campo obrigatório `prompt` e por isso
+  não rodava.
+
+### Removido
+
+- `setRecorder` / `resetRecorder` / `recorder()` e `setRuntimeSettings` /
+  `resetRuntimeSettings` / `settings()` — eram internos, nunca exportados pelo
+  `@thenajs/core`. Idem `budget()` / `withBudget()`, absorvidos pelo
+  `RunContext`, e `ReportRecorder.capturarConteudo()`, que existia só para
+  mutar um recorder compartilhado depois do fato.
+
 ## [0.6.0] — 2026-08-04
 
 Observabilidade ao vivo. O report já contava a história depois que ela acabava;
