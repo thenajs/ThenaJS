@@ -20,3 +20,7 @@ jobs:
         run: npm run build
       - name: Typecheck do app
         run: npx tsc --noEmit -p tsconfig.json
+      - name: Typecheck dos testes
+        run: npm run test:types
+      - name: Testes
+        run: npm test

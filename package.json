@@ -9,7 +9,10 @@
   "scripts": {
     "build": "tsc -b tsconfig.build.json && npm run build:ui --workspace @thenajs/flow",
     "clean": "tsc -b tsconfig.build.json --clean",
-    "typecheck": "npm run build && tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:types": "tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "npm run build && tsc --noEmit -p tsconfig.json && npm run test:types",
     "start": "npm run build && tsx src/main.ts",
     "thena": "node packages/cli/dist/index.js"
   },
@@ -22,6 +25,7 @@
     "@thenajs/cli": "*",
     "@types/node": "^20.19.43",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.10"
   }
 }

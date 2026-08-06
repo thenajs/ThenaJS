@@ -1,0 +1,98 @@
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { Tool, bootstrapWorkflow, runWorkflow } from "@thenajs/core";
+import type { ExecutionNode, WorkflowRuntime } from "@thenajs/core";
+import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+
+/**
+ * Caracterização da run aninhada: uma tool que dispara outro workflow pelo
+ * `WorkflowRuntime` injetado no construtor.
+ */
+
+const schema = z.object({ x: z.string() });
+
+/** Tool que roda `SubFluxo` e devolve a saída dele. */
+function criarToolQueRodaWorkflow(SubFluxo: Function) {
+  const Classe = class {
+    constructor(private readonly runtime: WorkflowRuntime) {}
+    execute() {
+      return this.runtime.run<string>(SubFluxo, {
+        input: { message: "sub" },
+      });
+    }
+  };
+  Tool({ name: "sub", description: "roda um sub-workflow", schema })(
+    Classe as any,
+  );
+  return Classe as any;
+}
+
+afterEach(() => {
+  process.exitCode = undefined;
+  vi.restoreAllMocks();
+});
+
+describe("run aninhada", () => {
+  it("o sub-workflow tem orçamento próprio, independente do pai", async () => {
+    const providerFilho = new FakeProvider([{ content: "resposta do filho" }]);
+    const SubFluxo = criarWorkflow([criarAgente({ provider: providerFilho })]);
+
+    const providerPai = new FakeProvider([
+      { tool: { name: "sub", arguments: { x: "1" } } },
+    ]);
+    const Fluxo = criarWorkflow([
+      criarAgente({
+        provider: providerPai,
+        tools: [criarToolQueRodaWorkflow(SubFluxo)],
+      }),
+    ]);
+
+    // O pai já esgota o teto no próprio turno. Se o orçamento fosse
+    // compartilhado, o agente do filho seria pulado e não haveria chamada.
+    const saida = await runWorkflow(Fluxo, "vai", undefined, {
+      maxChatCalls: 1,
+    });
+
+    expect(providerFilho.chamadas).toHaveLength(1);
+    expect(saida).toBe("resposta do filho");
+  });
+
+  it("os nós do sub-workflow aninham sob o nó da tool no report do pai", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "thena-nested-"));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const SubFluxo = criarWorkflow([
+      criarAgente({ provider: new FakeProvider([{ content: "filho" }]) }),
+    ]);
+    const providerPai = new FakeProvider([
+      { tool: { name: "sub", arguments: { x: "1" } } },
+    ]);
+    const Fluxo = criarWorkflow([
+      criarAgente({
+        provider: providerPai,
+        tools: [criarToolQueRodaWorkflow(SubFluxo)],
+      }),
+    ]);
+
+    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    await app.run({ input: { message: "vai" } });
+    await app.dispose();
+
+    const [pasta] = readdirSync(dir, { withFileTypes: true }).filter((e) =>
+      e.isDirectory(),
+    );
+    const raiz: ExecutionNode = JSON.parse(
+      readFileSync(join(dir, pasta.name, "report.json"), "utf-8"),
+    );
+    // O sub-workflow herda o recorder do pai, então uma run aninhada continua
+    // sendo **uma** árvore: workflow > agent > chat > tool > workflow > agent.
+    const tool = raiz.children[0].children[0].children[0];
+    expect(tool.kind).toBe("tool");
+    const filho = tool.children[0];
+    expect(filho.kind).toBe("workflow");
+    expect(filho.children[0].kind).toBe("agent");
+  });
+});

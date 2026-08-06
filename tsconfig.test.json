@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "types": ["node", "vitest/globals"],
+    // Os testes rodam contra o código-fonte (é o que o vitest.config.ts faz),
+    // então o typecheck precisa enxergar o mesmo — senão ele validaria contra
+    // um `dist/` que pode estar velho.
+    "paths": {
+      "@thenajs/core": ["./packages/core/src/index.ts"],
+      "@thenajs/agentflow": ["./packages/agentflow/src/index.ts"]
+    },
+    "baseUrl": "."
+  },
+  // Só os testes: os `src/` entram sozinhos, puxados pelos imports acima. A UI
+  // do flow fica de fora — ela tem tsconfig próprio, com JSX.
+  "include": ["packages/*/test"]
+}
