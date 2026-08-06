@@ -1,14 +1,33 @@
-import type { ExecutionEvent } from "./report/recorder.js";
+import type { ExecutionEvent } from "./observability/recorder.js";
+import type { ChatMiddleware } from "./middleware/chat.js";
+import type { ToolMiddleware } from "./middleware/tool.js";
 
 /**
- * Um plugin observa a execução sem participar dela. Ele recebe o mesmo stream
- * de eventos que o `log` do config — vários podem coexistir, e nenhum toma o
- * lugar do outro.
+ * Um plugin acopla comportamento à execução. Vários podem coexistir, e nenhum
+ * toma o lugar do outro.
+ *
+ * Há dois modos, combináveis no mesmo plugin:
+ *
+ * - **observar** — `onEvent` recebe o mesmo stream que o `log` do config;
+ * - **interceptar** — `tool` e `chat` envolvem cada execução de tool e cada
+ *   chamada ao modelo, podendo medir, transformar ou curto-circuitar.
  *
  * ```ts
  * const app = await bootstrapWorkflow(MeuWorkflow, config);
- * await app.use(thenaFlow({ port: 4100 }));
- * await app.run({ input: { message: "olá" } });
+ *
+ * await app.use(thenaFlow({ port: 4100 }));   // observa
+ *
+ * await app.use({                              // intercepta
+ *   name: "cache",
+ *   chat: async (inv, next) => {
+ *     const guardado = cache.get(chave(inv.messages));
+ *     if (guardado) {
+ *       inv.meta({ cacheHit: true });          // aparece no report e no Flow
+ *       return guardado;
+ *     }
+ *     return cache.set(chave(inv.messages), await next());
+ *   },
+ * });
  * ```
  */
 export interface ThenaPlugin {
@@ -27,6 +46,19 @@ export interface ThenaPlugin {
    * é engolida e nem a execução nem os outros plugins são afetados.
    */
   onEvent?(event: ExecutionEvent): void;
+
+  /**
+   * Envolve cada execução de tool. Diferente do `onEvent`, este **participa**:
+   * um `throw` daqui derruba a run, e devolver sem chamar `next()` substitui a
+   * execução.
+   *
+   * Para negar de forma recuperável — o modelo lê e tenta outra coisa —
+   * devolva `{ content, isError: true }` em vez de lançar.
+   */
+  tool?: ToolMiddleware;
+
+  /** Envolve cada chamada ao modelo. Mesmas regras do `tool`. */
+  chat?: ChatMiddleware;
 
   /** Chamado por `app.dispose()`. Feche aqui o que o `setup` abriu. */
   dispose?(): void | Promise<void>;

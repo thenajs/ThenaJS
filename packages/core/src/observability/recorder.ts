@@ -28,6 +28,12 @@ export interface ExecutionEvent {
   phase: "start" | "end";
   kind: ExecutionKind;
   name: string;
+  /**
+   * A qual execução o evento pertence. Sem isto, um consumidor que recebe
+   * eventos de runs concorrentes não tem como separá-los — era assim que o
+   * Flow embaralhava duas execuções numa só.
+   */
+  runId: string;
   /** Profundidade na árvore (0 = raiz), útil para indentação. */
   depth: number;
   id: string;
@@ -55,6 +61,9 @@ interface Frame {
  * (parentesco correto mesmo em `parallel`) e, opcionalmente, emite eventos ao
  * vivo (`onEvent`) e/ou a árvore final (`onComplete`). No-op quando nenhum dos
  * dois está configurado (overhead ~zero).
+ *
+ * **Um por execução**, criado pelo `RunContext`. Já foi um singleton de módulo,
+ * e era por isso que duas runs concorrentes misturavam suas árvores.
  */
 export class ReportRecorder {
   private als = new AsyncLocalStorage<Frame>();
@@ -67,30 +76,31 @@ export class ReportRecorder {
   private captureContent: boolean;
   private maxLen: number;
 
+  /** Carimbado em todo evento, para o consumidor separar runs concorrentes. */
+  readonly runId: string;
+
   constructor(
     opts: {
+      runId?: string;
       onComplete?: OnComplete;
-      onEvent?: OnEvent;
+      onEvent?: OnEvent | OnEvent[];
       captureContent?: boolean;
       maxContentLength?: number;
     } = {},
   ) {
+    this.runId = opts.runId ?? "";
     this.onComplete = opts.onComplete;
-    if (opts.onEvent) this.ouvintes.push(opts.onEvent);
+    if (opts.onEvent) {
+      this.ouvintes.push(
+        ...(Array.isArray(opts.onEvent) ? opts.onEvent : [opts.onEvent]),
+      );
+    }
     this.captureContent = opts.captureContent ?? true;
     this.maxLen = opts.maxContentLength ?? 20000;
   }
 
   get active(): boolean {
     return this.onComplete != null || this.ouvintes.length > 0;
-  }
-
-  /**
-   * Liga a captura de conteúdo (prompt, resposta, I/O das tools). Um plugin que
-   * observa a execução precisa disso, senão receberia eventos sem o conteúdo.
-   */
-  capturarConteudo(): void {
-    this.captureContent = true;
   }
 
   /** Acrescenta um ouvinte do stream ao vivo. Devolve como removê-lo. */
@@ -193,6 +203,7 @@ export class ReportRecorder {
       phase,
       kind: node.kind,
       name: node.name,
+      runId: this.runId,
       depth,
       id: node.id,
       parentId,
@@ -212,18 +223,4 @@ export class ReportRecorder {
       }
     }
   }
-}
-
-// Recorder ativo do processo (no-op por padrão).
-const NOOP = new ReportRecorder();
-let current: ReportRecorder = NOOP;
-
-export function setRecorder(rec: ReportRecorder): void {
-  current = rec;
-}
-export function resetRecorder(): void {
-  current = NOOP;
-}
-export function recorder(): ReportRecorder {
-  return current;
 }

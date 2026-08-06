@@ -1,4 +1,5 @@
 import type {
+  LoopFailure,
   LoopStep,
   ParallelStep,
   TurnInfo,
@@ -15,13 +16,38 @@ export function parallel(steps: WorkflowStep[]): ParallelStep {
   return { kind: "parallel", steps };
 }
 
+/** Voltas antes de desistir, quando `maxIterations` não é informado. */
+export const MAX_ITERATIONS_PADRAO = 10;
+
+/** Falhas de tool seguidas antes de desistir, quando `maxFails` não é informado. */
+export const MAX_FAILS_PADRAO = 5;
+
 /**
- * Bloco de repetição: executa `steps` até `until(ctx)` ser verdadeiro
- * (ou atingir `maxIterations`).
+ * Bloco de repetição: executa `steps` até `until(ctx)` ser verdadeiro.
  *
- * Quando a parada vem do teto e não da condição, o loop é marcado como
- * *exausto*: `onExhausted` é chamado, `ctx.loop.exhausted` fica `true` e o nó
- * `loop` do report registra o mesmo.
+ * Três freios, e **os dois primeiros vêm ligados** — um loop sem teto gasta o
+ * cartão de quem usa o framework, então ilimitado não pode ser o default:
+ *
+ * - `maxIterations` (default 10) — o loop não converge. Marca o loop como
+ *   *exausto*: `onExhausted` é chamado e `ctx.loop.exhausted` fica `true`.
+ * - `maxFails` (default 5) — o agente está **preso**, repetindo a mesma falha
+ *   de tool. Conta falhas **consecutivas**: uma tool que funciona zera a
+ *   contagem, então um agente que erra e corrige não é punido.
+ * - `budget` da run — o teto global de tempo, chamadas, tokens e custo.
+ *
+ * `Infinity` desliga qualquer um dos dois primeiros, se você souber o que está
+ * fazendo. O nó `loop` do report registra `stoppedBy`, para "convergiu" e
+ * "desistiu" não ficarem indistinguíveis.
+ *
+ * ```ts
+ * loop({
+ *   steps: [ExplorerAgent],
+ *   until: untilAnswered,
+ *   maxFails: 3,
+ *   onFail: (ctx, { consecutive, toolName }) =>
+ *     logger.warn(`${toolName} falhou ${consecutive}x seguidas`),
+ * })
+ * ```
  */
 export function loop(options: {
   steps: WorkflowStep[];
@@ -31,13 +57,25 @@ export function loop(options: {
     ctx: WorkflowContext,
     iterations: number,
   ) => unknown | Promise<unknown>;
+  maxFails?: number;
+  onFail?: (
+    ctx: WorkflowContext,
+    info: LoopFailure,
+  ) => unknown | Promise<unknown>;
 }): LoopStep {
   return {
     kind: "loop",
     steps: options.steps,
     until: options.until,
-    maxIterations: options.maxIterations,
+    // Os defaults ficam aqui, e não no `Pipeline.loop` do engine: o `loop()` é
+    // a API de quem escreve workflow, enquanto o `Pipeline` é a primitiva crua
+    // — mudar o default de lá alteraria o comportamento de quem a usa direto.
+    maxIterations: options.maxIterations ?? MAX_ITERATIONS_PADRAO,
     onExhausted: options.onExhausted,
+    // `Math.max(1, …)` pelo mesmo motivo do `maxAttempts` do retry: `0` não
+    // deve virar nem "ilimitado" nem uma comparação que para sem ter falhado.
+    maxFails: Math.max(1, options.maxFails ?? MAX_FAILS_PADRAO),
+    onFail: options.onFail,
   };
 }
 

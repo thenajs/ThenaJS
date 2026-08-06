@@ -156,7 +156,8 @@ const message = process.argv.slice(2).join(" ") || "Olá! O que você faz?";
 
 const app = await bootstrapWorkflow(AssistantWorkflow, config);
 
-await app.run({ input: { message } });
+// O \`run\` devolve a saída e propaga o erro — quem imprime é a aplicação.
+console.log(await app.run({ input: { message } }));
 `,
     },
     {

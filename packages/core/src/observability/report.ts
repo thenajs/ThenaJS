@@ -1,12 +1,32 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExecutionNode } from "./recorder.js";
-import type { ReportOptions } from "./config.js";
+import type { ReportOptions } from "../config.js";
 
-/** Escreve o report (HTML e/ou JSON) e devolve o caminho principal. */
-export function writeReport(root: ExecutionNode, opts: ReportOptions = {}): string {
-  const dir = opts.dir ?? "report";
+/** O resumo de uma run, lido de volta do disco para montar o índice. */
+interface ResumoDeRun {
+  runId: string;
+  nome: string;
+  status: string;
+  durationMs: number;
+  startedAt: number;
+}
+
+/**
+ * Escreve o report (HTML e/ou JSON) e devolve o caminho principal.
+ *
+ * Cada execução ganha a própria subpasta (`<dir>/<runId>/`). Antes o caminho
+ * era fixo, e duas runs concorrentes sobrescreviam o report uma da outra.
+ * O `<dir>/index.html` passa a ser um índice das runs.
+ */
+export function writeReport(
+  root: ExecutionNode,
+  opts: ReportOptions & { runId?: string } = {},
+): string {
+  const base = opts.dir ?? "report";
   const format = opts.format ?? "both";
+  const runId = opts.runId ?? root.id ?? "run";
+  const dir = join(base, runId);
   mkdirSync(dir, { recursive: true });
 
   let main = "";
@@ -19,8 +39,39 @@ export function writeReport(root: ExecutionNode, opts: ReportOptions = {}): stri
     const htmlPath = join(dir, "index.html");
     writeFileSync(htmlPath, renderHtml(root));
     main = htmlPath;
+    escreverIndice(base);
   }
   return main;
+}
+
+/**
+ * Regenera o índice das runs a partir do que está no disco — sem estado
+ * acumulado em memória, então funciona também entre processos diferentes.
+ */
+function escreverIndice(base: string): void {
+  const runs: ResumoDeRun[] = [];
+
+  for (const entrada of readdirSync(base, { withFileTypes: true })) {
+    if (!entrada.isDirectory()) continue;
+    try {
+      const node: ExecutionNode = JSON.parse(
+        readFileSync(join(base, entrada.name, "report.json"), "utf-8"),
+      );
+      runs.push({
+        runId: entrada.name,
+        nome: node.name,
+        status: node.status,
+        durationMs: node.durationMs ?? 0,
+        startedAt: node.startedAt,
+      });
+    } catch {
+      // Subpasta sem report.json legível (run em andamento, formato "html",
+      // lixo antigo). Fica de fora do índice em vez de derrubar a escrita.
+    }
+  }
+
+  runs.sort((a, b) => b.startedAt - a.startedAt);
+  writeFileSync(join(base, "index.html"), renderIndice(runs));
 }
 
 // ---------- helpers ----------
@@ -216,6 +267,52 @@ function renderHtml(root: ExecutionNode): string {
     <div class="sub">ThenaJS · report de execução · ${esc(when)}</div>
     <div class="stats">${stats}</div>
     ${tree}
+  </div>
+</body>
+</html>`;
+}
+
+/** Índice das runs — o `index.html` da raiz da pasta de report. */
+function renderIndice(runs: ResumoDeRun[]): string {
+  const linhas = runs
+    .map(
+      (r) => `<a class="run" href="./${esc(r.runId)}/index.html">
+      <span class="name">${esc(r.nome)}</span>
+      <span class="dur">${ms(r.durationMs)}</span>
+      ${r.status === "error" ? '<span class="err">erro</span>' : ""}
+      <span class="when">${esc(new Date(r.startedAt).toLocaleString())}</span>
+    </a>`,
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ThenaJS Reports</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f6f7f9; color: #1a1c1e; }
+  @media (prefers-color-scheme: dark) { body { background: #14161a; color: #e6e8eb; } }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: #6b7280; margin-bottom: 20px; }
+  .run { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; text-decoration: none; color: inherit; }
+  @media (prefers-color-scheme: dark) { .run { background: #1c1f24; border-color: #2a2e35; } }
+  .name { font-weight: 600; }
+  .dur, .when { color: #6b7280; font-size: 12px; }
+  .when { margin-left: auto; }
+  .err { background: #fee2e2; color: #991b1b; font-size: 11px; padding: 1px 6px; border-radius: 20px; }
+  .vazio { color: #6b7280; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Execuções</h1>
+    <div class="sub">ThenaJS · ${runs.length} run${runs.length === 1 ? "" : "s"}</div>
+    ${linhas || '<div class="vazio">Nenhuma execução registrada.</div>'}
   </div>
 </body>
 </html>`;

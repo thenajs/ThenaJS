@@ -1,5 +1,5 @@
 import type { VectorStoreCtor } from "@thenajs/agentflow";
-import type { ExecutionEvent } from "./recorder.js";
+import type { ExecutionEvent } from "./observability/recorder.js";
 
 /** Opções do report de execução. */
 export interface ReportOptions {
@@ -29,16 +29,6 @@ export interface ThenaConfig {
    * Independente do `report` — pode usar um, outro ou os dois.
    */
   log?: LogConfig;
-  /**
-   * O que fazer quando o `execute` de uma tool lança (default: `"throw"`,
-   * o comportamento histórico).
-   *
-   * - `"throw"` — o erro sobe, passa pelo `onError` do agente e pode derrubar a run;
-   * - `"observe"` — vira observação `isError: true` de volta para o modelo, e o
-   *   nó `tool` do report fica `status: "error"` (dá para medir `tool_error_rate`
-   *   contando nós, sem regex sobre o texto).
-   */
-  toolErrors?: "throw" | "observe";
   /**
    * Bancos vetoriais da aplicação. Cada classe é instanciada **uma vez** e
    * compartilhada por todos os agentes — uma conexão e um `ensureCollection`

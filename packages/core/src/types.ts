@@ -7,6 +7,7 @@ import type {
 } from "@thenajs/agentflow";
 import type { BudgetUsage, RunBudget } from "./budget.js";
 import type { ThenaPlugin } from "./plugin.js";
+import type { LogConfig, ReportOptions } from "./config.js";
 
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
@@ -125,7 +126,7 @@ export interface ToolResult {
   name: string;
   args: unknown;
   output: string;
-  /** A tool sinalizou falha (ou lançou, com `toolErrors: "observe"`). */
+  /** A tool sinalizou falha — devolvendo `isError`, ou lançando. */
   isError?: boolean;
 }
 
@@ -197,6 +198,27 @@ export interface ParallelStep {
   steps: WorkflowStep[];
 }
 
+/**
+ * Uma falha de tool observada dentro de um loop, entregue ao `onFail`.
+ *
+ * O que o `maxFails` compara é `consecutive`: o sinal de "preso" é a
+ * repetição, não o acúmulo. Um agente que erra, corrige e avança tem `total`
+ * alto e `consecutive` baixo — e é exatamente o comportamento que se quer.
+ */
+export interface LoopFailure {
+  /** Falhas seguidas até agora. Uma tool que funciona zera a contagem. */
+  consecutive: number;
+  /** Falhas desde o início desta execução do loop. */
+  total: number;
+  /** A tool que falhou, quando o provider informou o nome. */
+  toolName?: string;
+  /** A observação de erro que voltou para o modelo. */
+  message: string;
+}
+
+/** Por que o loop terminou. Registrado no nó `loop` do report. */
+export type LoopStopReason = "until" | "exhausted" | "fails" | "budget";
+
 /** Bloco de repetição criado por `loop({ ... })`. */
 export interface LoopStep {
   kind: "loop";
@@ -211,6 +233,15 @@ export interface LoopStep {
   onExhausted?: (
     ctx: WorkflowContext,
     iterations: number,
+  ) => unknown | Promise<unknown>;
+  /**
+   * Falhas de tool **consecutivas** que encerram o loop. `Infinity` desliga.
+   */
+  maxFails?: number;
+  /** Chamado a cada falha de tool — para alertar antes de o corte acontecer. */
+  onFail?: (
+    ctx: WorkflowContext,
+    info: LoopFailure,
   ) => unknown | Promise<unknown>;
 }
 
@@ -241,7 +272,12 @@ export interface WorkflowInput {
   [key: string]: unknown;
 }
 
-/** Opções de `app.run(...)`. */
+/**
+ * Opções de `app.run(...)`.
+ *
+ * `report` e `log` sobrescrevem o `ThenaConfig` **apenas nesta execução** —
+ * possível porque cada run tem o próprio contexto.
+ */
 export interface WorkflowRunOptions {
   input: WorkflowInput;
   /**
@@ -255,11 +291,21 @@ export interface WorkflowRunOptions {
    * nada é medido nem checado.
    */
   budget?: RunBudget;
+  /** Sobrescreve `ThenaConfig.report` só nesta execução. */
+  report?: boolean | ReportOptions;
+  /** Sobrescreve `ThenaConfig.log` só nesta execução. */
+  log?: LogConfig;
 }
 
 /** Handle retornado por `bootstrapWorkflow` — o "app" do workflow. */
 export interface WorkflowApp<T = string> {
-  run(options: WorkflowRunOptions): Promise<T | void>;
+  /**
+   * Executa o workflow. Rejeita quando a execução falha — o erro **não** é
+   * engolido, e o processo não é marcado por baixo dos panos.
+   *
+   * Chamadas concorrentes são seguras: cada uma abre o próprio `RunContext`.
+   */
+  run(options: WorkflowRunOptions): Promise<T>;
   /**
    * Acopla um observador do stream ao vivo. Vários coexistem, e nenhum toma o
    * lugar do `log` do config. Chame antes do `run`.

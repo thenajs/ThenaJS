@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { Usage } from "@thenajs/agentflow";
 
 /**
@@ -152,20 +151,4 @@ export class BudgetTracker {
 
     return undefined;
   }
-}
-
-// Escopo por run (e não global) para que um workflow disparado de dentro de uma
-// tool via `WorkflowRuntime` tenha o próprio orçamento.
-const als = new AsyncLocalStorage<BudgetTracker>();
-const NOOP = new BudgetTracker();
-
-export function budget(): BudgetTracker {
-  return als.getStore() ?? NOOP;
-}
-
-export function withBudget<T>(
-  tracker: BudgetTracker,
-  fn: () => Promise<T>,
-): Promise<T> {
-  return als.run(tracker, fn);
 }

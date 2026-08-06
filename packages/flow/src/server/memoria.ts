@@ -6,12 +6,16 @@ import type { FlowEvent, FlowRun, FlowSnapshot } from "../tipos.js";
  * O histórico vive só na memória do processo, de propósito: o Flow é uma janela
  * para o que está acontecendo agora, não um banco de traces. Fechou o processo,
  * acabou o histórico.
+ *
+ * A atribuição é feita pelo `runId` que vem no evento. Antes era um cursor
+ * único (`this.atual`) com a fronteira inferida por `depth === 0` — o que
+ * funcionava com uma execução por vez e embaralhava tudo com duas.
  */
 export class MemoriaDeRuns {
   private runs: FlowRun[] = [];
   private eventos = new Map<string, FlowEvent[]>();
-  private atual?: string;
-  private seq = 0;
+  /** Ordem de chegada **por run** — duas runs concorrentes não compartilham. */
+  private seqs = new Map<string, number>();
 
   constructor(private maxRuns: number) {}
 
@@ -20,27 +24,24 @@ export class MemoriaDeRuns {
    * ela mudou (para o navegador atualizar a lista sem recarregar).
    */
   registrar(evento: ExecutionEvent): { evento: FlowEvent; run?: FlowRun } {
+    // Um evento sem `runId` viria de um recorder montado à mão; damos um id
+    // sintético para ele não derrubar a atribuição das runs de verdade.
+    const runId = evento.runId || `sem-id-${randomUUID()}`;
+
+    let run = this.runs.find((r) => r.id === runId);
     let runMudou = false;
 
-    // Raiz da árvore (`depth === 0`) delimita uma execução.
-    if (evento.depth === 0 && evento.phase === "start") {
-      this.abrirRun(evento.name);
-      runMudou = true;
-      this.seq = 0;
-    }
-
-    // Um evento antes de qualquer raiz (agente rodado solto, via `run()`) ainda
-    // precisa de uma run para pertencer.
-    if (!this.atual) {
-      this.abrirRun(evento.name);
+    if (!run) {
+      run = this.abrirRun(runId, evento.name);
       runMudou = true;
     }
 
-    const runId = this.atual!;
-    const carimbado: FlowEvent = { ...evento, runId, seq: this.seq++, at: Date.now() };
+    const seq = this.seqs.get(runId) ?? 0;
+    this.seqs.set(runId, seq + 1);
+
+    const carimbado: FlowEvent = { ...evento, runId, seq, at: Date.now() };
     this.eventos.get(runId)!.push(carimbado);
 
-    const run = this.runs.find((r) => r.id === runId)!;
     if (evento.phase === "end") {
       run.passos++;
       runMudou = true;
@@ -48,7 +49,6 @@ export class MemoriaDeRuns {
         run.fimEm = carimbado.at;
         run.duracaoMs = evento.durationMs ?? run.fimEm - run.inicioEm;
         run.status = evento.status === "error" ? "error" : "ok";
-        this.atual = undefined;
       } else if (evento.status === "error") {
         // Uma falha lá no fundo já deixa a run vermelha, sem esperar o fim.
         run.status = "error";
@@ -60,7 +60,9 @@ export class MemoriaDeRuns {
 
   /** Estado inicial para quem acabou de abrir o navegador. */
   snapshot(): FlowSnapshot {
-    const alvo = this.atual ?? this.runs[0]?.id;
+    // A run em andamento mais recente; sem nenhuma rodando, a última que houve.
+    const alvo =
+      this.runs.find((r) => r.status === "rodando")?.id ?? this.runs[0]?.id;
     return {
       runs: this.runs,
       runAtual: alvo,
@@ -73,9 +75,9 @@ export class MemoriaDeRuns {
     return this.eventos.get(runId);
   }
 
-  private abrirRun(nome: string): void {
+  private abrirRun(id: string, nome: string): FlowRun {
     const run: FlowRun = {
-      id: randomUUID(),
+      id,
       nome,
       inicioEm: Date.now(),
       status: "rodando",
@@ -83,12 +85,15 @@ export class MemoriaDeRuns {
     };
     // Mais recente primeiro — é a que interessa.
     this.runs.unshift(run);
-    this.eventos.set(run.id, []);
-    this.atual = run.id;
+    this.eventos.set(id, []);
+    this.seqs.set(id, 0);
 
     while (this.runs.length > this.maxRuns) {
       const removida = this.runs.pop()!;
       this.eventos.delete(removida.id);
+      this.seqs.delete(removida.id);
     }
+
+    return run;
   }
 }

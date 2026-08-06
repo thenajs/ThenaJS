@@ -1,4 +1,4 @@
-import type { AgentMetadata, ToolConfig, WorkflowMetadata } from "./types.js";
+import type { AgentMetadata, ToolConfig, WorkflowMetadata } from "../types.js";
 
 /** Registro classe-do-agente -> metadados, preenchido pelo `@Agent`. */
 const agents = new WeakMap<Function, AgentMetadata>();

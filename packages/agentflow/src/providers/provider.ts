@@ -1,4 +1,4 @@
-import { ToolType, toToolOutput } from "../tools/index.js";
+import { ToolOutput, ToolType, toToolOutput } from "../tools/index.js";
 import { normalizeToolCallEnvelope, parser } from "./utils/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { SamplingParams } from "./sampling.types.js";
@@ -153,7 +153,7 @@ export class Providers extends HttpTransport {
         // Execução da tool continua no provider (decisão estratégica: evita ifs no agente).
         const tool = tools.find(t => t.name === call.name);
         const result = tool
-            ? toToolOutput(await tool.execute(this.parseArguments(tool, call)))
+            ? await this.executarTool(tool, call)
             : { content: `Tool '${call.name}' não encontrada.`, isError: true };
 
         const toolMessage: Message = {
@@ -180,22 +180,39 @@ export class Providers extends HttpTransport {
     }
 
     /**
-     * Valida os argumentos contra o schema da tool. O erro é reescrito dizendo
-     * de onde veio a chamada: um resgate cujos argumentos não passam no schema
-     * era, antes, indistinguível de um bug da tool.
+     * Valida os argumentos e executa a tool.
+     *
+     * Argumento fora do schema volta como **observação**, não como exceção: é a
+     * falha mais recuperável que existe — o modelo errou o formato e pode
+     * acertar no turno seguinte, do mesmo jeito que faz com uma tool
+     * inexistente. A mensagem diz de onde veio a chamada, porque um resgate do
+     * texto cujos argumentos não passam no schema era indistinguível de um bug
+     * da tool.
+     *
+     * O que a tool lançar do `execute` **propaga** — o engine não tem política
+     * sobre isso; quem decide é a camada de cima.
      */
-    private parseArguments(tool: ToolType, call: ProviderToolCall): unknown {
+    private async executarTool(
+        tool: ToolType,
+        call: ProviderToolCall,
+    ): Promise<ToolOutput> {
+        let args: unknown;
+
         try {
-            return tool.schema.parse(call.arguments);
+            args = tool.schema.parse(call.arguments);
         } catch (error) {
             const origem = call.source === "rescued"
                 ? " (chamada resgatada do texto da resposta)"
                 : "";
-            throw new Error(
-                `Argumentos inválidos para a tool '${call.name}'${origem}: ` +
-                ((error as Error)?.message ?? String(error)),
-            );
+            return {
+                content:
+                    `Argumentos inválidos para a tool '${call.name}'${origem}: ` +
+                    ((error as Error)?.message ?? String(error)),
+                isError: true,
+            };
         }
+
+        return toToolOutput(await tool.execute(args));
     }
 
     // Fallback: extrai uma tool call do texto do modelo (parsing separado da execução).

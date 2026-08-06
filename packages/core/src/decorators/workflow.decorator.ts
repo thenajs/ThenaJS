@@ -1,5 +1,5 @@
 import { setWorkflowMetadata } from "./metadata.js";
-import type { WorkflowConfig } from "./types.js";
+import type { WorkflowConfig } from "../types.js";
 
 /**
  * Decorator de workflow, no estilo do `@Agent`.

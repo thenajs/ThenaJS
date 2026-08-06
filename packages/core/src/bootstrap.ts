@@ -1,12 +1,13 @@
-import { WorkflowRuntime } from "./runner.js";
-import type { WorkflowApp } from "./types.js";
+import { randomUUID } from "node:crypto";
+import { runWorkflow, toInitial } from "./runtime/run-workflow.js";
+import type { WorkflowApp, WorkflowRunOptions } from "./types.js";
 import type { ThenaPlugin } from "./plugin.js";
-import type { ThenaConfig, ReportOptions } from "./report/config.js";
-import type { ExecutionEvent, ExecutionNode } from "./report/recorder.js";
-import { ReportRecorder, resetRecorder, setRecorder } from "./report/recorder.js";
-import { writeReport } from "./report/report.js";
-import { consoleLogger } from "./report/logger.js";
-import { resetRuntimeSettings, setRuntimeSettings } from "./settings.js";
+import type { ThenaConfig, LogConfig, ReportOptions } from "./config.js";
+import type { ExecutionEvent, ExecutionNode } from "./observability/recorder.js";
+import { ReportRecorder } from "./observability/recorder.js";
+import { writeReport } from "./observability/report.js";
+import { consoleLogger } from "./observability/logger.js";
+import { newRunContext, withRun } from "./run-context.js";
 
 /**
  * Ponto de entrada de uma aplicação ThenaJS. Prepara o workflow e devolve um
@@ -21,44 +22,58 @@ import { resetRuntimeSettings, setRuntimeSettings } from "./settings.js";
  * await app.use(thenaFlow({ port: 4100 }));
  * await app.run({ input: { message: "Olá" } });
  * ```
+ *
+ * Cada `run(...)` monta o próprio `RunContext`: duas execuções concorrentes —
+ * de um mesmo app ou de apps diferentes no mesmo processo — não se contaminam.
  */
 export async function bootstrapWorkflow<T = string>(
   WorkflowClass: Function,
   config: ThenaConfig = {},
 ): Promise<WorkflowApp<T>> {
-  // Instanciados uma vez, na ordem declarada — que é a ordem em que chegam no
-  // construtor dos agentes.
+  // Instanciados uma vez por app, e compartilhados por todas as runs: uma
+  // conexão e um `ensureCollection` por store, não um por execução.
   const memory = (config.memory ?? []).map((Store) => new Store());
 
-  setRuntimeSettings({ toolErrors: config.toolErrors, memory });
-
-  const reportOptions: ReportOptions =
-    typeof config.report === "object" ? config.report : {};
-
-  const onComplete = config.report
-    ? (root: ExecutionNode) => {
-        const path = writeReport(root, reportOptions);
-        console.log(`[thena] Report gerado: ${path}`);
-      }
-    : undefined;
-
-  let onEvent: ((event: ExecutionEvent) => void) | undefined;
-  if (typeof config.log === "function") onEvent = config.log;
-  else if (config.log) onEvent = consoleLogger(config.log === "verbose");
-
-  // O recorder é sempre criado — sem `report`, `log` nem plugins ele fica
-  // inativo e o custo é zero. Criá-lo aqui é o que permite ao `use()` acoplar
-  // depois sem mexer no singleton no-op, que é compartilhado.
-  const rec = new ReportRecorder({
-    onComplete,
-    onEvent,
-    // só captura conteúdo quando alguém vai usá-lo
-    captureContent: Boolean(config.report) || config.log === "verbose",
-  });
-  setRecorder(rec);
-
   const plugins: ThenaPlugin[] = [];
-  const runtime = new WorkflowRuntime();
+
+  /** Resolve o sink de log: função do usuário, ou o logger de console. */
+  function sinkDeLog(log: LogConfig | undefined): ((e: ExecutionEvent) => void) | undefined {
+    if (typeof log === "function") return log;
+    return log ? consoleLogger(log === "verbose") : undefined;
+  }
+
+  /** Monta o recorder desta execução, ligado ao report, ao log e aos plugins. */
+  function recorderDaRun(runId: string, options: WorkflowRunOptions): ReportRecorder {
+    const report = options.report ?? config.report;
+    const log = options.log ?? config.log;
+
+    const reportOptions: ReportOptions = typeof report === "object" ? report : {};
+    const onComplete = report
+      ? (root: ExecutionNode) => {
+          const path = writeReport(root, { ...reportOptions, runId });
+          console.log(`[thena] Report gerado: ${path}`);
+        }
+      : undefined;
+
+    const ouvintes: ((e: ExecutionEvent) => void)[] = [];
+    const sink = sinkDeLog(log);
+    if (sink) ouvintes.push(sink);
+    for (const plugin of plugins) {
+      if (plugin.onEvent) ouvintes.push((e) => plugin.onEvent!(e));
+    }
+
+    return new ReportRecorder({
+      runId,
+      onComplete,
+      onEvent: ouvintes,
+      // Só captura conteúdo quando alguém vai usá-lo. Um plugin que observa
+      // precisa dele; do contrário receberia eventos sem prompt nem resposta.
+      captureContent:
+        Boolean(report) ||
+        log === "verbose" ||
+        plugins.some((p) => p.onEvent),
+    });
+  }
 
   const app: WorkflowApp<T> = {
     async use(plugin) {
@@ -72,26 +87,39 @@ export async function bootstrapWorkflow<T = string>(
         );
       }
 
-      if (plugin.onEvent) {
-        // Um plugin que observa conteúdo precisa que ele seja capturado; do
-        // contrário receberia eventos sem prompt nem resposta.
-        rec.capturarConteudo();
-        rec.ouvir((evento) => plugin.onEvent!(evento));
-      }
-
       plugins.push(plugin);
       return app;
     },
 
     async run(options) {
-      try {
-        const output = await runtime.run<T>(WorkflowClass, options);
-        console.log(output);
-        return output;
-      } catch (err: unknown) {
-        console.error("[thena] Falha ao executar o workflow:", err);
-        process.exitCode = 1;
-      }
+      const runId = randomUUID();
+      // Este contexto carrega o que é do **app**: id, settings e recorder. O
+      // orçamento fica de fora porque quem o cria é o `runWorkflow`, ao derivar
+      // o contexto filho — é o mesmo caminho de um sub-workflow, e mantê-lo
+      // único evita dois trackers para a mesma run.
+      const execucao = newRunContext({
+        runId,
+        settings: { memory },
+        recorder: recorderDaRun(runId, options),
+        // Lido a cada run, e não no bootstrap: um plugin registrado depois
+        // vale para as execuções seguintes, igual aos ouvintes do recorder.
+        middleware: {
+          tool: plugins.flatMap((p) => (p.tool ? [p.tool] : [])),
+          chat: plugins.flatMap((p) => (p.chat ? [p.chat] : [])),
+        },
+      });
+
+      // A exceção sobe. Engoli-la e devolver `undefined` obrigava todo call
+      // site a adivinhar o que deu errado — e num handler HTTP escondia a
+      // falha por completo.
+      return withRun(execucao, () =>
+        runWorkflow<T>(
+          WorkflowClass,
+          toInitial(options.input),
+          options.memory,
+          options.budget,
+        ),
+      );
     },
 
     async dispose() {
@@ -103,8 +131,6 @@ export async function bootstrapWorkflow<T = string>(
         }
       }
       plugins.length = 0;
-      resetRecorder();
-      resetRuntimeSettings();
     },
   };
 

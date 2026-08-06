@@ -1,6 +1,18 @@
 import { fileURLToPath } from "node:url";
 
-/** Arquivos internos do framework que aparecem no stack antes do agente. */
+/**
+ * Arquivos internos do framework que aparecem no stack antes do agente.
+ *
+ * ⚠️ Estes **nomes de arquivo são contrato**. Renomear `agent.decorator.ts`
+ * para algo como `agent.ts` faz esta regex parar de casar, e o
+ * `resolveCallerFile` passa a devolver o arquivo do próprio framework — todo
+ * `@Agent({ prompt: "./x.agent.md" })` com caminho relativo quebra.
+ *
+ * O filtro é por **nome de arquivo**, e não por diretório, de propósito: source
+ * maps reescrevem os caminhos de `dist/` de volta para `src/` no stack, então
+ * qualquer checagem baseada em pasta seria frágil. Pelo mesmo motivo, não dá
+ * para comparar com `import.meta.url` — ele aponta para o `dist/` real.
+ */
 const INTERNAL = /(?:^|[\\/])(agent\.decorator|resolve-caller)\.[cm]?[jt]s$/;
 
 /** Extrai um caminho de arquivo (`file://...` ou absoluto) de uma linha de stack. */

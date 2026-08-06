@@ -1,5 +1,5 @@
 import { setToolMetadata } from "./metadata.js";
-import type { ToolClass, ToolConfig } from "./types.js";
+import type { ToolClass, ToolConfig } from "../types.js";
 
 /**
  * Decorator de tool, no estilo `@Agent`/`@Workflow`.

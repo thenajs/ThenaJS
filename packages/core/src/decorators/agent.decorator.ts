@@ -3,7 +3,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveCallerFile } from "./resolve-caller.js";
 import { setAgentMetadata } from "./metadata.js";
-import type { AgentConfig } from "./types.js";
+import type { AgentConfig } from "../types.js";
 
 /**
  * Resolve o caminho do markdown a partir do `prompt` (obrigatório) da config:
