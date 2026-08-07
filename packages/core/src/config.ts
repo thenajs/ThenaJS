@@ -1,5 +1,6 @@
 import type { VectorStoreCtor } from "@thenajs/agentflow";
 import type { ExecutionEvent } from "./observability/recorder.js";
+import type { RedactConfig } from "./observability/redact.js";
 
 /** Opções do report de execução. */
 export interface ReportOptions {
@@ -7,6 +8,15 @@ export interface ReportOptions {
   dir?: string;
   /** Formato gerado (default: "both"). */
   format?: "html" | "json" | "both";
+  /**
+   * Gravar o conteúdo de cada passo — prompt, resposta e I/O das tools
+   * (default: `true`).
+   *
+   * `false` mantém a árvore, as durações e a telemetria, e descarta o texto.
+   * É a saída para quem trata dado pessoal: os segredos conhecidos já são
+   * mascarados pelo `redact`, mas não existe regex para nome ou endereço.
+   */
+  content?: boolean;
 }
 
 /**
@@ -61,4 +71,18 @@ export interface ThenaConfig {
    * público e aceita `embedModel` para apontar um modelo dedicado.
    */
   memory?: VectorStoreCtor[];
+  /**
+   * Mascaramento de segredo no conteúdo capturado — prompt, resposta, I/O das
+   * tools e mensagem de erro — antes de ir para o report, para o log e para os
+   * plugins.
+   *
+   * **Vem ligado**, com um conjunto de padrões conhecidos (`Bearer …`,
+   * connection string com senha, `sk-…`, `ghp_…`, JWT, campos nomeados como
+   * `api_key` e `password`). Um arquivo em disco, sem retenção nem controle de
+   * acesso, é o pior lugar para um segredo aparecer por descuido.
+   *
+   * `false` desliga; uma função substitui o default — use `redactSecrets` se
+   * quiser acrescentar padrões sem perder os de fábrica.
+   */
+  redact?: RedactConfig;
 }

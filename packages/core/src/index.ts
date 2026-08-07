@@ -30,6 +30,9 @@ export { BudgetExceededError } from "./budget.js";
 export { FatalToolError } from "./tool-error.js";
 export type { RunBudget, BudgetUsage, BudgetExceeded } from "./budget.js";
 export type { ThenaConfig, ReportOptions, LogConfig } from "./config.js";
+/** Mascaramento de segredo no que vai para o report, o log e os plugins. */
+export { redactSecrets } from "./observability/redact.js";
+export type { RedactConfig } from "./observability/redact.js";
 export type {
   ExecutionEvent,
   ExecutionNode,

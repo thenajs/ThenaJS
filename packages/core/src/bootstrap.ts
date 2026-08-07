@@ -70,8 +70,11 @@ export async function bootstrapWorkflow<T = string>(
       onEvent: ouvintes,
       // Só captura conteúdo quando alguém vai usá-lo. Um plugin que observa
       // precisa dele; do contrário receberia eventos sem prompt nem resposta.
+      // `report: { content: false }` desliga mesmo com report ligado.
       captureContent:
-        Boolean(report) || log === "verbose" || plugins.some((p) => p.onEvent),
+        reportOptions.content !== false &&
+        (Boolean(report) || log === "verbose" || plugins.some((p) => p.onEvent)),
+      redact: config.redact,
     });
   }
 

@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { resolveRedact } from "./redact.js";
+import type { RedactConfig } from "./redact.js";
 
 export type ExecutionKind =
   "workflow" | "loop" | "parallel" | "agent" | "chat" | "tool";
@@ -70,6 +72,8 @@ export class ReportRecorder {
   private ouvintes: OnEvent[] = [];
   private captureContent: boolean;
   private maxLen: number;
+  /** Mascara segredo antes de gravar. Ligado por padrão. */
+  private readonly redact: (campo: string, valor: string) => string;
 
   /** Carimbado em todo evento, para o consumidor separar runs concorrentes. */
   readonly runId: string;
@@ -81,6 +85,7 @@ export class ReportRecorder {
       onEvent?: OnEvent | OnEvent[];
       captureContent?: boolean;
       maxContentLength?: number;
+      redact?: RedactConfig;
     } = {},
   ) {
     this.runId = opts.runId ?? "";
@@ -92,6 +97,7 @@ export class ReportRecorder {
     }
     this.captureContent = opts.captureContent ?? true;
     this.maxLen = opts.maxContentLength ?? 20000;
+    this.redact = resolveRedact(opts.redact);
   }
 
   get active(): boolean {
@@ -143,7 +149,9 @@ export class ReportRecorder {
       return await this.als.run({ node, depth }, () => fn(node));
     } catch (err) {
       node.status = "error";
-      node.error = (err as Error)?.message ?? String(err);
+      // Mensagem de erro é o lugar clássico de vazar credencial — um erro de
+      // driver de banco traz a connection string inteira.
+      node.error = this.redact("error", (err as Error)?.message ?? String(err));
       throw err;
     } finally {
       node.endedAt = Date.now();
@@ -173,7 +181,7 @@ export class ReportRecorder {
   markError(node: ExecutionNode, message: string): void {
     if (!this.active) return;
     node.status = "error";
-    node.error = message;
+    node.error = this.redact("error", message);
   }
 
   /** Grava conteúdo (prompt/resposta/tool I/O) no nó — truncado. */
@@ -181,8 +189,9 @@ export class ReportRecorder {
     if (!this.active || !this.captureContent) return;
     for (const [key, value] of Object.entries(content)) {
       if (value == null) continue;
+      const limpo = this.redact(key, value);
       node.data[key] =
-        value.length > this.maxLen ? value.slice(0, this.maxLen) + "…" : value;
+        limpo.length > this.maxLen ? limpo.slice(0, this.maxLen) + "…" : limpo;
     }
   }
 
