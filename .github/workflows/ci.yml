@@ -16,6 +16,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Formatação
+        run: npm run format:check
       - name: Build (tsc -b)
         run: npm run build
       - name: Typecheck do app
