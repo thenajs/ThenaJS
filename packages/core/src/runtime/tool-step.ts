@@ -41,6 +41,10 @@ export function buildToolStep(
       }
     : (args: unknown) => tool.execute(args);
 
+  // A cadeia é montada uma vez por tool, e não a cada execução: os
+  // middlewares vêm do `RunContext`, que não muda dentro de uma run.
+  const cadeia = compose(cadeiaDeTool(currentRun().middleware.tool));
+
   return {
     ...tool,
     execute: (args: unknown) => {
@@ -57,8 +61,6 @@ export function buildToolStep(
           if (invocacao.node) execucao.recorder.meta(invocacao.node, dados);
         },
       };
-
-      const cadeia = compose(cadeiaDeTool(execucao.middleware.tool));
 
       // `inv.args` é lido aqui dentro, e não capturado antes: um `beforeTool`
       // pode tê-los trocado no caminho.

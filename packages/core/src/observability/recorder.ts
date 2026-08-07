@@ -1,10 +1,18 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
 import { resolveRedact } from "./redact.js";
 import type { RedactConfig } from "./redact.js";
 
 export type ExecutionKind =
   "workflow" | "loop" | "parallel" | "agent" | "chat" | "tool";
+
+/**
+ * Id dos nós. Um contador em vez de `randomUUID()`: é id local da árvore de
+ * uma execução, não precisa ser único no universo nem imprevisível — e
+ * `randomUUID` é `crypto` de verdade, cobrado por nó.
+ *
+ * O `runId`, esse sim, continua sendo um UUID.
+ */
+let proximoNo = 0;
 
 /** Um nó da árvore de execução capturada para o report. */
 export interface ExecutionNode {
@@ -134,7 +142,7 @@ export class ReportRecorder {
     const parent = this.als.getStore();
     const depth = parent ? parent.depth + 1 : 0;
     const node: ExecutionNode = {
-      id: randomUUID(),
+      id: `n${++proximoNo}`,
       kind,
       name,
       startedAt: Date.now(),

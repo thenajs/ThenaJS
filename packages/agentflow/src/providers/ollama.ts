@@ -1,5 +1,4 @@
-import z from "zod";
-import { ToolType } from "../tools/index.js";
+import { ToolType, toFunctionTools } from "../tools/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
@@ -42,18 +41,6 @@ export class OllamaProvider extends Providers {
     });
   }
 
-  // Formato de tools nativo do Ollama (/api/chat), igual ao da OpenAI.
-  private toTools(tools: ToolType[]) {
-    return tools.map((tool) => ({
-      type: "function",
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: z.toJSONSchema(tool.schema),
-      },
-    }));
-  }
-
   // Traduz um Message neutro para o formato de mensagem do Ollama.
   private toOllamaMessage(message: Message): Record<string, unknown> {
     if (message.role === "assistant" && message.toolCalls?.length) {
@@ -81,7 +68,7 @@ export class OllamaProvider extends Providers {
     const body = {
       model: this.model,
       messages: messages.map((m) => this.toOllamaMessage(m)),
-      tools: tools.length ? this.toTools(tools) : undefined,
+      tools: tools.length ? toFunctionTools(tools) : undefined,
       stream: false,
       // Sem sampling configurado, a chave nem existe — body idêntico ao default.
       options: Object.keys(options).length ? options : undefined,
