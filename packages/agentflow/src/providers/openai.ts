@@ -165,13 +165,21 @@ interface OpenAIChatResponse {
     message?: { content?: string | null; tool_calls?: OpenAIToolCallBruta[] };
     delta?: { content?: string | null; tool_calls?: OpenAIToolCallBruta[] };
   }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
 }
 
 interface Assistente {
   content: string;
   toolCalls: ProviderToolCall[];
-  usage: { promptTokens?: number; completionTokens?: number };
+  usage: {
+    promptTokens?: number;
+    completionTokens?: number;
+    cachedTokens?: number;
+  };
 }
 
 /** Normaliza a resposta completa (sem streaming). */
@@ -180,10 +188,16 @@ function reduzirResposta(data: OpenAIChatResponse): Assistente {
   return {
     content: message?.content ?? "",
     toolCalls: normalizarToolCalls(message?.tool_calls ?? []),
-    usage: {
-      promptTokens: data?.usage?.prompt_tokens,
-      completionTokens: data?.usage?.completion_tokens,
-    },
+    usage: lerUsage(data?.usage),
+  };
+}
+
+/** O usage da OpenAI, no shape neutro. */
+function lerUsage(u: OpenAIChatResponse["usage"]): Assistente["usage"] {
+  return {
+    promptTokens: u?.prompt_tokens,
+    completionTokens: u?.completion_tokens,
+    cachedTokens: u?.prompt_tokens_details?.cached_tokens,
   };
 }
 
@@ -223,12 +237,7 @@ async function lerStreamOpenAI(
       continue;
     }
 
-    if (pedaco.usage) {
-      usage = {
-        promptTokens: pedaco.usage.prompt_tokens,
-        completionTokens: pedaco.usage.completion_tokens,
-      };
-    }
+    if (pedaco.usage) usage = lerUsage(pedaco.usage);
 
     const delta = pedaco.choices?.[0]?.delta;
     if (!delta) continue;

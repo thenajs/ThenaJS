@@ -51,6 +51,7 @@ export const registrarChat: ChatMiddleware = (inv, next) =>
       toolCallSource: turno.assistant.toolCalls?.[0]?.source,
       promptTokens: turno.usage?.promptTokens,
       completionTokens: turno.usage?.completionTokens,
+      cachedTokens: turno.usage?.cachedTokens,
       costUsd: turno.usage?.costUsd,
       attempts: (turno.attempts ?? 1) > 1 ? turno.attempts : undefined,
     });

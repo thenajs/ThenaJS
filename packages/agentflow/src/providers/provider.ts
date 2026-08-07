@@ -8,6 +8,15 @@ import { HttpTransport, TransportCredentials } from "../http/index.js";
 export interface Usage {
   promptTokens?: number;
   completionTokens?: number;
+  /**
+   * Quantos dos `promptTokens` vieram do cache de prefixo do provider.
+   *
+   * O histórico de um agente é um prefixo estável que cresce por append —
+   * exatamente o que o cache cobra mais barato. Medir isso é o que transforma
+   * "acho que o cache está pegando" em número: um `beforePrompt` que reescreve
+   * o system a cada turno derruba este valor para zero, **sem quebrar nada**.
+   */
+  cachedTokens?: number;
   /** Só preenchido quando o provider tem `costPer1kTokens` configurado. */
   costUsd?: number;
 }
@@ -16,6 +25,11 @@ export interface Usage {
 export interface TokenCost {
   input?: number;
   output?: number;
+  /**
+   * Preço do token de entrada que veio do cache. Costuma ser ~10% do `input`.
+   * Sem ele, tokens cacheados são cobrados como entrada normal.
+   */
+  cachedInput?: number;
 }
 
 /** O que `chatInternal` (cada subclasse) devolve: a resposta crua do modelo. */
@@ -190,9 +204,17 @@ export class Providers extends HttpTransport {
   private withCost(usage?: Usage): Usage | undefined {
     if (!usage || !this.costPer1kTokens) return usage;
 
-    const { input = 0, output = 0 } = this.costPer1kTokens;
+    const { input = 0, output = 0, cachedInput } = this.costPer1kTokens;
+
+    // Token cacheado só sai mais barato se houver preço para ele; sem
+    // `cachedInput`, é cobrado como entrada normal — que é o comportamento
+    // conservador: erra para mais, nunca para menos.
+    const cacheados = cachedInput !== undefined ? (usage.cachedTokens ?? 0) : 0;
+    const normais = Math.max(0, (usage.promptTokens ?? 0) - cacheados);
+
     const costUsd =
-      ((usage.promptTokens ?? 0) / 1000) * input +
+      (normais / 1000) * input +
+      (cacheados / 1000) * (cachedInput ?? input) +
       ((usage.completionTokens ?? 0) / 1000) * output;
 
     return { ...usage, costUsd };
