@@ -1,10 +1,16 @@
 # Design — `RunHandle`: `app.run()` devolvendo a execução
 
-> Status: **aprovado, não implementado**. É a Fase C do [ROADMAP.md](./ROADMAP.md).
+> Status: **fase 1 implementada** (v0.8.0). As fases 2 e 3 — `onToken` e
+> `textStream` — dependem do streaming no provider, que é a Fase E do
+> [ROADMAP.md](./ROADMAP.md).
 >
-> A dependência que este documento citava — o refactor do `@thenajs/core` e a
-> cadeia de middleware de chat — **já foi entregue**. As três fases abaixo estão
-> desbloqueadas.
+> O que já existe: `runId` síncrono, `result`, `signal`, `abort()`, `onEvent`,
+> `eventStream`, buffer para quem chega atrasado, e `dispose()` drenando.
+>
+> Duas decisões que estavam em aberto, resolvidas na implementação:
+> **teto do buffer** em 500 eventos por run (descarta os mais antigos), e
+> **`abort()` lança** — quem cancelou não quer meia resposta apresentada como
+> resposta.
 
 ## Problema
 

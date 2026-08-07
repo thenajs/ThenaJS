@@ -4,6 +4,106 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.8.0] — 2026-08-07
+
+Cancelamento, segurança e a régua de performance. `app.run()` deixa de ser uma
+`Promise` e passa a devolver a **execução**.
+
+**Release com uma quebra** — o retorno do `app.run()`, que continua funcionando
+com `await`.
+
+### Adicionado
+
+- ⚠️ **`app.run()` devolve um `RunHandle`**, de forma síncrona. Com `await`
+  você pede o resultado; sem `await`, a execução:
+
+  ```ts
+  const texto = await app.run({ input });   // como antes
+
+  const exec = app.run({ input });          // a execução
+  exec.runId;                                // disponível já, antes do 1º turno
+  exec.abort(razão);
+  exec.onEvent((e) => sse(e));
+  await exec.result;
+  ```
+
+  Uma `Promise` não expressa três usos reais: cancelar, observar, e **guardar**
+  a execução para reencontrá-la — o padrão de responder `{ runId }` num POST e
+  o cliente acompanhar por SSE. Quem assina depois do início recebe o que já
+  passou (buffer de 500 eventos por run).
+
+- **Cancelamento.** `run({ signal })` e `exec.abort()` valem os dois; o que
+  disparar primeiro vence. O signal viaja até o `fetch`, então abortar corta a
+  geração **em andamento**, não só a próxima chamada. Runs aninhadas herdam.
+
+  ```ts
+  app.run({ input, signal: req.signal });                  // cliente desconectou
+  app.run({ input, signal: AbortSignal.timeout(30_000) }); // timeout de graça
+  ```
+
+  Usa o erro **nativo** em vez de um tipo próprio, o que preserva `TimeoutError`
+  × `AbortError` × a razão que você passar. Atenção: `signal.reason` é uma
+  `DOMException`, que no Node **não** é `instanceof Error`.
+
+  Cancelamento não passa pelo `onError` do agente: o hook existe para o agente
+  se recuperar de falha, e "alguém mandou parar" não é falha.
+
+- **`ThenaConfig.redact` — mascaramento de segredo, ligado por padrão.** O
+  report grava a conversa inteira em disco; mensagem de erro é o lugar clássico
+  de vazar credencial. Padrões de fábrica: `Bearer`, `Basic`, connection string
+  com senha, `sk-`/`ghp_`/`xoxb-`/`AKIA`, JWT e campos nomeados (`api_key`,
+  `password`, `senha`, `token`). `redact: false` desliga; uma função substitui
+  o default, e `redactSecrets` é exportada para compor sem perder os de fábrica.
+
+- **`report: { content: false }`** — mantém árvore, durações e telemetria,
+  descartando o texto. Para quem trata dado pessoal: não existe regex para nome
+  ou endereço.
+
+- **`shellTool(options)`** com `timeoutMs` (default 30s), `cwd`, `maxChars` e
+  `allow`. Com allowlist ligada, encadeamento (`;`, `&&`, `|`, `$(…)`, `>`) é
+  recusado — sem isso a lista não valeria nada. A classe `ShellTool` continua,
+  com os defaults seguros e um aviso no JSDoc.
+
+- **`toJsonSchema` / `toFunctionTools`** no engine, para quem escreve provider.
+
+### Corrigido
+
+- **`stripThinkTags` apagava a resposta inteira** quando o texto continha uma
+  tag de prefixo parecido — `<thinker>`, `<thoughts>`, `<reasoningEngine>`. O
+  padrão casava `<think` e tratava o resto como atributo; a segunda regex, que
+  vai até o fim do texto, comia tudo. Sem erro, sem aviso: só resposta vazia.
+- **`transport.ts` descartava o timeout** quando um `signal` vinha de fora
+  (`init.signal ?? timeout`). Agora é `AbortSignal.any`.
+- **Um abort era retentado** — `isRetryableByDefault` tratava qualquer erro sem
+  status como transitório. Novo `isAbortError`.
+- **O backoff não era cancelável**: um abort no meio esperava os 8s antes de
+  perceber.
+- **`zod` era `dependencies`** em `agentflow` e `tools`, em vez de
+  `peerDependencies`. O usuário criava o schema com um zod e o framework
+  chamava `z.toJSONSchema()` com outro.
+
+### Alterado
+
+- **`app.dispose()` drena**: aborta as execuções em voo e espera elas soltarem
+  antes de encerrar os plugins.
+- **`z.toJSONSchema` é memoizada** por schema, num WeakMap. Rodava a cada
+  requisição: com 10 tools e 20 turnos, 200 conversões onde bastavam 10.
+- Ids dos nós do report viraram contador em vez de `randomUUID()` por nó. O
+  `runId` segue UUID.
+- `engines: { node: ">=20" }` declarado em todos os pacotes.
+
+### Infraestrutura
+
+- **316 testes** (eram 143), incluindo os módulos do engine que eram pura
+  heurística sem verificação — os 5 parsers de JSON, a normalização de envelope
+  de tool call e o retry.
+- **Régua de performance**: 14 testes que medem contagem de round-trips, tokens
+  enviados, estabilidade do prefixo do prompt e trabalho repetido. Protegem o
+  que regride em silêncio.
+- ESLint, Prettier e `.editorconfig`, rodando no CI.
+- `README.md` em `@thenajs/core` e `@thenajs/agentflow`, mais `SECURITY.md` e
+  `CONTRIBUTING.md`.
+
 ## [0.7.0] — 2026-08-06
 
 Isolamento por execução. O framework guardava três estados mutáveis no escopo de

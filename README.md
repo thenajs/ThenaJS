@@ -113,8 +113,15 @@ export class ReadFileTool {
 }
 ```
 
-O pacote `@thenajs/tools` já traz a `ShellTool`; tools próprias do app ficam em
-`src/tools/`.
+O pacote `@thenajs/tools` já traz a `ShellTool`.
+
+> ⚠️ A `ShellTool` dá ao modelo **execução arbitrária de comando**. Um agente
+> que leia conteúdo de terceiro pode ser induzido a executar o que estiver
+> escrito lá. Use `shellTool({ allow: ["git", "ls"] })` sempre que o agente
+> puder ver entrada não confiável — a versão sem allowlist é para ambiente
+> controlado. Ver [SECURITY.md](./SECURITY.md).
+
+Tools próprias do app ficam em `src/tools/`.
 
 Por padrão o `execute` recebe **só os argumentos** já validados pelo schema — o
 que mantém a tool trivial de testar. Quando precisar de mais, decore os
@@ -699,9 +706,10 @@ console.log(saida);
 ```
 
 `bootstrapWorkflow(WorkflowClass)` devolve um `app`; `app.run({ input, memory })`
-executa o workflow e **devolve** a saída. Um erro **rejeita a promise** — nada é
-engolido, nada é impresso e o `process.exitCode` não é tocado: o que fazer com a
-falha é decisão da aplicação. Rode com `npm start`.
+executa o workflow e devolve a **execução** — que, com `await`, resolve na
+saída. Um erro **rejeita** — nada é engolido, nada é impresso e o
+`process.exitCode` não é tocado: o que fazer com a falha é decisão da
+aplicação. Rode com `npm start`.
 
 - **`input.message`** é a entrada inicial do pipeline.
 - **`memory`** é o contexto inicial / memória persistente do workflow: é semeado
@@ -715,6 +723,88 @@ import { runWorkflow } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 
 const parecer = await runWorkflow(ExplorerWorkflow, "Revise o diretório src/");
+```
+
+#### A execução: cancelar e acompanhar
+
+`app.run()` devolve a execução, de forma **síncrona**. Com `await`, você pede o
+resultado; sem `await`, a execução:
+
+```ts
+const texto = await app.run({ input });   // resultado
+
+const exec = app.run({ input });          // execução
+exec.runId;                                // já disponível, antes do 1º turno
+exec.abort(new Error("desisti"));
+exec.onEvent((e) => console.log(e.kind, e.phase));
+const texto2 = await exec.result;
+```
+
+**Cancelamento** — o `signal` e o `abort()` valem os dois; o que disparar
+primeiro vence. O signal chega até o `fetch`, então abortar corta a geração em
+andamento, não só evita a próxima chamada:
+
+```ts
+await app.run({ input, signal: req.signal });                  // cliente sumiu
+await app.run({ input, signal: AbortSignal.timeout(30_000) }); // timeout
+```
+
+O erro é o **nativo**, então dá para distinguir a causa:
+
+| origem | `erro.name` |
+| --- | --- |
+| `AbortSignal.timeout(n)` | `TimeoutError` |
+| `abort()` | `AbortError` |
+| `abort(minhaRazao)` | o que você passou |
+
+> ⚠️ `signal.reason` é uma `DOMException` — que no Node **não** é
+> `instanceof Error`. Cheque por `erro.name`.
+
+Cancelamento **não** passa pelo `onError` do agente: o hook existe para ele se
+recuperar de falha, e "alguém mandou parar" não é falha.
+
+#### POST responde na hora, cliente acompanha por SSE
+
+O `runId` síncrono e o buffer de eventos são o que tornam este padrão possível
+— quem assina depois do início recebe o que já passou:
+
+```ts
+const execucoes = new Map<string, RunHandle<string>>();
+
+server.post("/chat", (req, res) => {
+  const exec = app.run({ input: req.body });        // sem await
+  execucoes.set(exec.runId, exec);
+  exec.result.finally(() =>
+    setTimeout(() => execucoes.delete(exec.runId), 60_000),
+  );
+  res.status(202).json({ runId: exec.runId });
+});
+
+server.get("/chat/:id/events", (req, res) => {
+  const exec = execucoes.get(req.params.id);
+  if (!exec) return res.status(404).end();
+
+  res.writeHead(200, { "content-type": "text/event-stream" });
+  const parar = exec.onEvent((e) => res.write(`data: ${JSON.stringify(e)}\n\n`));
+
+  exec.result.finally(() => { parar(); res.end(); });
+  req.on("close", parar);
+});
+
+server.delete("/chat/:id", (req, res) => {
+  execucoes.get(req.params.id)?.abort();
+  res.status(204).end();
+});
+```
+
+E `app.dispose()` drena: aborta o que está em voo e espera soltar antes de
+encerrar os plugins.
+
+```ts
+process.on("SIGTERM", async () => {
+  server.close();
+  await app.dispose();
+});
 ```
 
 #### Execuções concorrentes
@@ -953,6 +1043,34 @@ indentada no console, com durações), `"verbose"` (inclui o conteúdo) ou uma
 função `(event) => void` (sink customizado — pino/winston, arquivo, JSON lines).
 Log e report reutilizam a mesma camada de interceptação — uma instrumentação,
 dois "outputs".
+
+### O que vai para o disco
+
+O `report.json` guarda **tudo** que foi enviado ao modelo e recebido dele. Por
+isso o mascaramento de segredo vem **ligado**:
+
+```ts
+export const config: ThenaConfig = {
+  report: true,
+  // redact: false,                       // desliga (não recomendado)
+  // redact: (campo, valor) =>            // acrescenta sem perder os de fábrica
+  //   redactSecrets(valor).replace(/CPF \d{11}/g, "CPF [REDACTED]"),
+};
+```
+
+Padrões de fábrica: `Bearer`, `Basic`, connection string com senha, `sk-`,
+`ghp_`, `xoxb-`, `AKIA`, JWT e campos nomeados (`api_key`, `password`, `senha`,
+`token`).
+
+O que ele **não** faz é PII — não existe regex para nome ou endereço. Se a sua
+aplicação trata dado pessoal, desligue a captura de conteúdo:
+
+```ts
+report: { content: false }   // mantém árvore, durações e telemetria
+```
+
+> Trate a pasta `report/` como dado sensível: não commite, não empacote em
+> imagem, não sirva estaticamente. Ver [SECURITY.md](./SECURITY.md).
 
 ### O que dá para medir sem regex
 

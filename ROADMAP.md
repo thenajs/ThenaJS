@@ -1,11 +1,11 @@
-# Roadmap — de ~75% a Enterprise
+# Roadmap — de ~82% a Enterprise
 
-> Atualizado em 2026-08-06 (Fase A concluída). Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
+> Atualizado em 2026-08-07 (Fases A, B, C e D concluídas). Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
 > que detalha a Fase C.
 
 ## Onde estamos
 
-Score de maturidade: **~75%** · Classificação: **(C) Bom framework** · Maturidade: **Beta**
+Score de maturidade: **~82%** · Classificação: **(C→D)** · Maturidade: **Beta**
 
 Concluído (branch `feat/run-context`):
 
@@ -19,6 +19,9 @@ Concluído (branch `feat/run-context`):
 | ✅ | `runner.ts` (639 linhas, 5 responsabilidades) quebrado em `di/` + `runtime/` |
 | ✅ | Cadeias de middleware de **tool** e **chat**; `ThenaPlugin.tool` / `.chat` |
 | ✅ | 246 testes em CI (core + engine), com lint e typecheck próprios |
+| ✅ | Mascaramento de segredo ligado por padrão; `ShellTool` com timeout e allowlist |
+| ✅ | `RunHandle`: cancelamento, `runId` síncrono, stream de eventos, `dispose` drenando |
+| ✅ | Régua de performance + `z.toJSONSchema` memoizada — **316 testes** |
 
 ## Princípios que valeram até aqui
 
@@ -87,7 +90,7 @@ em runtime, de forma difícil de diagnosticar.
 
 ---
 
-## Fase B — Régua de performance
+## ~~Fase B~~ — Régua de performance ✅
 
 **~1 dia · a infra de teste da Fase A já está pronta**
 
@@ -122,7 +125,7 @@ round-trips e tokens sem tocar em rede.
 
 ---
 
-## Fase C — `RunHandle`: cancelamento e endereçamento
+## ~~Fase C~~ — `RunHandle`: cancelamento e endereçamento ✅
 
 **~1,5 dia · depende de nada · desenho completo em [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md)**
 
@@ -156,7 +159,7 @@ próxima checagem; `AbortSignal.timeout` funciona; run aninhada herda o signal.
 
 ---
 
-## Fase D — Segurança
+## ~~Fase D~~ — Segurança ✅
 
 **~1 dia · depende de C (o middleware de redação usa a cadeia)**
 
@@ -284,15 +287,18 @@ construído por factory já consegue ler o contexto da run.
 | Ordem | Fase | Esforço | Score projetado |
 | --- | --- | --- | --- |
 | ~~1~~ | ~~**A** — higiene + engine testado~~ | ✅ feito | **~75%** |
-| 2 | **B** — régua + micros | 1 dia | ~76% |
-| 3 | **C** — RunHandle e cancelamento | 1,5 dia | ~79% |
-| 4 | **D** — segurança | 1 dia | ~81% |
-| 5 | **E** — streaming | 2,5 dias | ~84% |
-| 6 | **F** — custo | 3 dias | ~86% |
-| 7 | **G** — multi-tenant | 2 dias | ~88% |
+| ~~2~~ | ~~**B** — régua + micros~~ | ✅ feito | |
+| ~~3~~ | ~~**C** — RunHandle e cancelamento~~ | ✅ feito | |
+| ~~4~~ | ~~**D** — segurança~~ | ✅ feito | **~82%** |
+| 5 | **E** — streaming | 2,5 dias | ~85% |
+| 6 | **F** — custo | 3 dias | ~87% |
+| 7 | **G** — multi-tenant | 2 dias | ~89% |
 
-**Total: ~12,5 dias** para sair de (C) Bom framework para o topo de
-(D) Framework Sênior.
+**Restam ~7,5 dias** para o topo de (D) Framework Sênior.
+
+A Fase E é a próxima: o `RunHandle` já tem onde os tokens sairem (`onToken`
+está desenhado no design doc), e a cadeia de middleware de chat é a costura
+entre o provider que emite e o handle que entrega.
 
 A ordem não é por tamanho: **A e B primeiro porque criam a régua**. Sem
 cobertura do engine e sem teste de performance, as fases E e F são impossíveis
