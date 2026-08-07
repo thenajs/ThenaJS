@@ -1,7 +1,6 @@
 # Roadmap — o que falta
 
-> Atualizado em 2026-08-07 (todas as sete fases concluídas). Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
-> que detalha a Fase C.
+> Atualizado em 2026-08-07 (todas as sete fases concluídas).
 
 ## Onde estamos
 
@@ -129,7 +128,7 @@ round-trips e tokens sem tocar em rede.
 
 ## ~~Fase C~~ — `RunHandle`: cancelamento e endereçamento ✅
 
-**~1,5 dia · depende de nada · desenho completo em [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md)**
+**~1,5 dia · depende de nada**
 
 `app.run()` passa a devolver, de forma síncrona, um handle *thenable*:
 
