@@ -20,7 +20,7 @@ export function classNameFromAgent(name: string): string {
 export function agentTsTemplate(name: string): string {
   const className = classNameFromAgent(name);
   return `import { Agent } from "@thenajs/core";
-import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
+import { LocalOllamaProvider } from "../../providers/ollama.provider";
 
 @Agent({
   provider: LocalOllamaProvider,
@@ -59,13 +59,15 @@ export function projectFiles(name: string): ScaffoldFile[] {
     name,
     version: "0.1.0",
     private: true,
-    type: "module",
+    // Sem `type: "module"`: o projeto é **CommonJS**, como o de um `nest new`.
+    // É o que permite escrever `from "./config"` sem extensão — a resolução do
+    // CJS completa `.js`/`/index.js`, coisa que o ESM nativo não faz.
     scripts: {
       start: "tsx src/main.ts",
       // tsc transpila só os .ts; os prompts .md são copiados para o dist/
       // preservando a estrutura, senão o @Agent não acha o .md em produção.
       build: 'tsc && copyfiles -u 1 "src/**/*.md" dist',
-      "start:prod": "node dist/main.js",
+      "start:prod": "node dist/main",
     },
     dependencies: {
       "@thenajs/core": THENA_VERSION,
@@ -83,8 +85,8 @@ export function projectFiles(name: string): ScaffoldFile[] {
   const tsconfig = {
     compilerOptions: {
       target: "ES2022",
-      module: "NodeNext",
-      moduleResolution: "NodeNext",
+      module: "nodenext",
+      moduleResolution: "nodenext",
       lib: ["ES2022"],
       types: ["node"],
       strict: true,
@@ -126,7 +128,7 @@ npm start -- "Sua pergunta aqui"
 
 \`\`\`bash
 npm run build             # tsc + copia os .md dos prompts para dist/
-npm run start:prod        # node dist/main.js
+npm run start:prod        # node dist/main
 \`\`\`
 
 O \`build\` copia os \`*.agent.md\` para o \`dist/\` ao lado dos \`.js\`, para o
@@ -148,16 +150,23 @@ Gere mais agentes com \`thena g agent <nome>\`.
     },
     {
       path: "src/main.ts",
-      content: `import { bootstrapWorkflow } from "@thenajs/core";
-import { AssistantWorkflow } from "./workflows/assistant.workflow.js";
-import { config } from "./config.js";
+      content: `import { Thena } from "@thenajs/core";
+import { AssistantWorkflow } from "./workflows/assistant.workflow";
+import { config } from "./config";
 
 const message = process.argv.slice(2).join(" ") || "Olá! O que você faz?";
 
-const app = await bootstrapWorkflow(AssistantWorkflow, config);
+async function bootstrap() {
+  // \`create\` não é async — quem espera é o \`run\`.
+  const app = Thena.create(AssistantWorkflow, config);
 
-// O \`run\` devolve a saída e propaga o erro — quem imprime é a aplicação.
-console.log(await app.run({ input: { message } }));
+  // O \`run\` devolve a saída e propaga o erro — quem imprime é a aplicação.
+  console.log(await app.run({ input: { message } }));
+
+  await app.dispose();
+}
+
+bootstrap();
 `,
     },
     {
@@ -188,7 +197,7 @@ export class LocalOllamaProvider extends OllamaProvider {
     {
       path: "src/agents/assistant/assistant.agent.ts",
       content: `import { Agent } from "@thenajs/core";
-import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
+import { LocalOllamaProvider } from "../../providers/ollama.provider";
 
 @Agent({
   provider: LocalOllamaProvider,
@@ -209,7 +218,7 @@ concisa e objetiva.
     {
       path: "src/workflows/assistant.workflow.ts",
       content: `import { Workflow } from "@thenajs/core";
-import { AssistantAgent } from "../agents/assistant/assistant.agent.js";
+import { AssistantAgent } from "../agents/assistant/assistant.agent";
 
 @Workflow({
   steps: [AssistantAgent],
