@@ -1,11 +1,11 @@
-# Roadmap — de 71% a Enterprise
+# Roadmap — de ~75% a Enterprise
 
-> Estado em 2026-08-06. Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
+> Atualizado em 2026-08-06 (Fase A concluída). Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
 > que detalha a Fase C.
 
 ## Onde estamos
 
-Score de maturidade: **71%** · Classificação: **(C) Bom framework** · Maturidade: **Beta**
+Score de maturidade: **~75%** · Classificação: **(C) Bom framework** · Maturidade: **Beta**
 
 Concluído (branch `feat/run-context`):
 
@@ -18,7 +18,7 @@ Concluído (branch `feat/run-context`):
 | ✅ | `maxFails` (consecutivas) e `maxIterations` com default; `stoppedBy` no report |
 | ✅ | `runner.ts` (639 linhas, 5 responsabilidades) quebrado em `di/` + `runtime/` |
 | ✅ | Cadeias de middleware de **tool** e **chat**; `ThenaPlugin.tool` / `.chat` |
-| ✅ | 143 testes em CI, com typecheck próprio |
+| ✅ | 246 testes em CI (core + engine), com lint e typecheck próprios |
 
 ## Princípios que valeram até aqui
 
@@ -35,7 +35,27 @@ Foram testados na prática e devem continuar valendo:
 
 ---
 
-## Fase A — Higiene e cobertura do engine
+## ~~Fase A~~ — Higiene e cobertura do engine ✅
+
+**Concluída.** 246 testes (eram 143). CI roda lint, formatação, build, dois
+typechecks e a suíte.
+
+O que ela rendeu além do previsto:
+
+- **Um bug real**, encontrado na primeira execução dos testes novos:
+  `stripThinkTags` apagava a resposta inteira quando o texto tinha uma tag de
+  prefixo parecido (`<thinker>`, `<thoughts>`, `<reasoningEngine>`). Sem erro,
+  sem aviso — só uma resposta vazia.
+- **Duas dívidas ficaram visíveis** como aviso do ESLint, com o motivo no
+  config: `no-explicit-any` (24) e `no-unsafe-function-type` (19). A segunda
+  merece tarefa própria — introduzir um `ClassLike` e trocar 19 assinaturas,
+  várias públicas, porque hoje `bootstrapWorkflow(() => {})` compila.
+- **`SECURITY.md`** virou mais que canal de reporte: documenta o report gravando
+  a conversa em disco, a `ShellTool` sem sandbox, a ausência de defesa contra
+  prompt injection e o custo como superfície de risco.
+
+<details>
+<summary>Escopo original</summary>
 
 **~1,5 dia · sem dependências · pode começar hoje**
 
@@ -63,13 +83,15 @@ em runtime, de forma difícil de diagnosticar.
 
 **Aceite:** CI verde com lint; cobertura direta dos três módulos do engine.
 
+</details>
+
 ---
 
 ## Fase B — Régua de performance
 
-**~1 dia · depende de A4 (mesma infra de teste)**
+**~1 dia · a infra de teste da Fase A já está pronta**
 
-Hoje há 143 testes de correção e **zero** de performance. Sem número em CI,
+Hoje há 246 testes de correção e **zero** de performance. Sem número em CI,
 qualquer melhoria é opinião — e as otimizações desta área regridem em silêncio:
 ninguém quebra, a conta é que triplica.
 
@@ -253,6 +275,7 @@ construído por factory já consegue ler o contexto da run.
 | **`WorkflowStep` aberto** | União fechada + `if/else` em `compileStep`. Adicionar `branch`/`race` exige editar o core. Violação de OCP que sobrevive ao refactor. |
 | **Decorators TC39** | Decorator de parâmetro **não existe** no padrão. Toda a DI de `@input`/`@state`/`@context`/`@memory` depende de um recurso legado sem caminho de migração. Maior risco de longo prazo; precisa de um plano B (API funcional `defineAgent({...})`) antes de virar urgência. |
 | **Tradução para inglês** | API, comentários e docs em português limitam a adoção. Trabalho grande e mecânico; melhor depois que a API parar de mudar. |
+| **`ClassLike` no lugar de `Function`** | 19 assinaturas, várias públicas (`runWorkflow`, `bootstrapWorkflow`, `getAgentMetadata`). Hoje `bootstrapWorkflow(() => {})` compila. Visível como aviso do ESLint desde a Fase A. |
 
 ---
 
@@ -260,7 +283,7 @@ construído por factory já consegue ler o contexto da run.
 
 | Ordem | Fase | Esforço | Score projetado |
 | --- | --- | --- | --- |
-| 1 | **A** — higiene + engine testado | 1,5 dia | ~75% |
+| ~~1~~ | ~~**A** — higiene + engine testado~~ | ✅ feito | **~75%** |
 | 2 | **B** — régua + micros | 1 dia | ~76% |
 | 3 | **C** — RunHandle e cancelamento | 1,5 dia | ~79% |
 | 4 | **D** — segurança | 1 dia | ~81% |
