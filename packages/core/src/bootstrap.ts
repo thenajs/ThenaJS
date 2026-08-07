@@ -8,6 +8,7 @@ import { ReportRecorder } from "./observability/recorder.js";
 import { writeReport } from "./observability/report.js";
 import { consoleLogger } from "./observability/logger.js";
 import { newRunContext, withRun } from "./run-context.js";
+import { FilaDeEventos, criarRunHandle } from "./run-handle.js";
 
 /**
  * Ponto de entrada de uma aplicação ThenaJS. Prepara o workflow e devolve um
@@ -44,8 +45,15 @@ export async function bootstrapWorkflow<T = string>(
     return log ? consoleLogger(log === "verbose") : undefined;
   }
 
+  /** Execuções em voo, para o `dispose()` conseguir drená-las. */
+  const emVoo = new Set<{ abort: (r?: unknown) => void; result: Promise<unknown> }>();
+
   /** Monta o recorder desta execução, ligado ao report, ao log e aos plugins. */
-  function recorderDaRun(runId: string, options: WorkflowRunOptions): ReportRecorder {
+  function recorderDaRun(
+    runId: string,
+    options: WorkflowRunOptions,
+    fila: FilaDeEventos,
+  ): ReportRecorder {
     const report = options.report ?? config.report;
     const log = options.log ?? config.log;
 
@@ -63,6 +71,9 @@ export async function bootstrapWorkflow<T = string>(
     for (const plugin of plugins) {
       if (plugin.onEvent) ouvintes.push((e) => plugin.onEvent!(e));
     }
+    // O handle é mais um consumidor do mesmo stream — empurrado (plugin) e
+    // puxado (`onEvent`/`eventStream`) são duas torneiras no mesmo cano.
+    ouvintes.push((e) => fila.publicar(e));
 
     return new ReportRecorder({
       runId,
@@ -71,6 +82,8 @@ export async function bootstrapWorkflow<T = string>(
       // Só captura conteúdo quando alguém vai usá-lo. Um plugin que observa
       // precisa dele; do contrário receberia eventos sem prompt nem resposta.
       // `report: { content: false }` desliga mesmo com report ligado.
+      // O handle sempre observa, então o recorder nunca fica inativo — mas só
+      // captura **conteúdo** se alguém for de fato usá-lo.
       captureContent:
         reportOptions.content !== false &&
         (Boolean(report) || log === "verbose" || plugins.some((p) => p.onEvent)),
@@ -94,16 +107,26 @@ export async function bootstrapWorkflow<T = string>(
       return app;
     },
 
-    async run(options) {
+    run(options) {
       const runId = randomUUID();
-      // Este contexto carrega o que é do **app**: id, settings e recorder. O
-      // orçamento fica de fora porque quem o cria é o `runWorkflow`, ao derivar
-      // o contexto filho — é o mesmo caminho de um sub-workflow, e mantê-lo
-      // único evita dois trackers para a mesma run.
+      const fila = new FilaDeEventos();
+
+      // O signal de quem chamou e o `abort()` deste handle valem os dois — o
+      // que disparar primeiro vence.
+      const controller = new AbortController();
+      const signal = options.signal
+        ? AbortSignal.any([options.signal, controller.signal])
+        : controller.signal;
+
+      // Este contexto carrega o que é do **app**: id, settings, recorder e
+      // signal. O orçamento fica de fora porque quem o cria é o `runWorkflow`,
+      // ao derivar o contexto filho — é o mesmo caminho de um sub-workflow, e
+      // mantê-lo único evita dois trackers para a mesma run.
       const execucao = newRunContext({
         runId,
         settings: { memory },
-        recorder: recorderDaRun(runId, options),
+        recorder: recorderDaRun(runId, options, fila),
+        signal,
         // Lido a cada run, e não no bootstrap: um plugin registrado depois
         // vale para as execuções seguintes, igual aos ouvintes do recorder.
         middleware: {
@@ -115,7 +138,7 @@ export async function bootstrapWorkflow<T = string>(
       // A exceção sobe. Engoli-la e devolver `undefined` obrigava todo call
       // site a adivinhar o que deu errado — e num handler HTTP escondia a
       // falha por completo.
-      return withRun(execucao, () =>
+      const result = withRun(execucao, () =>
         runWorkflow<T>(
           WorkflowClass,
           toInitial(options.input),
@@ -123,9 +146,26 @@ export async function bootstrapWorkflow<T = string>(
           options.budget,
         ),
       );
+
+      const registro = { abort: (r?: unknown) => controller.abort(r), result };
+      emVoo.add(registro);
+      result
+        .finally(() => {
+          emVoo.delete(registro);
+          fila.encerrar();
+        })
+        .catch(() => {});
+
+      return criarRunHandle<T>({ runId, result, signal, abort: registro.abort, fila });
     },
 
     async dispose() {
+      // Drena antes de encerrar os plugins: um plugin que fecha servidor não
+      // pode sumir enquanto uma execução ainda escreve nele.
+      for (const { abort } of emVoo) abort(new Error("[thena] app encerrado"));
+      await Promise.allSettled([...emVoo].map((r) => r.result));
+      emVoo.clear();
+
       for (const plugin of plugins) {
         try {
           await plugin.dispose?.();

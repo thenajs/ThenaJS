@@ -9,6 +9,8 @@ export interface ChatInvocation {
   messages: Message[];
   tools: ToolType[];
   sampling?: SamplingParams;
+  /** Cancelamento da execução — repasse ao provider se você chamar por fora. */
+  signal?: AbortSignal;
   /** A instância do agente que originou a chamada. */
   readonly agent: any;
   readonly ctx: AgentContext;

@@ -79,11 +79,14 @@ export class FakeProvider extends Providers {
     tools: ToolType[],
     messages: Message[],
     sampling?: SamplingParams,
+    signal?: AbortSignal,
   ): Promise<RawAssistant> {
     this.chamadas.push({ messages, tools, sampling });
 
+    // O delay respeita o signal, como um `fetch` de verdade: sem isso o fake
+    // não simula um provider cancelável, e teste de abort passaria por engano.
     if (this.delayMs) {
-      await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+      await esperar(this.delayMs, signal);
     }
 
     const turno = this.fila.shift() ?? this.ultimo;
@@ -192,4 +195,36 @@ export function criarWorkflow(steps: WorkflowStep[], state?: StateCtor): Functio
   const Classe = class {};
   Workflow({ steps, state })(Classe);
   return Classe;
+}
+
+/** `setTimeout` que rejeita na hora se o signal abortar. */
+function esperar(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Captura o motivo da rejeição.
+ *
+ * `signal.throwIfAborted()` lança o `reason` do signal, que por padrão é uma
+ * `DOMException` — e no Node ela **não** é `instanceof Error`, então
+ * `rejects.toThrow()` não casa. Aqui o teste inspeciona o valor cru.
+ */
+export async function capturarErro(p: PromiseLike<unknown>): Promise<any> {
+  try {
+    await p;
+    throw new Error("esperava uma rejeição, mas resolveu");
+  } catch (e) {
+    return e;
+  }
 }

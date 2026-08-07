@@ -117,7 +117,7 @@ describe("falhas de tool", () => {
 
     const erro = await app
       .run({ input: { message: "vai" } })
-      .catch((e: FatalToolError) => e);
+      .catch((e) => e as FatalToolError);
 
     expect((erro as FatalToolError).message).toBe("banco indisponível");
     expect((erro as FatalToolError).cause).toBe(original);

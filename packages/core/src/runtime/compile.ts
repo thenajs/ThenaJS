@@ -1,6 +1,6 @@
 import { Pipeline } from "@thenajs/agentflow";
 import type { PipelineContext, Step } from "@thenajs/agentflow";
-import { currentRun } from "../run-context.js";
+import { currentRun, throwIfAborted } from "../run-context.js";
 import type { LoopStopReason, WorkflowContext, WorkflowStep } from "../types.js";
 import { buildAgentStep } from "./agent-step.js";
 
@@ -69,8 +69,8 @@ export function compileStep(
         falhas.consecutive = 0;
       }
 
-      // Mesmo checkpoint do passo de agente: no modo "stop" o orçamento encerra
-      // o loop pela porta da frente (output preservado); no "throw", lança daqui.
+      // Mesmos checkpoints do passo de agente.
+      throwIfAborted();
       if (currentRun().budget.checkpoint()) {
         stoppedBy = "budget";
         return true;

@@ -75,6 +75,7 @@ export class OllamaProvider extends Providers {
     tools: ToolType[],
     messages: Message[],
     sampling?: SamplingParams,
+    signal?: AbortSignal,
   ): Promise<RawAssistant> {
     const options = this.toOllamaOptions(sampling);
     const body = {
@@ -91,6 +92,7 @@ export class OllamaProvider extends Providers {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {

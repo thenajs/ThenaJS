@@ -93,6 +93,7 @@ export class OpenAIProvider extends Providers {
     tools: ToolType[],
     messages: Message[],
     sampling?: SamplingParams,
+    signal?: AbortSignal,
   ): Promise<RawAssistant> {
     const body = {
       model: this.model,
@@ -107,6 +108,7 @@ export class OpenAIProvider extends Providers {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {

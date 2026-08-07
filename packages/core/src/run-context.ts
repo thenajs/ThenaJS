@@ -43,6 +43,14 @@ export interface RunContext {
    * passa pelas mesmas camadas do pai.
    */
   middleware: RunMiddleware;
+  /**
+   * Cancelamento desta execução. **Herdado** pelas runs aninhadas: abortar o
+   * pai encerra o sub-workflow junto.
+   *
+   * É consultado nos mesmos dois pontos que o orçamento — antes de cada turno
+   * de agente e no `until` de cada loop — e repassado até o `fetch`.
+   */
+  signal?: AbortSignal;
 }
 
 /** As cadeias de middleware do usuário, por ponto de acoplamento. */
@@ -93,6 +101,7 @@ export interface RunContextOptions {
   budget?: RunBudget;
   runId?: string;
   middleware?: RunMiddleware;
+  signal?: AbortSignal;
 }
 
 /**
@@ -107,6 +116,7 @@ export function newRunContext(options: RunContextOptions = {}): RunContext {
     recorder: options.recorder ?? new ReportRecorder({ runId }),
     budget: new BudgetTracker(options.budget),
     middleware: options.middleware ?? SEM_MIDDLEWARE,
+    signal: options.signal,
   };
 }
 
@@ -121,6 +131,7 @@ export function childRunContext(parent: RunContext, budget?: RunBudget): RunCont
     recorder: parent.recorder,
     budget: new BudgetTracker(budget),
     middleware: parent.middleware,
+    signal: parent.signal,
   };
 }
 
@@ -131,4 +142,17 @@ function prune(overrides: Partial<RuntimeSettings>): Partial<RuntimeSettings> {
     if (value !== undefined) (out as Record<string, unknown>)[key] = value;
   }
   return out;
+}
+
+/**
+ * Lança se a execução foi cancelada.
+ *
+ * Usa o erro **nativo** do signal em vez de um tipo próprio: é o que preserva
+ * a distinção entre `TimeoutError` (de `AbortSignal.timeout`), `AbortError`
+ * (de `controller.abort()`) e uma razão qualquer passada em
+ * `controller.abort(razão)`. Orçamento é conceito do framework e merece erro
+ * próprio; cancelamento é conceito da plataforma, com protocolo estabelecido.
+ */
+export function throwIfAborted(ctx: RunContext = currentRun()): void {
+  ctx.signal?.throwIfAborted();
 }

@@ -1,4 +1,5 @@
 import {
+  isAbortError,
   ResolvedRetry,
   RetryAttempt,
   RetryPolicy,
@@ -57,11 +58,9 @@ export class HttpTransport {
       try {
         response = await fetch(url, {
           ...init,
-          signal:
-            init.signal ??
-            (política.timeoutMs !== undefined
-              ? AbortSignal.timeout(política.timeoutMs)
-              : undefined),
+          // Os dois valem, e o que disparar primeiro vence. Com `??`, um
+          // signal vindo de fora descartava o timeout em silêncio.
+          signal: combinarSinais(init.signal, política.timeoutMs),
         });
 
         if (response.ok) {
@@ -69,6 +68,12 @@ export class HttpTransport {
         }
       } catch (err) {
         error = err as Error;
+
+        // Cancelamento sobe **como veio**, sem virar "Falha na chamada HTTP":
+        // é o que preserva a distinção entre `TimeoutError` (estourou o teto)
+        // e `AbortError` (alguém pediu para parar), e entre os dois e uma
+        // razão própria passada em `controller.abort(razão)`.
+        if (isAbortError(error)) throw error;
       }
 
       const info: RetryAttempt = {
@@ -98,7 +103,9 @@ export class HttpTransport {
       política.onRetry?.(info);
       ultimoErro = error;
 
-      await sleep(info.delayMs);
+      // Abortável: sem isto, um cancelamento no meio do backoff esperaria os
+      // 8 segundos antes de perceber.
+      await sleep(info.delayMs, init.signal ?? undefined);
     }
 
     // Inalcançável: o laço sempre retorna ou lança antes.
@@ -112,4 +119,17 @@ export class HttpTransport {
       cause: error,
     });
   }
+}
+
+/** Combina o signal de quem chamou com o timeout da política. */
+function combinarSinais(
+  externo: AbortSignal | null | undefined,
+  timeoutMs: number | undefined,
+): AbortSignal | undefined {
+  const sinais: AbortSignal[] = [];
+  if (externo) sinais.push(externo);
+  if (timeoutMs !== undefined) sinais.push(AbortSignal.timeout(timeoutMs));
+
+  if (sinais.length === 0) return undefined;
+  return sinais.length === 1 ? sinais[0] : AbortSignal.any(sinais);
 }

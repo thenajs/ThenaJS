@@ -8,7 +8,7 @@ import type { Disponivel } from "../di/params.js";
 import { compose } from "../middleware/compose.js";
 import { cadeiaDeChat as chatMiddlewares } from "../middleware/chat.js";
 import type { ChatInvocation } from "../middleware/chat.js";
-import { currentRun } from "../run-context.js";
+import { currentRun, throwIfAborted } from "../run-context.js";
 import type { AgentContext } from "../types.js";
 import { buildToolStep } from "./tool-step.js";
 import { WorkflowRuntime } from "./workflow-runtime.js";
@@ -60,8 +60,12 @@ export function buildAgentStep(
       const agentCtx = ctx as AgentContext;
 
       // Checagem entre unidades de trabalho: um turno é uma chamada ao modelo
-      // mais, no máximo, uma tool. No modo "stop" o passo é pulado e a run
-      // termina com o output que já tinha; no modo "throw", isto lança.
+      // mais, no máximo, uma tool.
+      //
+      // Cancelamento sempre lança — quem pediu para parar não quer meia
+      // resposta apresentada como resposta. Orçamento pode só pular: no modo
+      // "stop" a run termina com o output que já tinha.
+      throwIfAborted(execucao);
       if (execucao.budget.checkpoint()) return ctx;
 
       // Texto do último turno — passado ao escape hatch `run`.
@@ -110,6 +114,7 @@ export function buildAgentStep(
           messages,
           tools,
           sampling: meta.sampling,
+          signal: execucao.signal,
           agent: instance,
           ctx: agentCtx,
           run: execucao,
@@ -125,6 +130,7 @@ export function buildAgentStep(
             tools: invocacao.tools,
             messages: invocacao.messages,
             sampling: invocacao.sampling,
+            signal: invocacao.signal,
           }),
         );
 
@@ -151,6 +157,11 @@ export function buildAgentStep(
         ctx.output = response;
         return ctx;
       } catch (error) {
+        // Cancelamento não passa pelo `onError`: o hook existe para o agente
+        // se recuperar de falha, e "alguém mandou parar" não é falha. Deixá-lo
+        // devolver um fallback transformaria um abort em resposta.
+        throwIfAborted(execucao);
+
         if (typeof instance.onError === "function") {
           const fallback = await instance.onError(error as Error, agentCtx);
           if (fallback !== undefined) {

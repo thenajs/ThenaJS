@@ -85,10 +85,22 @@ export function resolveRetry(input?: RetryPolicy | boolean): ResolvedRetry {
   };
 }
 
+/**
+ * `true` quando o erro foi um cancelamento — do usuário ou de um
+ * `AbortSignal.timeout`. Distinguir importa porque um abort **não** deve ser
+ * retentado: quem cancelou não quer que o framework tente de novo.
+ */
+export function isAbortError(error: unknown): boolean {
+  const nome = (error as Error)?.name;
+  return nome === "AbortError" || nome === "TimeoutError";
+}
+
 /** Decisão padrão: transitório se tentar de novo pode dar outro resultado. */
 export function isRetryableByDefault(info: RetryAttempt): boolean {
   if (info.status !== undefined) return RETRYABLE_STATUS.has(info.status);
-  // Sem status houve erro de rede ou abort por timeout — ambos transitórios.
+  // Cancelamento não é falha transitória — retentar contraria quem abortou.
+  if (isAbortError(info.error)) return false;
+  // Sem status houve erro de rede — transitório.
   return info.error !== undefined;
 }
 
@@ -129,8 +141,28 @@ export function parseRetryAfter(header: string | null): number | undefined {
   return Math.max(0, data - Date.now());
 }
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Espera `ms`, ou rejeita na hora se o `signal` abortar.
+ *
+ * Sem o signal, um cancelamento no meio do backoff esperaria os 8 segundos
+ * antes de perceber que ninguém quer mais o resultado.
+ */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+
+    const t = setTimeout(() => {
+      signal?.removeEventListener("abort", cancelar);
+      resolve();
+    }, ms);
+
+    function cancelar() {
+      clearTimeout(t);
+      reject(signal!.reason);
+    }
+
+    signal?.addEventListener("abort", cancelar, { once: true });
+  });
 }
 
 function prune(policy: RetryPolicy): Partial<RetryPolicy> {

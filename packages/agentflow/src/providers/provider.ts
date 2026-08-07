@@ -41,6 +41,12 @@ export interface ChatParams {
   messages: Message[];
   /** Sampling desta chamada; sobrescreve chave a chave o do provider. */
   sampling?: SamplingParams;
+  /**
+   * Cancelamento da chamada em voo. Repassado ao `chatInternal` e daí ao
+   * `fetch` — é o que faz um abort parar de gastar geração já em andamento,
+   * em vez de só evitar a próxima chamada.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -120,10 +126,15 @@ export class Providers extends HttpTransport {
     parser.parseAsExtractedJson,
   ];
 
-  public async chat({ tools, messages, sampling }: ChatParams): Promise<ChatTurn> {
+  public async chat({
+    tools,
+    messages,
+    sampling,
+    signal,
+  }: ChatParams): Promise<ChatTurn> {
     // O sampling da chamada (ex.: o do `@Agent`) vence o do provider, chave a chave.
     const merged = { ...this.sampling, ...sampling };
-    const raw = await this.chatInternal(tools, messages, merged);
+    const raw = await this.chatInternal(tools, messages, merged, signal);
     const content = parser.stripThinkTags(raw.content);
 
     // tool call: usa o nativo quando o provider o trouxe; senão, tenta
@@ -250,11 +261,16 @@ export class Providers extends HttpTransport {
    * A classe base cuida do resto: remove blocos de raciocínio, decide entre
    * tool call nativa e resgatada do texto, valida os argumentos contra o
    * schema, executa a tool e calcula o custo.
+   *
+   * O 4º parâmetro é **opcional e aditivo**: um provider que o ignore continua
+   * compilando e funcionando — só não cancela a requisição em voo. Repasse-o
+   * ao `this.request()` para ganhar isso de graça.
    */
   protected chatInternal(
     _tools: ToolType[],
     _messages: Message[],
     _sampling?: SamplingParams,
+    _signal?: AbortSignal,
   ): Promise<RawAssistant> {
     return Promise.resolve({ content: "" });
   }

@@ -8,6 +8,7 @@ import type {
 import type { BudgetUsage, RunBudget } from "./budget.js";
 import type { ThenaPlugin } from "./plugin.js";
 import type { LogConfig, ReportOptions } from "./config.js";
+import type { RunHandle } from "./run-handle.js";
 
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
@@ -285,22 +286,35 @@ export interface WorkflowRunOptions {
   report?: boolean | ReportOptions;
   /** Sobrescreve `ThenaConfig.log` só nesta execução. */
   log?: LogConfig;
+  /**
+   * Cancela a execução. Combina com o `abort()` do handle: o que disparar
+   * primeiro vence.
+   *
+   * ```ts
+   * app.run({ input, signal: req.signal });              // cliente desconectou
+   * app.run({ input, signal: AbortSignal.timeout(30_000) });
+   * ```
+   */
+  signal?: AbortSignal;
 }
 
 /** Handle retornado por `bootstrapWorkflow` — o "app" do workflow. */
 export interface WorkflowApp<T = string> {
   /**
-   * Executa o workflow. Rejeita quando a execução falha — o erro **não** é
-   * engolido, e o processo não é marcado por baixo dos panos.
+   * Executa o workflow e devolve a execução, de forma **síncrona**.
+   *
+   * Com `await`, você pede o resultado; sem `await`, a execução — com
+   * `runId`, `abort()` e `onEvent()`. Rejeita quando a execução falha: o erro
+   * não é engolido, e o processo não é marcado por baixo dos panos.
    *
    * Chamadas concorrentes são seguras: cada uma abre o próprio `RunContext`.
    */
-  run(options: WorkflowRunOptions): Promise<T>;
+  run(options: WorkflowRunOptions): RunHandle<T>;
   /**
    * Acopla um observador do stream ao vivo. Vários coexistem, e nenhum toma o
    * lugar do `log` do config. Chame antes do `run`.
    */
   use(plugin: ThenaPlugin): Promise<WorkflowApp<T>>;
-  /** Encerra os plugins e solta o recorder. */
+  /** Aborta as execuções em voo, espera elas soltarem, e encerra os plugins. */
   dispose(): Promise<void>;
 }

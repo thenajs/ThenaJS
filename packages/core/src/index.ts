@@ -20,6 +20,7 @@ export { bootstrapWorkflow } from "./bootstrap.js";
 export { input, context, state, memory } from "./decorators/inject.js";
 export type { ThenaPlugin } from "./plugin.js";
 export type { RunContext, RunMiddleware } from "./run-context.js";
+export type { RunHandle } from "./run-handle.js";
 
 /** Middlewares: o ponto de acoplamento de `app.use({ tool, chat })`. */
 export type { Middleware } from "./middleware/compose.js";
