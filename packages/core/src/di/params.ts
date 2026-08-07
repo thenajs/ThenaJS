@@ -28,8 +28,8 @@ export function resolverPonto(
       if (!d.ctx) {
         throw new Error(
           `[thena] @context() em ${onde} (parâmetro ${indice}): o contexto ainda ` +
-          `não existe quando a classe é construída. Use @context() no execute de ` +
-          `uma tool, ou receba o ctx como parâmetro do hook.`,
+            `não existe quando a classe é construída. Use @context() no execute de ` +
+            `uma tool, ou receba o ctx como parâmetro do hook.`,
         );
       }
       return d.ctx;
@@ -38,7 +38,7 @@ export function resolverPonto(
       if (!d.estado) {
         throw new Error(
           `[thena] @state() em ${onde} (parâmetro ${indice}): nenhum estado ` +
-          `declarado. Acrescente \`state: MinhaClasse\` no @Workflow.`,
+            `declarado. Acrescente \`state: MinhaClasse\` no @Workflow.`,
         );
       }
       return d.estado;
@@ -49,7 +49,7 @@ export function resolverPonto(
       if (!achada) {
         throw new Error(
           `[thena] @memory(${ponto.store.name}) em ${onde}: esse store não está ` +
-          `registrado em ThenaConfig.memory.`,
+            `registrado em ThenaConfig.memory.`,
         );
       }
       return achada;

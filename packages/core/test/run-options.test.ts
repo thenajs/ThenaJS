@@ -9,10 +9,7 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 describe("opções de run", () => {
   it("memory entra no system prompt enviado ao modelo", async () => {
     const provider = new FakeProvider([{ content: "ok" }]);
-    const app = await bootstrapWorkflow(
-      criarWorkflow([criarAgente({ provider })]),
-      {},
-    );
+    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
 
     await app.run({
       input: { message: "Olá" },
@@ -32,10 +29,7 @@ describe("opções de run", () => {
 
   it("não há canal para dado de execução que não vá para o prompt", async () => {
     const provider = new FakeProvider([{ content: "ok" }]);
-    const app = await bootstrapWorkflow(
-      criarWorkflow([criarAgente({ provider })]),
-      {},
-    );
+    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
 
     await app.run({ input: { message: "Olá" } });
     await app.dispose();

@@ -140,11 +140,5 @@ export const politicaDeErroDaTool: ToolMiddleware = async (_inv, next) => {
  * depois de uma autorização a tornaria contornável.
  */
 export function cadeiaDeTool(usuario: ToolMiddleware[] = []): ToolMiddleware[] {
-  return [
-    registrarTool,
-    hooksDeTool,
-    ...usuario,
-    contarTool,
-    politicaDeErroDaTool,
-  ];
+  return [registrarTool, hooksDeTool, ...usuario, contarTool, politicaDeErroDaTool];
 }

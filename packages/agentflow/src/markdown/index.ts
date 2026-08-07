@@ -3,9 +3,9 @@ import * as lists from "./lists.js";
 import * as misc from "./misc.js";
 
 export const md = {
-    headers,
-    lists,
-    misc,
+  headers,
+  lists,
+  misc,
 };
 
 export { headers, lists, misc };

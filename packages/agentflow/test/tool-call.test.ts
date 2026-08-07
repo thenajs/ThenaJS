@@ -15,9 +15,9 @@ describe("normalizeToolCallEnvelope", () => {
     it.each(["name", "tool", "tool_name", "toolName", "function_name"])(
       "reconhece `%s`",
       (chave) => {
-        expect(normalizeToolCallEnvelope({ [chave]: "ler", arguments: { a: 1 } })).toEqual(
-          { name: "ler", arguments: { a: 1 } },
-        );
+        expect(
+          normalizeToolCallEnvelope({ [chave]: "ler", arguments: { a: 1 } }),
+        ).toEqual({ name: "ler", arguments: { a: 1 } });
       },
     );
 
@@ -95,7 +95,9 @@ describe("normalizeToolCallEnvelope", () => {
     });
 
     it("para na profundidade máxima em vez de recursar sem fim", () => {
-      const fundo = { tool_call: { tool_call: { tool_call: { tool_call: { name: "ler" } } } } };
+      const fundo = {
+        tool_call: { tool_call: { tool_call: { tool_call: { name: "ler" } } } },
+      };
       expect(normalizeToolCallEnvelope(fundo)).toBeNull();
     });
 

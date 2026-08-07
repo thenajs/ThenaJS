@@ -22,10 +22,7 @@ export class ReadFileTool {
    * Sem decorator nenhum, o `execute` recebe só os argumentos — que continua
    * sendo o caso comum, e o mais simples.
    */
-  async execute(
-    @input() { path }: { path: string },
-    @state() estado: ExplorerState,
-  ) {
+  async execute(@input() { path }: { path: string }, @state() estado: ExplorerState) {
     try {
       const conteudo = await readFile(path, "utf8");
 

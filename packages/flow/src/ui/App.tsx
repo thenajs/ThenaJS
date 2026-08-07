@@ -23,7 +23,10 @@ const ICONES: Record<string, string> = {
 
 function NoPasso({ data, selected }: NodeProps<NoDoFluxo>) {
   return (
-    <div className={`no no--${data.kind} no--${data.estado}`} data-selecionado={selected}>
+    <div
+      className={`no no--${data.kind} no--${data.estado}`}
+      data-selecionado={selected}
+    >
       <Handle type="target" position={Position.Left} />
       <span className="no__icone">{ICONES[data.kind] ?? "•"}</span>
       <span className="no__texto">

@@ -12,12 +12,14 @@ interface Inv {
 }
 type Mw = Middleware<Inv, string>;
 
-const marcar = (nome: string): Mw => async (inv, next) => {
-  inv.passos.push(`${nome}:entra`);
-  const saida = await next();
-  inv.passos.push(`${nome}:sai`);
-  return saida;
-};
+const marcar =
+  (nome: string): Mw =>
+  async (inv, next) => {
+    inv.passos.push(`${nome}:entra`);
+    const saida = await next();
+    inv.passos.push(`${nome}:sai`);
+    return saida;
+  };
 
 describe("compose", () => {
   it("executa em cebola: entra na ordem, sai na inversa", async () => {

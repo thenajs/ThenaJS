@@ -7,8 +7,6 @@ import { ExplorerAgent } from "../agents/explorer/explorer.agent.js";
  * nenhum hook — o `untilAnswered` lê `ctx.turn.calledTool` que o runtime grava.
  */
 @Workflow({
-  steps: [
-    loop({ steps: [ExplorerAgent], until: untilAnswered, maxIterations: 8 }),
-  ],
+  steps: [loop({ steps: [ExplorerAgent], until: untilAnswered, maxIterations: 8 })],
 })
 export class ReactWorkflow {}

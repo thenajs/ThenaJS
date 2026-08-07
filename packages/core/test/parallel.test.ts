@@ -76,10 +76,7 @@ describe("parallel", () => {
 
     const saida = await runWorkflow(
       criarWorkflow([
-        parallel([
-          criarAgente({ provider: lento }),
-          criarAgente({ provider: rapido }),
-        ]),
+        parallel([criarAgente({ provider: lento }), criarAgente({ provider: rapido })]),
       ]),
       "vai",
     );

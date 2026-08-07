@@ -28,10 +28,24 @@ describe("MemoriaDeRuns", () => {
     memoria.registrar(evento({ runId: "A", depth: 1, kind: "agent", name: "AgenteA" }));
     memoria.registrar(evento({ runId: "B", depth: 1, kind: "agent", name: "AgenteB" }));
     memoria.registrar(
-      evento({ runId: "B", depth: 1, kind: "agent", name: "AgenteB", phase: "end", status: "ok" }),
+      evento({
+        runId: "B",
+        depth: 1,
+        kind: "agent",
+        name: "AgenteB",
+        phase: "end",
+        status: "ok",
+      }),
     );
     memoria.registrar(
-      evento({ runId: "A", depth: 1, kind: "agent", name: "AgenteA", phase: "end", status: "ok" }),
+      evento({
+        runId: "A",
+        depth: 1,
+        kind: "agent",
+        name: "AgenteA",
+        phase: "end",
+        status: "ok",
+      }),
     );
 
     expect(memoria.eventosDe("A")).toHaveLength(3);

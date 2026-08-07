@@ -4,11 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { FatalToolError, bootstrapWorkflow } from "@thenajs/core";
-import type {
-  ChatMiddleware,
-  ExecutionNode,
-  ToolMiddleware,
-} from "@thenajs/core";
+import type { ChatMiddleware, ExecutionNode, ToolMiddleware } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
 
 /**
@@ -173,12 +169,14 @@ describe("middleware de tool", () => {
 
   it("vários middlewares rodam na ordem de registro, o primeiro por fora", async () => {
     const ordem: string[] = [];
-    const marcar = (nome: string): ToolMiddleware => async (_inv, next) => {
-      ordem.push(`${nome}:entra`);
-      const r = await next();
-      ordem.push(`${nome}:sai`);
-      return r;
-    };
+    const marcar =
+      (nome: string): ToolMiddleware =>
+      async (_inv, next) => {
+        ordem.push(`${nome}:entra`);
+        const r = await next();
+        ordem.push(`${nome}:sai`);
+        return r;
+      };
 
     const { Fluxo } = fluxoComTool();
     const app = await bootstrapWorkflow(Fluxo, {});
@@ -198,10 +196,7 @@ describe("middleware de chat", () => {
       assistant: { role: "assistant", content: "do cache" },
     });
 
-    const app = await bootstrapWorkflow(
-      criarWorkflow([criarAgente({ provider })]),
-      {},
-    );
+    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
     await app.use({ name: "cache", chat: cache });
     const saida = await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -300,9 +295,7 @@ describe("inv.meta — o middleware escreve no report", () => {
     const app = await bootstrapWorkflow(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe(
-      "do cache",
-    );
+    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("do cache");
     await app.dispose();
   });
 });

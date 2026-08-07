@@ -17,10 +17,7 @@ const eco = (impl: (...a: any[]) => unknown = ({ x }: any) => x) =>
 describe("beforePrompt", () => {
   it("substitui o system prompt quando devolve string", async () => {
     const provider = new FakeProvider();
-    const Agente = criarAgente(
-      { provider },
-      { beforePrompt: () => "PROMPT TROCADO" },
-    );
+    const Agente = criarAgente({ provider }, { beforePrompt: () => "PROMPT TROCADO" });
 
     await runWorkflow(criarWorkflow([Agente]), "vai");
 
@@ -81,7 +78,7 @@ describe("beforeTool", () => {
       { tool: { name: "eco", arguments: { x: "1" } } },
     ]);
     const Agente = criarAgente(
-      { provider, tools: [eco(() => ((executou = true), "nunca")) ] },
+      { provider, tools: [eco(() => ((executou = true), "nunca"))] },
       {
         beforeTool: () => {
           throw new Error("cancelado pela política");
@@ -153,9 +150,7 @@ describe("afterTool", () => {
       { afterTool: () => undefined },
     );
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe(
-      "intacto",
-    );
+    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe("intacto");
   });
 
   it("recebe nome, args, output e isError", async () => {
@@ -196,9 +191,7 @@ describe("afterResponse", () => {
     const provider = new FakeProvider([{ content: "original" }]);
     const Agente = criarAgente({ provider }, { afterResponse: () => undefined });
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe(
-      "original",
-    );
+    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe("original");
   });
 });
 
@@ -253,9 +246,9 @@ describe("onError", () => {
     await runWorkflow(criarWorkflow([Quebrado, Seguinte]), "vai");
 
     const historico = provider.chamadas[0].messages;
-    expect(historico.some((m) => m.role === "assistant" && m.content === "fallback")).toBe(
-      true,
-    );
+    expect(
+      historico.some((m) => m.role === "assistant" && m.content === "fallback"),
+    ).toBe(true);
   });
 });
 

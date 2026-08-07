@@ -79,7 +79,11 @@ describe("report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     const Ferramenta = criarTool(
-      { name: "eco", description: "devolve o que recebe", schema: z.object({ x: z.string() }) },
+      {
+        name: "eco",
+        description: "devolve o que recebe",
+        schema: z.object({ x: z.string() }),
+      },
       ({ x }: { x: string }) => x,
     );
     const provider = new FakeProvider([

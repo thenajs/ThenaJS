@@ -28,10 +28,7 @@ describe("budget", () => {
 
   it('modo "throw" lança BudgetExceededError', async () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
-    const Fluxo = criarWorkflow([
-      criarAgente({ provider }),
-      criarAgente({ provider }),
-    ]);
+    const Fluxo = criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]);
 
     await expect(
       runWorkflow(Fluxo, "vai", undefined, {
@@ -64,10 +61,7 @@ describe("budget", () => {
 
   it("sem budget configurado, nada é medido nem interrompido", async () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
-    const Fluxo = criarWorkflow([
-      criarAgente({ provider }),
-      criarAgente({ provider }),
-    ]);
+    const Fluxo = criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]);
 
     const saida = await runWorkflow(Fluxo, "vai");
 
@@ -80,10 +74,7 @@ describe("budget", () => {
       { content: "a", usage: { promptTokens: 30, completionTokens: 30 } },
       { content: "b", usage: { promptTokens: 30, completionTokens: 30 } },
     ]);
-    const Fluxo = criarWorkflow([
-      criarAgente({ provider }),
-      criarAgente({ provider }),
-    ]);
+    const Fluxo = criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]);
 
     const saida = await runWorkflow(Fluxo, "vai", undefined, {
       maxTokens: 60,

@@ -11,7 +11,9 @@ function label(e: ExecutionEvent): string {
 }
 
 function short(v: unknown, max = 120): string {
-  const s = String(v ?? "").replace(/\s+/g, " ").trim();
+  const s = String(v ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
@@ -32,13 +34,15 @@ export function consoleLogger(verbose = false): (event: ExecutionEvent) => void 
     if (!verbose || !e.data) return;
     const d = e.data;
     if (e.kind === "chat") {
-      if (d.toolCall != null) console.log(`[thena] ${indent}  ↳ decisão: ${short(d.toolCall)}`);
+      if (d.toolCall != null)
+        console.log(`[thena] ${indent}  ↳ decisão: ${short(d.toolCall)}`);
       if (d.response != null && String(d.response).length)
         console.log(`[thena] ${indent}  ↳ resposta: ${short(d.response)}`);
     }
     if (e.kind === "tool") {
       if (d.input != null) console.log(`[thena] ${indent}  ↳ input: ${short(d.input)}`);
-      if (d.output != null) console.log(`[thena] ${indent}  ↳ output: ${short(d.output)}`);
+      if (d.output != null)
+        console.log(`[thena] ${indent}  ↳ output: ${short(d.output)}`);
     }
     if (e.status === "error" && e.error) {
       console.log(`[thena] ${indent}  ↳ erro: ${short(e.error)}`);

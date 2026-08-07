@@ -2,11 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  agentMdTemplate,
-  agentTsTemplate,
-  projectFiles,
-} from "./templates.js";
+import { agentMdTemplate, agentTsTemplate, projectFiles } from "./templates.js";
 
 function version(): string {
   try {

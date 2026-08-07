@@ -70,7 +70,7 @@ export default tseslint.config(
       // O framework lança `Error` em todo lugar; nunca uma string.
       "no-throw-literal": "error",
 
-      "eqeqeq": ["error", "always", { null: "ignore" }],
+      eqeqeq: ["error", "always", { null: "ignore" }],
       "no-console": "off", // o logger e o CLI escrevem no console de propósito
     },
   },

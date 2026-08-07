@@ -159,21 +159,14 @@ export interface AgentHooks {
   afterTool?(
     result: ToolResult,
     ctx: AgentContext,
-  ):
-    | string
-    | ToolOutput
-    | void
-    | Promise<string | ToolOutput | void>;
+  ): string | ToolOutput | void | Promise<string | ToolOutput | void>;
   /** Transforma a resposta final do passo do agente. */
   afterResponse?(
     response: string,
     ctx: AgentContext,
   ): string | void | Promise<string | void>;
   /** Trata erros do fluxo; o retorno (se houver) vira a saída do agente. */
-  onError?(
-    error: Error,
-    ctx: AgentContext,
-  ): string | void | Promise<string | void>;
+  onError?(error: Error, ctx: AgentContext): string | void | Promise<string | void>;
 }
 
 /**
@@ -239,10 +232,7 @@ export interface LoopStep {
    */
   maxFails?: number;
   /** Chamado a cada falha de tool — para alertar antes de o corte acontecer. */
-  onFail?: (
-    ctx: WorkflowContext,
-    info: LoopFailure,
-  ) => unknown | Promise<unknown>;
+  onFail?: (ctx: WorkflowContext, info: LoopFailure) => unknown | Promise<unknown>;
 }
 
 /** Configuração passada para `@Workflow({ ... })`. */

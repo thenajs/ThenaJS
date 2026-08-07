@@ -46,9 +46,7 @@ describe("app.run", () => {
 
     const app = await bootstrapWorkflow(fluxoQueLanca("falhou feio"), {});
 
-    await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
-      "falhou feio",
-    );
+    await expect(app.run({ input: { message: "vai" } })).rejects.toThrow("falhou feio");
     expect(process.exitCode).toBeUndefined();
     expect(erro).not.toHaveBeenCalled();
 

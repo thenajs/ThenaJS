@@ -1,4 +1,9 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -113,7 +118,11 @@ export class ServidorFlow {
 
     if (caminho.startsWith("/api/runs/")) {
       const eventos = this.memoria.eventosDe(caminho.slice("/api/runs/".length));
-      return this.json(res, eventos ? { eventos } : { erro: "run não encontrada" }, eventos ? 200 : 404);
+      return this.json(
+        res,
+        eventos ? { eventos } : { erro: "run não encontrada" },
+        eventos ? 200 : 404,
+      );
     }
 
     return this.servirArquivo(caminho, res);

@@ -1,11 +1,7 @@
 import { Pipeline } from "@thenajs/agentflow";
 import type { PipelineContext, Step } from "@thenajs/agentflow";
 import { currentRun } from "../run-context.js";
-import type {
-  LoopStopReason,
-  WorkflowContext,
-  WorkflowStep,
-} from "../types.js";
+import type { LoopStopReason, WorkflowContext, WorkflowStep } from "../types.js";
 import { buildAgentStep } from "./agent-step.js";
 
 /**
@@ -39,8 +35,8 @@ export function compileStep(
   if (step.until.length >= 2 && !estado) {
     throw new Error(
       `[thena] O \`until\` deste loop recebe o estado como 2º parâmetro, mas o ` +
-      `workflow não declara \`state\`. Acrescente \`state: MinhaClasse\` no ` +
-      `@Workflow, ou use um \`until\` que só leia o ctx.`,
+        `workflow não declara \`state\`. Acrescente \`state: MinhaClasse\` no ` +
+        `@Workflow, ou use um \`until\` que só leia o ctx.`,
     );
   }
 

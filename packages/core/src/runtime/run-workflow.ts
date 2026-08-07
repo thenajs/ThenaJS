@@ -1,11 +1,6 @@
 import { Pipeline, StateManager } from "@thenajs/agentflow";
 import { getWorkflowMetadata } from "../decorators/metadata.js";
-import {
-  childRunContext,
-  newRunContext,
-  peekRun,
-  withRun,
-} from "../run-context.js";
+import { childRunContext, newRunContext, peekRun, withRun } from "../run-context.js";
 import type { RunBudget } from "../budget.js";
 import type { WorkflowInput } from "../types.js";
 import { buildAgentStep } from "./agent-step.js";
@@ -13,9 +8,7 @@ import { compileStep } from "./compile.js";
 
 /** Deriva a string inicial do pipeline a partir do `input` do workflow. */
 export function toInitial(input: WorkflowInput): string {
-  return typeof input.message === "string"
-    ? input.message
-    : JSON.stringify(input);
+  return typeof input.message === "string" ? input.message : JSON.stringify(input);
 }
 
 /**
@@ -23,10 +16,7 @@ export function toInitial(input: WorkflowInput): string {
  * fica no `@thenajs/agentflow`; o framework só monta as peças a partir
  * dos metadados do `@Agent`.
  */
-export async function run<T = string>(
-  AgentClass: Function,
-  input: string,
-): Promise<T> {
+export async function run<T = string>(AgentClass: Function, input: string): Promise<T> {
   // Dentro de uma run já em curso, reaproveita o contexto: um agente avulso é
   // mais um turno da mesma execução, e deve contar no orçamento dela. Fora de
   // qualquer run, abre um contexto de topo.
@@ -83,21 +73,17 @@ export async function runWorkflow<T = string>(
     // `memory` do ThenaConfig ser ignorado em silêncio.
     pipeline.new(meta.steps.map((s) => compileStep(s, pipeline, estado)));
 
-    return execucao.recorder.around(
-      "workflow",
-      WorkflowClass.name,
-      async (node) => {
-        try {
-          const ctx = await pipeline.run(input);
-          return ctx.output as T;
-        } finally {
-          // No nó raiz mesmo quando a run falha — o consumo já aconteceu.
-          execucao.recorder.meta(node, {
-            ...execucao.budget.usage(),
-            exceeded: execucao.budget.exceeded(),
-          });
-        }
-      },
-    );
+    return execucao.recorder.around("workflow", WorkflowClass.name, async (node) => {
+      try {
+        const ctx = await pipeline.run(input);
+        return ctx.output as T;
+      } finally {
+        // No nó raiz mesmo quando a run falha — o consumo já aconteceu.
+        execucao.recorder.meta(node, {
+          ...execucao.budget.usage(),
+          exceeded: execucao.budget.exceeded(),
+        });
+      }
+    });
   });
 }

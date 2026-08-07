@@ -1,19 +1,19 @@
 export function hr(): string {
-    return "---";
+  return "---";
 }
 
 export function link(title: string, url: string): string {
-    return `[${title}](${url})`;
+  return `[${title}](${url})`;
 }
 
 export function image(alt: string, url: string): string {
-    return `![${alt}](${url})`;
+  return `![${alt}](${url})`;
 }
 
 export function code(text: string): string {
-    return `\`${text}\``;
+  return `\`${text}\``;
 }
 
 export function codeBlock(text: string, lang: string = ""): string {
-    return `\`\`\`${lang}\n${text}\n\`\`\``;
+  return `\`\`\`${lang}\n${text}\n\`\`\``;
 }

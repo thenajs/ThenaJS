@@ -10,10 +10,7 @@ import { runWorkflow, toInitial } from "./run-workflow.js";
  * de módulo.
  */
 export class WorkflowRuntime {
-  run<T = string>(
-    WorkflowClass: Function,
-    options: WorkflowRunOptions,
-  ): Promise<T> {
+  run<T = string>(WorkflowClass: Function, options: WorkflowRunOptions): Promise<T> {
     return runWorkflow<T>(
       WorkflowClass,
       toInitial(options.input),

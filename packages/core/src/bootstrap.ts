@@ -37,7 +37,9 @@ export async function bootstrapWorkflow<T = string>(
   const plugins: ThenaPlugin[] = [];
 
   /** Resolve o sink de log: função do usuário, ou o logger de console. */
-  function sinkDeLog(log: LogConfig | undefined): ((e: ExecutionEvent) => void) | undefined {
+  function sinkDeLog(
+    log: LogConfig | undefined,
+  ): ((e: ExecutionEvent) => void) | undefined {
     if (typeof log === "function") return log;
     return log ? consoleLogger(log === "verbose") : undefined;
   }
@@ -69,9 +71,7 @@ export async function bootstrapWorkflow<T = string>(
       // Só captura conteúdo quando alguém vai usá-lo. Um plugin que observa
       // precisa dele; do contrário receberia eventos sem prompt nem resposta.
       captureContent:
-        Boolean(report) ||
-        log === "verbose" ||
-        plugins.some((p) => p.onEvent),
+        Boolean(report) || log === "verbose" || plugins.some((p) => p.onEvent),
     });
   }
 

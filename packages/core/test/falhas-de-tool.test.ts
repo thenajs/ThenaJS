@@ -18,7 +18,8 @@ function montar(
   return criarWorkflow([criarAgente({ provider, tools: [tool] })]);
 }
 
-const eco = () => criarTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
+const eco = () =>
+  criarTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
 
 describe("falhas de tool", () => {
   it("execute que lança vira observação", async () => {
@@ -126,7 +127,11 @@ describe("falhas de tool", () => {
   it("um loop deixa o agente corrigir depois de uma falha", async () => {
     const tentativas: string[] = [];
     const tool = criarTool(
-      { name: "ler", description: "lê um arquivo", schema: z.object({ path: z.string() }) },
+      {
+        name: "ler",
+        description: "lê um arquivo",
+        schema: z.object({ path: z.string() }),
+      },
       ({ path }: { path: string }) => {
         tentativas.push(path);
         if (path === "certo.ts") return "conteúdo";

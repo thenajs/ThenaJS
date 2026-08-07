@@ -2,12 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 
 export type ExecutionKind =
-  | "workflow"
-  | "loop"
-  | "parallel"
-  | "agent"
-  | "chat"
-  | "tool";
+  "workflow" | "loop" | "parallel" | "agent" | "chat" | "tool";
 
 /** Um nó da árvore de execução capturada para o report. */
 export interface ExecutionNode {

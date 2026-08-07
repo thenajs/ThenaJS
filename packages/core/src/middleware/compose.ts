@@ -10,10 +10,7 @@
  * camada isolada, testável e **removível** — e uma nova (cache, cancelamento,
  * autorização, streaming) entra sem tocar nas outras.
  */
-export type Middleware<Inv, Out> = (
-  inv: Inv,
-  next: () => Promise<Out>,
-) => Promise<Out>;
+export type Middleware<Inv, Out> = (inv: Inv, next: () => Promise<Out>) => Promise<Out>;
 
 /**
  * Compõe os middlewares numa única função. O primeiro do array é o mais

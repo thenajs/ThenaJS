@@ -61,8 +61,7 @@ export class MemoriaDeRuns {
   /** Estado inicial para quem acabou de abrir o navegador. */
   snapshot(): FlowSnapshot {
     // A run em andamento mais recente; sem nenhuma rodando, a última que houve.
-    const alvo =
-      this.runs.find((r) => r.status === "rodando")?.id ?? this.runs[0]?.id;
+    const alvo = this.runs.find((r) => r.status === "rodando")?.id ?? this.runs[0]?.id;
     return {
       runs: this.runs,
       runAtual: alvo,

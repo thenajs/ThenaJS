@@ -168,7 +168,11 @@ describe("wasExhausted", () => {
 
     await runWorkflow(
       criarWorkflow([
-        loop({ steps: [criarAgente({ provider })], until: () => false, maxIterations: 2 }),
+        loop({
+          steps: [criarAgente({ provider })],
+          until: () => false,
+          maxIterations: 2,
+        }),
         // um segundo passo, para ler o `ctx.loop` deixado pelo loop anterior
         criarAgente({
           provider: new FakeProvider([{ content: "depois" }]),
@@ -210,10 +214,7 @@ describe("wasExhausted", () => {
 describe("entrada da run", () => {
   it("input.message vira a primeira mensagem user", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(
-      criarWorkflow([criarAgente({ provider })]),
-      {},
-    );
+    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({ input: { message: "olá mundo" } });
     await app.dispose();
 
@@ -223,10 +224,7 @@ describe("entrada da run", () => {
 
   it("sem message, o objeto inteiro é serializado", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(
-      criarWorkflow([criarAgente({ provider })]),
-      {},
-    );
+    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({ input: { userId: 7, acao: "revisar" } });
     await app.dispose();
 
@@ -236,10 +234,7 @@ describe("entrada da run", () => {
 
   it("memory da run é semeada no state e projetada como system", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(
-      criarWorkflow([criarAgente({ provider })]),
-      {},
-    );
+    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({
       input: { message: "oi" },
       memory: { sessionId: "abc" },

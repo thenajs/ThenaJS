@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Agent, Workflow, bootstrapWorkflow, memory } from "@thenajs/core";
 import type { VectorMemory } from "@thenajs/core";
-import {
-  FakeProvider,
-  FakeVectorStore,
-  FakeVectorStoreB,
-  PROMPT,
-} from "./harness.js";
+import { FakeProvider, FakeVectorStore, FakeVectorStoreB, PROMPT } from "./harness.js";
 
 /**
  * Memória vetorial: os stores do `ThenaConfig` chegam ao construtor do agente.

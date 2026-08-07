@@ -114,10 +114,7 @@ export function newRunContext(options: RunContextOptions = {}): RunContext {
  * Contexto de uma execução aninhada (uma tool que dispara outro workflow).
  * Herda id, recorder e settings do pai; ganha orçamento próprio.
  */
-export function childRunContext(
-  parent: RunContext,
-  budget?: RunBudget,
-): RunContext {
+export function childRunContext(parent: RunContext, budget?: RunBudget): RunContext {
   return {
     runId: parent.runId,
     settings: parent.settings,

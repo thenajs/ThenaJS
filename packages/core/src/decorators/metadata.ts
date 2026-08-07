@@ -23,10 +23,7 @@ export function getAgentMetadata(target: Function): AgentMetadata {
   return meta;
 }
 
-export function setWorkflowMetadata(
-  target: Function,
-  meta: WorkflowMetadata,
-): void {
+export function setWorkflowMetadata(target: Function, meta: WorkflowMetadata): void {
   workflows.set(target, meta);
 }
 

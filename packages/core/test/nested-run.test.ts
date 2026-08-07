@@ -24,9 +24,7 @@ function criarToolQueRodaWorkflow(SubFluxo: Function) {
       });
     }
   };
-  Tool({ name: "sub", description: "roda um sub-workflow", schema })(
-    Classe as any,
-  );
+  Tool({ name: "sub", description: "roda um sub-workflow", schema })(Classe as any);
   return Classe as any;
 }
 

@@ -105,9 +105,7 @@ describe("@input, @state e @context no execute da tool", () => {
       }
     }
 
-    const provider = new FakeProvider([
-      { tool: { name: "aprovar", arguments: {} } },
-    ]);
+    const provider = new FakeProvider([{ tool: { name: "aprovar", arguments: {} } }]);
 
     let visto: EstadoDeTeste | undefined;
     const Fluxo = criarWorkflow(

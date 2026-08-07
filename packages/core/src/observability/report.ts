@@ -170,7 +170,9 @@ function signals(node: ExecutionNode): string[] {
   if (d.attempts != null) out.push(`${d.attempts} tentativas HTTP (houve retry)`);
   if (d.isError === true) out.push("tool sinalizou erro (isError)");
   if (d.promptTokens != null || d.completionTokens != null)
-    out.push(`tokens: ${d.promptTokens ?? "?"} prompt + ${d.completionTokens ?? "?"} completion`);
+    out.push(
+      `tokens: ${d.promptTokens ?? "?"} prompt + ${d.completionTokens ?? "?"} completion`,
+    );
   if (d.costUsd != null) out.push(`custo: US$ ${Number(d.costUsd).toFixed(6)}`);
   if (node.kind === "workflow" && d.chatCalls != null)
     out.push(
@@ -199,7 +201,8 @@ function renderNode(node: ExecutionNode): string {
   const body = content(node);
   const children = node.children.map(renderNode).join("");
   const err = node.status === "error" ? '<span class="err">erro</span>' : "";
-  const open = node.kind === "workflow" || node.kind === "loop" || node.kind === "parallel";
+  const open =
+    node.kind === "workflow" || node.kind === "loop" || node.kind === "parallel";
   return `<details class="node k-${node.kind}"${open ? " open" : ""}>
     <summary><span class="badge b-${node.kind}">${esc(node.kind)}</span> <span class="name">${esc(label(node))}</span> <span class="dur">${ms(node.durationMs)}</span> ${err}</summary>
     <div class="body">${body}${children}</div>

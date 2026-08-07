@@ -29,7 +29,12 @@ export function buildToolStep(
     ? (args: unknown) => {
         const argumentos = plano.pontos.map((ponto, i) =>
           ponto
-            ? resolverPonto(ponto, { ...disponivel, ctx, args }, `${plano.nome}.execute`, i)
+            ? resolverPonto(
+                ponto,
+                { ...disponivel, ctx, args },
+                `${plano.nome}.execute`,
+                i,
+              )
             : undefined,
         );
         return Promise.resolve(plano.instance.execute(...argumentos));

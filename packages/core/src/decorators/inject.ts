@@ -77,7 +77,7 @@ export const state = (): ParameterDecorator => marcar({ tipo: "state" });
  * ```
  */
 export const memory = (store?: VectorStoreCtor): ParameterDecorator =>
-    marcar({ tipo: "memory", store });
+  marcar({ tipo: "memory", store });
 
 /** Os pontos declarados num método (ou no construtor). `undefined` = nenhum. */
 export function pontosDe(

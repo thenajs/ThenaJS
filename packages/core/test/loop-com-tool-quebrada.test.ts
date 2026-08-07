@@ -85,11 +85,14 @@ describe("freios do loop", () => {
 
   it("conta falhas CONSECUTIVAS: quem erra e corrige não é punido", async () => {
     const tentativas: string[] = [];
-    const tool = criarTool({ name: "ler", description: "lê", schema }, ({ path }: any) => {
-      tentativas.push(path);
-      if (path === "bom.ts") return "conteúdo";
-      throw new Error(`ENOENT: ${path}`);
-    });
+    const tool = criarTool(
+      { name: "ler", description: "lê", schema },
+      ({ path }: any) => {
+        tentativas.push(path);
+        if (path === "bom.ts") return "conteúdo";
+        throw new Error(`ENOENT: ${path}`);
+      },
+    );
 
     // Padrão ✗ ✗ ✓ ✗ ✗ ✓ … — 4 falhas no total, nunca 3 seguidas.
     const provider = new FakeProvider([
@@ -122,10 +125,13 @@ describe("freios do loop", () => {
 
   it("uma tool que funciona zera a sequência", async () => {
     const registradas: LoopFailure[] = [];
-    const tool = criarTool({ name: "ler", description: "lê", schema }, ({ path }: any) => {
-      if (path === "bom.ts") return "ok";
-      throw new Error("ENOENT");
-    });
+    const tool = criarTool(
+      { name: "ler", description: "lê", schema },
+      ({ path }: any) => {
+        if (path === "bom.ts") return "ok";
+        throw new Error("ENOENT");
+      },
+    );
 
     const provider = new FakeProvider([
       { tool: { name: "ler", arguments: { path: "ruim.ts" } } },
@@ -226,10 +232,13 @@ describe("freios do loop", () => {
   });
 
   it("loop aninhado zera os contadores a cada volta do de fora", async () => {
-    const tool = criarTool({ name: "ler", description: "lê", schema }, ({ path }: any) => {
-      if (path === "bom.ts") return "ok";
-      throw new Error("ENOENT");
-    });
+    const tool = criarTool(
+      { name: "ler", description: "lê", schema },
+      ({ path }: any) => {
+        if (path === "bom.ts") return "ok";
+        throw new Error("ENOENT");
+      },
+    );
 
     // Cada volta do loop externo: ✗ ✓ no interno. Se o contador não zerasse
     // entre as voltas, o `maxFails: 2` cortaria na segunda.

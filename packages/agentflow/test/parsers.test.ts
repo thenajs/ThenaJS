@@ -126,9 +126,9 @@ describe("parseAsTaggedJson", () => {
   });
 
   it("ignora o texto antes da tag", () => {
-    expect(parseAsTaggedJson('Vou ler o arquivo.\n<tool_call>{"name":"ler"}')).toEqual(
-      { name: "ler" },
-    );
+    expect(parseAsTaggedJson('Vou ler o arquivo.\n<tool_call>{"name":"ler"}')).toEqual({
+      name: "ler",
+    });
   });
 
   it("falha quando não há tag", () => {
@@ -145,9 +145,7 @@ describe("stripThinkTags", () => {
   );
 
   it("remove vários blocos", () => {
-    expect(stripThinkTags("<think>a</think>meio<think>b</think>fim")).toBe(
-      "meiofim",
-    );
+    expect(stripThinkTags("<think>a</think>meio<think>b</think>fim")).toBe("meiofim");
   });
 
   it("remove bloco NÃO fechado até o fim do texto", () => {

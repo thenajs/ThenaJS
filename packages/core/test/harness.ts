@@ -188,10 +188,7 @@ export function criarTool(
   return Classe as unknown as ToolInput;
 }
 
-export function criarWorkflow(
-  steps: WorkflowStep[],
-  state?: StateCtor,
-): Function {
+export function criarWorkflow(steps: WorkflowStep[], state?: StateCtor): Function {
   const Classe = class {};
   Workflow({ steps, state })(Classe);
   return Classe;

@@ -58,10 +58,7 @@ export function loop(options: {
     iterations: number,
   ) => unknown | Promise<unknown>;
   maxFails?: number;
-  onFail?: (
-    ctx: WorkflowContext,
-    info: LoopFailure,
-  ) => unknown | Promise<unknown>;
+  onFail?: (ctx: WorkflowContext, info: LoopFailure) => unknown | Promise<unknown>;
 }): LoopStep {
   return {
     kind: "loop",

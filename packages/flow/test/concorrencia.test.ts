@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bootstrapWorkflow } from "@thenajs/core";
 import type { ExecutionEvent } from "@thenajs/core";
-import {
-  FakeProvider,
-  criarAgente,
-  criarWorkflow,
-} from "../../core/test/harness.js";
+import { FakeProvider, criarAgente, criarWorkflow } from "../../core/test/harness.js";
 import { MemoriaDeRuns } from "../src/server/memoria.js";
 
 /**

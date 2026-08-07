@@ -20,18 +20,13 @@ export interface PlanoDeInjecao {
  * esta camada sem nenhuma dependência de `runtime/` — uma tool pode disparar um
  * workflow, e um workflow contém tools, então importar direto criaria ciclo.
  */
-export function resolveTool(
-  input: ToolInput,
-  criarRuntime: () => unknown,
-): ToolType {
+export function resolveTool(input: ToolInput, criarRuntime: () => unknown): ToolType {
   if (typeof input !== "function") {
     return input;
   }
   const config = getToolMetadata(input);
   if (!config) {
-    throw new Error(
-      `[thena] A classe "${input.name}" não está decorada com @Tool().`,
-    );
+    throw new Error(`[thena] A classe "${input.name}" não está decorada com @Tool().`);
   }
   // Como `WorkflowRuntime` é a única dependência injetável, ele é passado a
   // toda tool; tools sem construtor apenas ignoram o argumento extra. Assim a
@@ -47,9 +42,7 @@ export function resolveTool(
   // falha apareceria como `TypeError: instance.execute is not a function`
   // lá na frente — genérico, e mascarado como observação de falha da tool.
   if (typeof instance.execute !== "function") {
-    throw new Error(
-      `[thena] A classe "${input.name}" não implementa execute(input).`,
-    );
+    throw new Error(`[thena] A classe "${input.name}" não implementa execute(input).`);
   }
   const pontos = pontosDe(input, "execute");
 

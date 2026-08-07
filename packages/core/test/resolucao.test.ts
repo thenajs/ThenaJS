@@ -24,10 +24,7 @@ describe("provider", () => {
     }
 
     await expect(
-      runWorkflow(
-        criarWorkflow([criarAgente({ provider: ProviderProprio })]),
-        "vai",
-      ),
+      runWorkflow(criarWorkflow([criarAgente({ provider: ProviderProprio })]), "vai"),
     ).resolves.toBe("da classe");
   });
 
@@ -62,17 +59,18 @@ describe("tools", () => {
     ]);
 
     await expect(
-      runWorkflow(
-        criarWorkflow([criarAgente({ provider, tools: [tool] })]),
-        "vai",
-      ),
+      runWorkflow(criarWorkflow([criarAgente({ provider, tools: [tool] })]), "vai"),
     ).resolves.toBe("eco: oi");
     expect(chamada).toBe(true);
   });
 
   it("aceita uma classe @Tool", async () => {
     const Ferramenta = criarTool(
-      { name: "classe", description: "com classe", schema: z.object({ x: z.string() }) },
+      {
+        name: "classe",
+        description: "com classe",
+        schema: z.object({ x: z.string() }),
+      },
       ({ x }: { x: string }) => `eco: ${x}`,
     );
     const provider = new FakeProvider([
@@ -126,9 +124,7 @@ describe("sampling", () => {
     });
 
     await runWorkflow(
-      criarWorkflow([
-        criarAgente({ provider, sampling: { temperature: 0 } }),
-      ]),
+      criarWorkflow([criarAgente({ provider, sampling: { temperature: 0 } })]),
       "vai",
     );
 
