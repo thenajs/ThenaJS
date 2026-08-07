@@ -22,8 +22,16 @@
   "publishConfig": {
     "access": "public"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@thenajs/core": "^0.6.0",
+    "@thenajs/core": "^0.6.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
     "zod": "^4.0.0"
   }
 }

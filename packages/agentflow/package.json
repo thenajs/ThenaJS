@@ -22,7 +22,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
     "zod": "^4.0.0"
   }
 }
