@@ -1,11 +1,11 @@
-# Roadmap — de ~85% a Enterprise
+# Roadmap — o que falta
 
-> Atualizado em 2026-08-07 (Fases A, B, C, D e E concluídas). Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
+> Atualizado em 2026-08-07 (todas as sete fases concluídas). Complementa o [DESIGN-RUN-HANDLE.md](./DESIGN-RUN-HANDLE.md),
 > que detalha a Fase C.
 
 ## Onde estamos
 
-Score de maturidade: **~85%** · Classificação: **(D) Framework Sênior** · Maturidade: **Beta**
+Score de maturidade: **~89%** · Classificação: **(D) Framework Sênior** · Maturidade: **Beta**
 
 Concluído (branch `feat/run-context`):
 
@@ -22,7 +22,8 @@ Concluído (branch `feat/run-context`):
 | ✅ | Mascaramento de segredo ligado por padrão; `ShellTool` com timeout e allowlist |
 | ✅ | `RunHandle`: cancelamento, `runId` síncrono, stream de eventos, `dispose` drenando |
 | ✅ | Régua de performance + `z.toJSONSchema` memoizada |
-| ✅ | Streaming de token no Ollama e na OpenAI — **346 testes** |
+| ✅ | Streaming de token no Ollama e na OpenAI |
+| ✅ | Janela de contexto, cache de prompt medido, config por execução — **367 testes** |
 
 ## Princípios que valeram até aqui
 
@@ -219,7 +220,7 @@ a parte que precisará voltar.
 
 ---
 
-## Fase F — Custo
+## ~~Fase F~~ — Custo ✅
 
 **~3 dias · depende de B (a régua)**
 
@@ -247,7 +248,7 @@ tool reinventa o mesmo corte, é sinal de que falta no framework.
 
 ---
 
-## Fase G — Configuração injetável (multi-tenant)
+## ~~Fase G~~ — Configuração injetável (multi-tenant) ✅
 
 **~2 dias · depende de C**
 
@@ -291,16 +292,24 @@ construído por factory já consegue ler o contexto da run.
 | ~~2~~ | ~~**B** — régua + micros~~ | ✅ feito | |
 | ~~3~~ | ~~**C** — RunHandle e cancelamento~~ | ✅ feito | |
 | ~~4~~ | ~~**D** — segurança~~ | ✅ feito | **~82%** |
-| ~~5~~ | ~~**E** — streaming~~ | ✅ feito | **~85%** |
-| 6 | **F** — custo | 3 dias | ~87% |
-| 7 | **G** — multi-tenant | 2 dias | ~89% |
+| ~~5~~ | ~~**E** — streaming~~ | ✅ feito | |
+| ~~6~~ | ~~**F** — custo~~ | ✅ feito | |
+| ~~7~~ | ~~**G** — multi-tenant~~ | ✅ feito | **~89%** |
 
-**Restam ~5 dias** para o topo de (D).
+**As sete fases foram entregues.** O que ficou de fora está na tabela abaixo,
+com o motivo — e agora ela é o roadmap.
 
-A Fase F é a próxima, e a régua da Fase B já protege as duas metades dela: o
-teste do crescimento quadrático de tokens vigia a janela de contexto, e o da
-estabilidade do prefixo do prompt vigia o prompt caching — que um `beforePrompt`
-dinâmico anula sem quebrar nada.
+O que move mais daqui em diante, em ordem de impacto:
+
+1. **Tool calls paralelas** (~3 dias) — maior ganho isolado de custo e latência.
+   Ler 5 arquivos são 5 round-trips hoje; seriam 1. Exige tirar a execução de
+   tool do provider, e a cadeia de middleware já é a costura.
+2. **`parallel` com fork/merge** (~2 dias) — o único mecanismo de concorrência
+   entre agentes é não-determinístico.
+3. **Store vetorial por tenant** (~1 dia) — o que faltou da Fase G.
+4. **`ClassLike` no lugar de `Function`** (~1 dia) — 19 assinaturas; hoje
+   `bootstrapWorkflow(() => {})` compila.
+5. **Decorators TC39** — o maior risco de longo prazo, sem urgência imediata.
 
 A ordem não é por tamanho: **A e B primeiro porque criam a régua**. Sem
 cobertura do engine e sem teste de performance, as fases E e F são impossíveis

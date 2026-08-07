@@ -1073,6 +1073,63 @@ função `(event) => void` (sink customizado — pino/winston, arquivo, JSON lin
 Log e report reutilizam a mesma camada de interceptação — uma instrumentação,
 dois "outputs".
 
+### Janela de contexto
+
+O `history` cresce sem teto, e **cada turno reenvia tudo** — o custo é
+quadrático: dez turnos custam mais de 30× o primeiro. Quando a janela do modelo
+estoura, a falha chega como um `400` não-retentável, tarde e depois de pago.
+
+```ts
+import { janelaDeContexto } from "@thenajs/core";
+
+await app.use({
+  name: "janela",
+  chat: janelaDeContexto({ maxTurnos: 12, maxCharsPorTool: 2000 }),
+});
+```
+
+O bloco `system` do topo é intocável — é o prompt do agente, e cortá-lo
+quebraria o agente em vez de economizar. O corte deixa um aviso no lugar, para
+o modelo não achar que a conversa começou ali e repetir trabalho já feito.
+
+> **Não vem ligado.** Diferente do `maxIterations` e do `maxFails`, que só
+> impedem desperdício, cortar histórico **muda o comportamento do agente**. Um
+> default trocaria uma falha ruidosa e cara por uma degradação muda. Meça
+> primeiro — o nó `chat` do report traz `promptTokens`.
+
+### Multi-tenant: configuração por execução
+
+O `provider` do `@Agent` aceita uma **factory chamada por execução**, então
+chave, modelo e endpoint podem variar por tenant:
+
+```ts
+import { currentRun } from "@thenajs/core";
+
+@Agent({
+  provider: () => new OpenAIProvider({
+    apiKey: chaveDe(currentRun().data.tenant as string),
+  }),
+  prompt: "./a.agent.md",
+})
+export class MeuAgente {}
+```
+
+```ts
+await app.run({ input, data: { tenant: "acme" } });
+```
+
+`data` é o canal de dados da execução — e a diferença para o `memory` é
+importante:
+
+| | Vai para o modelo? | Vai para o report? |
+| --- | --- | --- |
+| `run({ memory })` | **sim** (vira mensagem `system`) | sim |
+| `run({ data })` | não | não |
+
+Use `memory` para contexto que o modelo **deve** ler; `data` para tenant,
+credencial e id de usuário. Os dois são herdados por sub-workflows, e `data`
+chega no `ctx`, alcançável por `@context()` numa tool.
+
 ### O que vai para o disco
 
 O `report.json` guarda **tudo** que foi enviado ao modelo e recebido dele. Por

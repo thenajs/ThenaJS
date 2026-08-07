@@ -6,8 +6,8 @@ que `^0.x.y` as instale sozinho.
 
 ## [0.8.0] — 2026-08-07
 
-Streaming, cancelamento, segurança e a régua de performance. `app.run()` deixa
-de ser uma `Promise` e passa a devolver a **execução**.
+Streaming, cancelamento, custo, multi-tenant e segurança. `app.run()` deixa de
+ser uma `Promise` e passa a devolver a **execução**.
 
 **Release com uma quebra** — o retorno do `app.run()`, que continua funcionando
 com `await`.
@@ -90,6 +90,53 @@ com `await`.
   recusado — sem isso a lista não valeria nada. A classe `ShellTool` continua,
   com os defaults seguros e um aviso no JSDoc.
 
+- **Configuração por execução.** `@Agent({ provider })` passa a aceitar uma
+  **factory chamada por run**, além de instância e classe:
+
+  ```ts
+  @Agent({
+    provider: () => new OpenAIProvider({
+      apiKey: chaveDe(currentRun().data.tenant as string),
+    }),
+    prompt: "./a.agent.md",
+  })
+  ```
+
+  Antes o provider era instanciado **sem argumentos**, com as credenciais fixas
+  na subclasse: dois tenants batiam no mesmo endpoint com a mesma chave.
+
+  `run({ data })` é o canal de dados da execução que **não passa pelo modelo** —
+  a diferença para o `run({ memory })`, que é serializado na mensagem `system` e
+  portanto lido pelo modelo e gravado no report. Disponível em
+  `currentRun().data` e em `ctx.data`, e herdado pelas runs aninhadas.
+
+  `currentRun()` passou a ser exportado.
+
+  Os `VectorStore` continuam instanciados uma vez por app; um store por tenant
+  exige mudar o ciclo de vida deles, e a memoização fica em user-land.
+
+- **`janelaDeContexto()`** — middleware que corta o histórico antes de enviá-lo.
+
+  ```ts
+  await app.use({ name: "janela", chat: janelaDeContexto({ maxTurnos: 12 }) });
+  ```
+
+  O `history` cresce sem teto e cada turno reenvia tudo: dez turnos custam mais
+  de 30× o primeiro, e quando a janela do modelo estoura a falha chega como um
+  `400` não-retentável, tarde e depois de pago.
+
+  O bloco `system` do topo é intocável, e o corte deixa um aviso no lugar — um
+  salto silencioso faria o modelo repetir trabalho já feito.
+
+  **Não vem ligado**, diferente do `maxIterations` e do `maxFails`: aqueles só
+  impedem desperdício, este **muda o comportamento do agente**. Um default
+  trocaria uma falha ruidosa e cara por uma degradação muda.
+
+- **`Usage.cachedTokens` e `TokenCost.cachedInput`** — quantos tokens do prompt
+  vieram do cache do provider, e quanto eles custam. Na OpenAI o caching é
+  automático; o que faltava era **medir**. Sem `cachedInput`, token cacheado é
+  cobrado como entrada normal: erra para mais, nunca para menos.
+
 - **`toJsonSchema` / `toFunctionTools`** no engine, para quem escreve provider.
 - **`lerLinhas` / `lerSse`** no engine — leitura de resposta em stream, para
   quem escreve um provider com streaming. Resolvem o que é chato: um chunk da
@@ -123,7 +170,7 @@ com `await`.
 
 ### Infraestrutura
 
-- **346 testes** (eram 143), incluindo os módulos do engine que eram pura
+- **367 testes** (eram 143), incluindo os módulos do engine que eram pura
   heurística sem verificação — os 5 parsers de JSON, a normalização de envelope
   de tool call e o retry.
 - **Régua de performance**: 14 testes que medem contagem de round-trips, tokens
