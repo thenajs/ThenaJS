@@ -97,14 +97,22 @@ export function stripThinkTags(text: string): string {
     const TAG_PATTERN =
         "think|thinking|reasoning|thought|reasoning_scratchpad";
 
+    // O nome da tag precisa **terminar** aqui — `(?=[\s>])`. Sem isso,
+    // `<thinker>` casava como `<think` mais o "atributo" `er`, e a segunda
+    // regex (que vai até o fim do texto) apagava a resposta inteira. Qualquer
+    // tag com um desses prefixos — `<thoughts>`, `<reasoningEngine>` — tinha o
+    // mesmo efeito, sem erro nenhum: só uma resposta vazia.
+    const ABRE = `(${TAG_PATTERN})(?=[\\s>])`;
+
     text = text.replace(
-        new RegExp(`<(${TAG_PATTERN})[\\s\\S]*?<\\/\\1>`, "gi"),
+        new RegExp(`<${ABRE}[\\s\\S]*?<\\/\\1>`, "gi"),
         ""
     );
 
+    // Bloco que abriu e não fechou — resposta truncada no meio do raciocínio.
     text = text.replace(
         new RegExp(
-            `(?:^|\\n)\\s*<(?:${TAG_PATTERN})[^>]*>[\\s\\S]*$`,
+            `(?:^|\\n)\\s*<(?:${TAG_PATTERN})(?=[\\s>])[^>]*>[\\s\\S]*$`,
             "i"
         ),
         ""
