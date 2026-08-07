@@ -275,7 +275,7 @@ construído por factory já consegue ler o contexto da run.
 | Item | Por quê |
 | --- | --- |
 | **Tool calls paralelas** | Decisão do time. Cabe na estrutura atual (a costura de middleware existe), mas exige tirar a execução de tool do provider. Maior ganho isolado de custo e latência quando for a hora. |
-| **`parallel` com fork/merge** | Corrida de dados real em [pipeline.ts:37](packages/agentflow/src/pipeline/pipeline.ts#L37): N agentes compartilham o mesmo `StateManager`. Trabalho próprio, não coberto por nenhuma fase acima. |
+| **Ordem e isolamento no `parallel`** | Ver a seção abaixo — a descrição anterior ("corrida de dados", fork/merge, 2 dias) estava **errada**, e a medição corrigiu. |
 | **`WorkflowStep` aberto** | União fechada + `if/else` em `compileStep`. Adicionar `branch`/`race` exige editar o core. Violação de OCP que sobrevive ao refactor. |
 | **Decorators TC39** | Decorator de parâmetro **não existe** no padrão. Toda a DI de `@input`/`@state`/`@context`/`@memory` depende de um recurso legado sem caminho de migração. Maior risco de longo prazo; precisa de um plano B (API funcional `defineAgent({...})`) antes de virar urgência. |
 | **Tradução para inglês** | API, comentários e docs em português limitam a adoção. Trabalho grande e mecânico; melhor depois que a API parar de mudar. |
@@ -303,12 +303,65 @@ O que move mais daqui em diante, em ordem de impacto:
 1. **Tool calls paralelas** (~3 dias) — maior ganho isolado de custo e latência.
    Ler 5 arquivos são 5 round-trips hoje; seriam 1. Exige tirar a execução de
    tool do provider, e a cadeia de middleware já é a costura.
-2. **`parallel` com fork/merge** (~2 dias) — o único mecanismo de concorrência
-   entre agentes é não-determinístico.
+2. **Ordem e isolamento no `parallel`** (~4 horas) — ver abaixo.
 3. **Store vetorial por tenant** (~1 dia) — o que faltou da Fase G.
 4. **`ClassLike` no lugar de `Function`** (~1 dia) — 19 assinaturas; hoje
    `bootstrapWorkflow(() => {})` compila.
 5. **Decorators TC39** — o maior risco de longo prazo, sem urgência imediata.
+
+---
+
+## `parallel`: o que medimos
+
+A descrição anterior deste item dizia "corrida de dados" e estimava 2 dias de
+fork/merge. **Estava errada.** A medição mostrou outra coisa.
+
+Três agentes em `parallel` (40ms, 20ms, 5ms) mais um depois:
+
+```
+lento  => "pergunta"                              ← não viu os irmãos
+medio  => "pergunta"                              ← não viu os irmãos
+rapido => "pergunta"                              ← não viu os irmãos
+DEPOIS => "pergunta | RAPIDO | MEDIO | LENTO"     ← viu os três
+```
+
+O padrão fan-out → coleta **funciona**: cada ramo dispara isolado, e o agente
+seguinte enxerga os três. O isolamento se sustenta porque o `map` invoca todos
+sincronamente, cada um roda até o `await` do `provider.chat`, e o
+`toMessages()` acontece antes desse await enquanto o `append` acontece depois —
+todas as leituras precedem todas as escritas.
+
+Sobram dois problemas, e são menores do que "corrida de dados":
+
+**1. A ordem é a de conclusão, não a de declaração.** Declarar
+`[lento, medio, rapido]` produz `RAPIDO | MEDIO | LENTO`, e isso muda a cada
+execução conforme a latência do modelo. Um prompt que diga "o primeiro parecer
+é do especialista em segurança" quebra sem aviso.
+
+**2. O isolamento é acidental, não garantido.** Basta um ramo esperar antes de
+ler o estado. Medido com um `beforePrompt` que espera 15ms:
+
+```
+A viu => "pergunta"
+B viu => "pergunta | RESPOSTA-DE-A"    ← contaminado
+```
+
+Um `beforePrompt` que consulta um banco, um cache que responde na hora, ou uma
+diferença de latência suficiente entre providers reproduzem isso. Nada no
+código impede nem documenta.
+
+### O conserto (~4 horas)
+
+Não precisa de fork/merge de estado. Precisa de duas coisas:
+
+1. **Congelar a leitura** — tirar um snapshot do `history` no início do bloco e
+   dar o mesmo a todos os ramos. Elimina o problema 2.
+2. **Anexar em ordem de declaração** — coletar o resultado de cada ramo e fazer
+   o `append` ao final, na ordem do array, em vez de cada um escrever quando
+   termina. Elimina o problema 1.
+
+`ctx.output` e `ctx.turn` continuariam last-writer-wins, ou passariam a ser o do
+último ramo declarado — decisão de API, não de implementação.
 
 A ordem não é por tamanho: **A e B primeiro porque criam a régua**. Sem
 cobertura do engine e sem teste de performance, as fases E e F são impossíveis
