@@ -11,6 +11,8 @@ export interface ChatInvocation {
   sampling?: SamplingParams;
   /** Cancelamento da execução — repasse ao provider se você chamar por fora. */
   signal?: AbortSignal;
+  /** Sink de token, quando alguém está ouvindo. Repasse junto com o signal. */
+  onToken?: (token: string) => void;
   /** A instância do agente que originou a chamada. */
   readonly agent: any;
   readonly ctx: AgentContext;

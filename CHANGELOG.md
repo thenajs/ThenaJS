@@ -6,8 +6,8 @@ que `^0.x.y` as instale sozinho.
 
 ## [0.8.0] — 2026-08-07
 
-Cancelamento, segurança e a régua de performance. `app.run()` deixa de ser uma
-`Promise` e passa a devolver a **execução**.
+Streaming, cancelamento, segurança e a régua de performance. `app.run()` deixa
+de ser uma `Promise` e passa a devolver a **execução**.
 
 **Release com uma quebra** — o retorno do `app.run()`, que continua funcionando
 com `await`.
@@ -31,6 +31,32 @@ com `await`.
   a execução para reencontrá-la — o padrão de responder `{ runId }` num POST e
   o cliente acompanhar por SSE. Quem assina depois do início recebe o que já
   passou (buffer de 500 eventos por run).
+
+- **Streaming.** `exec.onToken(cb)` e `exec.textStream` entregam o texto à
+  medida que o modelo o produz, em vez de esperar a resposta inteira.
+
+  ```ts
+  const exec = app.run({ input });
+  for await (const pedaco of exec.textStream) process.stdout.write(pedaco);
+  const texto = await exec.result;
+  ```
+
+  O caminho do token é `provider → ChatParams.onToken → RunContext → canal →
+  RunHandle`, e nenhuma ponta conhece a outra. O canal é **separado** do de
+  eventos de propósito: token não é um passo da execução — não tem início, fim,
+  duração nem status —, e misturá-lo no `ExecutionEvent` poluiria o tipo e
+  quebraria quem monta a árvore a partir dele. Quem assina atrasado recebe o
+  texto que já saiu.
+
+  Implementado no Ollama (NDJSON) e na OpenAI (SSE). O que **liga** o streaming
+  é a presença do sink: sem ninguém ouvindo, o provider faz a requisição normal.
+  Um provider de terceiro que ignore o `onToken` continua funcionando — só não
+  transmite.
+
+  Na OpenAI a parte delicada é a tool call, que chega **fragmentada**: o `name`
+  num chunk e o `arguments` em vários, caractere a caractere. O que amarra os
+  pedaços é o `index`, não a ordem de chegada — com duas tool calls no mesmo
+  turno, concatenar por ordem misturaria os argumentos das duas.
 
 - **Cancelamento.** `run({ signal })` e `exec.abort()` valem os dois; o que
   disparar primeiro vence. O signal viaja até o `fetch`, então abortar corta a
@@ -65,6 +91,9 @@ com `await`.
   com os defaults seguros e um aviso no JSDoc.
 
 - **`toJsonSchema` / `toFunctionTools`** no engine, para quem escreve provider.
+- **`lerLinhas` / `lerSse`** no engine — leitura de resposta em stream, para
+  quem escreve um provider com streaming. Resolvem o que é chato: um chunk da
+  rede não respeita fronteira de linha nem de caractere UTF-8.
 
 ### Corrigido
 
@@ -94,7 +123,7 @@ com `await`.
 
 ### Infraestrutura
 
-- **316 testes** (eram 143), incluindo os módulos do engine que eram pura
+- **346 testes** (eram 143), incluindo os módulos do engine que eram pura
   heurística sem verificação — os 5 parsers de JSON, a normalização de envelope
   de tool call e o retry.
 - **Régua de performance**: 14 testes que medem contagem de round-trips, tokens

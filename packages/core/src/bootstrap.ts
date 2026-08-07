@@ -8,7 +8,7 @@ import { ReportRecorder } from "./observability/recorder.js";
 import { writeReport } from "./observability/report.js";
 import { consoleLogger } from "./observability/logger.js";
 import { newRunContext, withRun } from "./run-context.js";
-import { FilaDeEventos, criarRunHandle } from "./run-handle.js";
+import { Canal, criarRunHandle } from "./run-handle.js";
 
 /**
  * Ponto de entrada de uma aplicação ThenaJS. Prepara o workflow e devolve um
@@ -52,7 +52,7 @@ export async function bootstrapWorkflow<T = string>(
   function recorderDaRun(
     runId: string,
     options: WorkflowRunOptions,
-    fila: FilaDeEventos,
+    eventos: Canal<ExecutionEvent>,
   ): ReportRecorder {
     const report = options.report ?? config.report;
     const log = options.log ?? config.log;
@@ -73,7 +73,7 @@ export async function bootstrapWorkflow<T = string>(
     }
     // O handle é mais um consumidor do mesmo stream — empurrado (plugin) e
     // puxado (`onEvent`/`eventStream`) são duas torneiras no mesmo cano.
-    ouvintes.push((e) => fila.publicar(e));
+    ouvintes.push((e) => eventos.publicar(e));
 
     return new ReportRecorder({
       runId,
@@ -109,7 +109,8 @@ export async function bootstrapWorkflow<T = string>(
 
     run(options) {
       const runId = randomUUID();
-      const fila = new FilaDeEventos();
+      const eventos = new Canal<ExecutionEvent>();
+      const tokens = new Canal<string>();
 
       // O signal de quem chamou e o `abort()` deste handle valem os dois — o
       // que disparar primeiro vence.
@@ -125,8 +126,10 @@ export async function bootstrapWorkflow<T = string>(
       const execucao = newRunContext({
         runId,
         settings: { memory },
-        recorder: recorderDaRun(runId, options, fila),
+        recorder: recorderDaRun(runId, options, eventos),
         signal,
+        // O provider só transmite se houver sink; o handle sempre oferece um.
+        onToken: (t) => tokens.publicar(t),
         // Lido a cada run, e não no bootstrap: um plugin registrado depois
         // vale para as execuções seguintes, igual aos ouvintes do recorder.
         middleware: {
@@ -152,11 +155,19 @@ export async function bootstrapWorkflow<T = string>(
       result
         .finally(() => {
           emVoo.delete(registro);
-          fila.encerrar();
+          eventos.encerrar();
+          tokens.encerrar();
         })
         .catch(() => {});
 
-      return criarRunHandle<T>({ runId, result, signal, abort: registro.abort, fila });
+      return criarRunHandle<T>({
+        runId,
+        result,
+        signal,
+        abort: registro.abort,
+        eventos,
+        tokens,
+      });
     },
 
     async dispose() {

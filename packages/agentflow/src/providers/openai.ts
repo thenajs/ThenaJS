@@ -1,6 +1,7 @@
 import { ToolType, toFunctionTools } from "../tools/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
+import { lerSse } from "../http/index.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
 /**
@@ -81,6 +82,7 @@ export class OpenAIProvider extends Providers {
     messages: Message[],
     sampling?: SamplingParams,
     signal?: AbortSignal,
+    onToken?: (token: string) => void,
   ): Promise<RawAssistant> {
     const body = {
       model: this.model,
@@ -88,6 +90,10 @@ export class OpenAIProvider extends Providers {
       tools: tools.length ? toFunctionTools(tools) : undefined,
       tool_choice: tools.length ? "auto" : undefined,
       ...this.toOpenAIParams(sampling),
+      // O sink é o que liga o streaming. `include_usage` é necessário porque,
+      // com `stream: true`, a OpenAI só manda o usage se pedirem — e sem ele o
+      // orçamento por tokens ficaria cego.
+      ...(onToken ? { stream: true, stream_options: { include_usage: true } } : {}),
       ...this.raw,
     };
 
@@ -103,25 +109,14 @@ export class OpenAIProvider extends Providers {
       throw new Error(`OpenAI chat falhou (${response.status}): ${detail}`);
     }
 
-    const data = (await response.json()) as any;
-    const message = data?.choices?.[0]?.message;
-
-    // Normaliza eventuais tool calls nativas para { id, name, arguments }.
-    const toolCalls: ProviderToolCall[] = (message?.tool_calls ?? []).map(
-      (tc: any) => ({
-        id: tc?.id,
-        name: tc?.function?.name,
-        arguments: safeParse(tc?.function?.arguments),
-      }),
-    );
+    const bruto = onToken
+      ? await lerStreamOpenAI(response, onToken)
+      : reduzirResposta((await response.json()) as OpenAIChatResponse);
 
     return {
-      content: message?.content ?? "",
-      toolCalls: toolCalls.length ? toolCalls : undefined,
-      usage: {
-        promptTokens: data?.usage?.prompt_tokens,
-        completionTokens: data?.usage?.completion_tokens,
-      },
+      content: bruto.content,
+      toolCalls: bruto.toolCalls.length ? bruto.toolCalls : undefined,
+      usage: bruto.usage,
       attempts,
     };
   }
@@ -155,4 +150,116 @@ function safeParse(value: unknown): unknown {
   } catch {
     return value;
   }
+}
+
+// ---------- leitura da resposta ----------
+
+interface OpenAIToolCallBruta {
+  index?: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+interface OpenAIChatResponse {
+  choices?: {
+    message?: { content?: string | null; tool_calls?: OpenAIToolCallBruta[] };
+    delta?: { content?: string | null; tool_calls?: OpenAIToolCallBruta[] };
+  }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+}
+
+interface Assistente {
+  content: string;
+  toolCalls: ProviderToolCall[];
+  usage: { promptTokens?: number; completionTokens?: number };
+}
+
+/** Normaliza a resposta completa (sem streaming). */
+function reduzirResposta(data: OpenAIChatResponse): Assistente {
+  const message = data?.choices?.[0]?.message;
+  return {
+    content: message?.content ?? "",
+    toolCalls: normalizarToolCalls(message?.tool_calls ?? []),
+    usage: {
+      promptTokens: data?.usage?.prompt_tokens,
+      completionTokens: data?.usage?.completion_tokens,
+    },
+  };
+}
+
+function normalizarToolCalls(brutas: OpenAIToolCallBruta[]): ProviderToolCall[] {
+  return brutas
+    .filter((tc) => typeof tc.function?.name === "string")
+    .map((tc) => ({
+      id: tc.id,
+      name: tc.function!.name as string,
+      arguments: safeParse(tc.function?.arguments),
+    }));
+}
+
+/**
+ * Consome o SSE da OpenAI, emitindo cada pedaço de texto e remontando o turno.
+ *
+ * A parte delicada são as tool calls: diferente do Ollama, elas chegam
+ * **fragmentadas**. O `name` vem num chunk e o `arguments` em vários,
+ * caractere a caractere, e o que amarra os pedaços é o `index` — o `id` só
+ * aparece no primeiro. Concatenar por ordem de chegada quebraria com mais de
+ * uma tool call no mesmo turno.
+ */
+async function lerStreamOpenAI(
+  response: Response,
+  onToken: (token: string) => void,
+): Promise<Assistente> {
+  let content = "";
+  let usage: Assistente["usage"] = {};
+  const porIndice = new Map<number, OpenAIToolCallBruta>();
+
+  for await (const payload of lerSse(response)) {
+    let pedaco: OpenAIChatResponse;
+    try {
+      pedaco = JSON.parse(payload) as OpenAIChatResponse;
+    } catch {
+      // Payload que não é JSON não deve derrubar a geração inteira.
+      continue;
+    }
+
+    if (pedaco.usage) {
+      usage = {
+        promptTokens: pedaco.usage.prompt_tokens,
+        completionTokens: pedaco.usage.completion_tokens,
+      };
+    }
+
+    const delta = pedaco.choices?.[0]?.delta;
+    if (!delta) continue;
+
+    if (delta.content) {
+      content += delta.content;
+      onToken(delta.content);
+    }
+
+    for (const fragmento of delta.tool_calls ?? []) {
+      const i = fragmento.index ?? 0;
+      const acumulado = porIndice.get(i) ?? { index: i, function: {} };
+
+      if (fragmento.id) acumulado.id = fragmento.id;
+      if (fragmento.function?.name) {
+        acumulado.function!.name = fragmento.function.name;
+      }
+      if (fragmento.function?.arguments) {
+        acumulado.function!.arguments =
+          (acumulado.function!.arguments ?? "") + fragmento.function.arguments;
+      }
+
+      porIndice.set(i, acumulado);
+    }
+  }
+
+  return {
+    content,
+    toolCalls: normalizarToolCalls(
+      [...porIndice.entries()].sort((a, b) => a[0] - b[0]).map(([, tc]) => tc),
+    ),
+    usage,
+  };
 }

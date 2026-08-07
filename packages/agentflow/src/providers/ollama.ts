@@ -1,6 +1,7 @@
 import { ToolType, toFunctionTools } from "../tools/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
+import { lerLinhas } from "../http/index.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
 /**
@@ -63,13 +64,15 @@ export class OllamaProvider extends Providers {
     messages: Message[],
     sampling?: SamplingParams,
     signal?: AbortSignal,
+    onToken?: (token: string) => void,
   ): Promise<RawAssistant> {
     const options = this.toOllamaOptions(sampling);
     const body = {
       model: this.model,
       messages: messages.map((m) => this.toOllamaMessage(m)),
       tools: tools.length ? toFunctionTools(tools) : undefined,
-      stream: false,
+      // O sink é o que liga o streaming: sem ninguém ouvindo, uma resposta só.
+      stream: Boolean(onToken),
       // Sem sampling configurado, a chave nem existe — body idêntico ao default.
       options: Object.keys(options).length ? options : undefined,
       ...this.raw,
@@ -87,16 +90,19 @@ export class OllamaProvider extends Providers {
       throw new Error(`Ollama chat falhou (${response.status}): ${detail}`);
     }
 
-    const data = (await response.json()) as any;
+    const data = onToken
+      ? await lerStreamOllama(response, onToken)
+      : ((await response.json()) as OllamaChatResponse);
+
     const message = data?.message;
 
     // Normaliza eventuais tool calls nativas para { name, arguments }.
-    const toolCalls: ProviderToolCall[] = (message?.tool_calls ?? []).map(
-      (tc: any) => ({
-        name: tc?.function?.name,
-        arguments: tc?.function?.arguments,
-      }),
-    );
+    const toolCalls: ProviderToolCall[] = (message?.tool_calls ?? [])
+      .filter((tc) => typeof tc?.function?.name === "string")
+      .map((tc) => ({
+        name: tc.function!.name as string,
+        arguments: tc.function?.arguments,
+      }));
 
     return {
       content: message?.content ?? "",
@@ -127,4 +133,60 @@ export class OllamaProvider extends Providers {
     const data = (await response.json()) as any;
     return data?.embedding ?? [];
   }
+}
+
+/** O que o `/api/chat` do Ollama devolve, nos dois modos. */
+interface OllamaChatResponse {
+  message?: {
+    content?: string;
+    tool_calls?: { function?: { name?: string; arguments?: unknown } }[];
+  };
+  prompt_eval_count?: number;
+  eval_count?: number;
+  done?: boolean;
+}
+
+/**
+ * Consome o NDJSON do Ollama, emitindo cada pedaço de texto e juntando o turno.
+ *
+ * Cada linha é um `OllamaChatResponse` parcial; a última traz `done: true` com
+ * as contagens de token. As tool calls chegam inteiras numa linha só — o Ollama
+ * não as fragmenta, diferente da OpenAI.
+ */
+async function lerStreamOllama(
+  response: Response,
+  onToken: (token: string) => void,
+): Promise<OllamaChatResponse> {
+  type ToolCalls = NonNullable<OllamaChatResponse["message"]>["tool_calls"];
+
+  let conteudo = "";
+  let toolCalls: ToolCalls;
+  let final: OllamaChatResponse = {};
+
+  for await (const linha of lerLinhas(response)) {
+    let pedaco: OllamaChatResponse;
+    try {
+      pedaco = JSON.parse(linha) as OllamaChatResponse;
+    } catch {
+      // Linha que não é JSON não deve derrubar a geração inteira.
+      continue;
+    }
+
+    const texto = pedaco.message?.content;
+    if (texto) {
+      conteudo += texto;
+      onToken(texto);
+    }
+
+    if (pedaco.message?.tool_calls?.length) {
+      toolCalls = pedaco.message.tool_calls;
+    }
+
+    if (pedaco.done) final = pedaco;
+  }
+
+  return {
+    ...final,
+    message: { content: conteudo, tool_calls: toolCalls },
+  };
 }

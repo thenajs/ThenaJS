@@ -1,11 +1,15 @@
 # Design — `RunHandle`: `app.run()` devolvendo a execução
 
-> Status: **fase 1 implementada** (v0.8.0). As fases 2 e 3 — `onToken` e
-> `textStream` — dependem do streaming no provider, que é a Fase E do
-> [ROADMAP.md](./ROADMAP.md).
+> Status: **implementado por completo** (v0.8.0) — as três fases.
 >
-> O que já existe: `runId` síncrono, `result`, `signal`, `abort()`, `onEvent`,
-> `eventStream`, buffer para quem chega atrasado, e `dispose()` drenando.
+> `runId` síncrono, `result`, `signal`, `abort()`, `onEvent`, `eventStream`,
+> `onToken`, `textStream`, buffer para quem chega atrasado, e `dispose()`
+> drenando. Streaming no Ollama (NDJSON) e na OpenAI (SSE).
+>
+> Uma decisão que o documento não previa: **o token tem canal próprio**, e não
+> um `phase: "token"` no `ExecutionEvent`. Token não é um passo — não tem
+> início, fim, duração nem status —, e misturá-lo no evento quebraria quem monta
+> a árvore a partir dele (o grafo do Flow, entre outros).
 >
 > Duas decisões que estavam em aberto, resolvidas na implementação:
 > **teto do buffer** em 500 eventos por run (descarta os mais antigos), e

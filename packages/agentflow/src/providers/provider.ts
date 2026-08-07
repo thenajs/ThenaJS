@@ -47,6 +47,14 @@ export interface ChatParams {
    * em vez de só evitar a próxima chamada.
    */
   signal?: AbortSignal;
+  /**
+   * Chamado a cada pedaço de texto que o modelo produz.
+   *
+   * A presença deste callback é o que **liga o streaming**: sem ele o provider
+   * faz a requisição normal, com uma resposta só. É aditivo — um provider que
+   * o ignore continua funcionando, só não transmite.
+   */
+  onToken?: (token: string) => void;
 }
 
 /**
@@ -131,10 +139,11 @@ export class Providers extends HttpTransport {
     messages,
     sampling,
     signal,
+    onToken,
   }: ChatParams): Promise<ChatTurn> {
     // O sampling da chamada (ex.: o do `@Agent`) vence o do provider, chave a chave.
     const merged = { ...this.sampling, ...sampling };
-    const raw = await this.chatInternal(tools, messages, merged, signal);
+    const raw = await this.chatInternal(tools, messages, merged, signal, onToken);
     const content = parser.stripThinkTags(raw.content);
 
     // tool call: usa o nativo quando o provider o trouxe; senão, tenta
@@ -262,15 +271,17 @@ export class Providers extends HttpTransport {
    * tool call nativa e resgatada do texto, valida os argumentos contra o
    * schema, executa a tool e calcula o custo.
    *
-   * O 4º parâmetro é **opcional e aditivo**: um provider que o ignore continua
-   * compilando e funcionando — só não cancela a requisição em voo. Repasse-o
-   * ao `this.request()` para ganhar isso de graça.
+   * Os dois últimos parâmetros são **opcionais e aditivos**: um provider que os
+   * ignore continua compilando e funcionando — só não cancela a requisição em
+   * voo (`signal`) nem transmite (`onToken`). Repasse o `signal` ao
+   * `this.request()` para ganhar cancelamento de graça.
    */
   protected chatInternal(
     _tools: ToolType[],
     _messages: Message[],
     _sampling?: SamplingParams,
     _signal?: AbortSignal,
+    _onToken?: (token: string) => void,
   ): Promise<RawAssistant> {
     return Promise.resolve({ content: "" });
   }

@@ -47,6 +47,22 @@ export interface RunHandle<T> extends PromiseLike<T> {
   /** O mesmo stream como `AsyncIterable` — dá backpressure num socket lento. */
   readonly eventStream: AsyncIterable<ExecutionEvent>;
 
+  /**
+   * Cada pedaço de texto que o modelo produz, à medida que produz.
+   *
+   * Canal separado do `onEvent` de propósito: token não é um passo da execução
+   * — não tem início, fim nem status. Quem assina atrasado recebe o texto que
+   * já saiu, então o `for await` de um cliente que conecta tarde não começa do
+   * meio da frase.
+   *
+   * **Só emite se o provider suportar.** Um provider que ignore o `onToken`
+   * continua funcionando; o texto simplesmente chega inteiro no `result`.
+   */
+  onToken(cb: (token: string) => void): () => void;
+
+  /** O mesmo, como `AsyncIterable`. */
+  readonly textStream: AsyncIterable<string>;
+
   // `catch` e `finally` além do `then` do PromiseLike: sem eles,
   // `app.run(...).catch(...)` — que é como se trata erro sem `try` — deixaria
   // de compilar, e o handle só pareceria uma Promise.
@@ -69,35 +85,46 @@ export interface RunHandle<T> extends PromiseLike<T> {
  */
 export const MAX_EVENTOS_NO_BUFFER = 500;
 
-/** O canal de eventos de uma execução: guarda, reproduz e distribui. */
-export class FilaDeEventos {
-  private readonly passados: ExecutionEvent[] = [];
-  private readonly ouvintes = new Set<(e: ExecutionEvent) => void>();
+/**
+ * Um canal que guarda, reproduz para quem chega atrasado, e distribui.
+ *
+ * Genérico porque a execução tem dois: os passos (`ExecutionEvent`) e o texto
+ * (`string`). Eles não se misturam — token não tem início, fim nem status.
+ */
+export class Canal<T> {
+  private readonly passados: T[] = [];
+  private readonly ouvintes = new Set<(item: T) => void>();
+  private encerrado = false;
 
   constructor(private readonly max = MAX_EVENTOS_NO_BUFFER) {}
 
-  publicar(evento: ExecutionEvent): void {
-    this.passados.push(evento);
+  publicar(item: T): void {
+    this.passados.push(item);
     if (this.passados.length > this.max) this.passados.shift();
 
     for (const cb of this.ouvintes) {
       // Isolado: um assinante que lança não afeta a execução nem os outros.
       try {
-        cb(evento);
+        cb(item);
       } catch {
         /* ignorado de propósito */
       }
     }
   }
 
-  assinar(cb: (e: ExecutionEvent) => void): () => void {
+  assinar(cb: (item: T) => void): () => void {
     // O histórico primeiro, e só então os novos.
-    for (const e of this.passados) {
+    for (const item of this.passados) {
       try {
-        cb(e);
+        cb(item);
       } catch {
         /* ignorado de propósito */
       }
+    }
+    // Quem assina depois do fim recebe o histórico e o encerramento na hora.
+    if (this.encerrado) {
+      (cb as { __fim?: () => void }).__fim?.();
+      return () => {};
     }
     this.ouvintes.add(cb);
     return () => this.ouvintes.delete(cb);
@@ -105,19 +132,19 @@ export class FilaDeEventos {
 
   /** Fecha os iteradores abertos, para o `for await` de quem observa terminar. */
   encerrar(): void {
+    this.encerrado = true;
     for (const cb of [...this.ouvintes]) {
-      const fim = (cb as { __fim?: () => void }).__fim;
-      fim?.();
+      (cb as { __fim?: () => void }).__fim?.();
     }
   }
 
-  async *iterar(): AsyncIterableIterator<ExecutionEvent> {
-    const pendentes: ExecutionEvent[] = [];
+  async *iterar(): AsyncIterableIterator<T> {
+    const pendentes: T[] = [];
     let acordar: (() => void) | undefined;
     let terminou = false;
 
-    const cb = (e: ExecutionEvent) => {
-      pendentes.push(e);
+    const cb = (item: T) => {
+      pendentes.push(item);
       acordar?.();
     };
     (cb as { __fim?: () => void }).__fim = () => {
@@ -139,15 +166,19 @@ export class FilaDeEventos {
   }
 }
 
+/** @deprecated Use `Canal<ExecutionEvent>`. Mantido para não quebrar imports. */
+export class FilaDeEventos extends Canal<ExecutionEvent> {}
+
 /** Monta o handle a partir das peças que o `bootstrap` já tem. */
 export function criarRunHandle<T>(peças: {
   runId: string;
   result: Promise<T>;
   signal: AbortSignal;
   abort: (reason?: unknown) => void;
-  fila: FilaDeEventos;
+  eventos: Canal<ExecutionEvent>;
+  tokens: Canal<string>;
 }): RunHandle<T> {
-  const { runId, result, signal, abort, fila } = peças;
+  const { runId, result, signal, abort, eventos, tokens } = peças;
 
   // Sem isto, o padrão do POST+SSE derruba o processo: ninguém deu `await`
   // ainda quando a execução falha, e o Node dispara `unhandledRejection`. O
@@ -159,9 +190,13 @@ export function criarRunHandle<T>(peças: {
     result,
     signal,
     abort,
-    onEvent: (cb) => fila.assinar(cb),
+    onEvent: (cb) => eventos.assinar(cb),
     get eventStream() {
-      return fila.iterar();
+      return eventos.iterar();
+    },
+    onToken: (cb) => tokens.assinar(cb),
+    get textStream() {
+      return tokens.iterar();
     },
     then: (ok, err) => result.then(ok, err),
     catch: (aoFalhar) => result.catch(aoFalhar),

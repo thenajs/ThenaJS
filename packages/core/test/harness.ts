@@ -58,6 +58,8 @@ export class FakeProvider extends Providers {
     messages: Message[];
     tools: ToolType[];
     sampling?: SamplingParams;
+    /** O provider recebeu um sink de token nesta chamada? */
+    streaming?: boolean;
   }[] = [];
 
   private readonly fila: TurnoFalso[];
@@ -80,8 +82,9 @@ export class FakeProvider extends Providers {
     messages: Message[],
     sampling?: SamplingParams,
     signal?: AbortSignal,
+    onToken?: (token: string) => void,
   ): Promise<RawAssistant> {
-    this.chamadas.push({ messages, tools, sampling });
+    this.chamadas.push({ messages, tools, sampling, streaming: Boolean(onToken) });
 
     // O delay respeita o signal, como um `fetch` de verdade: sem isso o fake
     // não simula um provider cancelável, e teste de abort passaria por engano.
@@ -90,6 +93,15 @@ export class FakeProvider extends Providers {
     }
 
     const turno = this.fila.shift() ?? this.ultimo;
+
+    // Transmite palavra a palavra quando alguém está ouvindo, como um provider
+    // de verdade. Sem sink, devolve inteiro.
+    if (onToken && turno.content) {
+      for (const pedaco of turno.content.match(/\S+\s*/g) ?? []) {
+        onToken(pedaco);
+      }
+    }
+
     return {
       content: turno.content ?? "",
       toolCalls: turno.tool

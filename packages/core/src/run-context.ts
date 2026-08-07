@@ -51,6 +51,15 @@ export interface RunContext {
    * de agente e no `until` de cada loop — e repassado até o `fetch`.
    */
   signal?: AbortSignal;
+  /**
+   * Recebe cada pedaço de texto que o modelo produz, quando alguém está
+   * ouvindo. Herdado pelas runs aninhadas.
+   *
+   * Fica aqui, e não no recorder, porque token não é um passo da execução: não
+   * tem início, fim, duração nem status. Misturá-lo no `ExecutionEvent`
+   * poluiria o tipo e quebraria quem monta a árvore a partir dele.
+   */
+  onToken?: (token: string) => void;
 }
 
 /** As cadeias de middleware do usuário, por ponto de acoplamento. */
@@ -102,6 +111,7 @@ export interface RunContextOptions {
   runId?: string;
   middleware?: RunMiddleware;
   signal?: AbortSignal;
+  onToken?: (token: string) => void;
 }
 
 /**
@@ -117,6 +127,7 @@ export function newRunContext(options: RunContextOptions = {}): RunContext {
     budget: new BudgetTracker(options.budget),
     middleware: options.middleware ?? SEM_MIDDLEWARE,
     signal: options.signal,
+    onToken: options.onToken,
   };
 }
 
@@ -132,6 +143,7 @@ export function childRunContext(parent: RunContext, budget?: RunBudget): RunCont
     budget: new BudgetTracker(budget),
     middleware: parent.middleware,
     signal: parent.signal,
+    onToken: parent.onToken,
   };
 }
 

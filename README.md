@@ -763,6 +763,35 @@ O erro é o **nativo**, então dá para distinguir a causa:
 Cancelamento **não** passa pelo `onError` do agente: o hook existe para ele se
 recuperar de falha, e "alguém mandou parar" não é falha.
 
+#### Streaming: o texto à medida que sai
+
+`onToken` e `textStream` entregam o texto enquanto o modelo o produz, em vez de
+esperar a resposta inteira:
+
+```ts
+const exec = app.run({ input: { message: "explique X" } });
+
+for await (const pedaco of exec.textStream) {
+  process.stdout.write(pedaco);
+}
+
+const texto = await exec.result;   // o mesmo texto, inteiro
+```
+
+Ou por callback, que é o que costuma casar melhor com um socket:
+
+```ts
+exec.onToken((pedaco) => ws.send(pedaco));
+```
+
+É um canal **separado** do `onEvent`: token não é um passo da execução — não
+tem início, fim nem status. Quem assina atrasado recebe o texto que já saiu.
+
+> Funciona com Ollama e OpenAI. O que **liga** o streaming é haver alguém
+> ouvindo: sem sink, o provider faz a requisição normal. Um provider próprio
+> que ignore o `onToken` continua funcionando — o texto simplesmente chega
+> inteiro no `result`.
+
 #### POST responde na hora, cliente acompanha por SSE
 
 O `runId` síncrono e o buffer de eventos são o que tornam este padrão possível

@@ -115,6 +115,7 @@ export function buildAgentStep(
           tools,
           sampling: meta.sampling,
           signal: execucao.signal,
+          onToken: execucao.onToken,
           agent: instance,
           ctx: agentCtx,
           run: execucao,
@@ -131,6 +132,7 @@ export function buildAgentStep(
             messages: invocacao.messages,
             sampling: invocacao.sampling,
             signal: invocacao.signal,
+            onToken: invocacao.onToken,
           }),
         );
 
