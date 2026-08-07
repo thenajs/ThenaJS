@@ -5,7 +5,7 @@ import type { ThenaPlugin } from "./plugin.js";
 import type { ThenaConfig, LogConfig, ReportOptions } from "./config.js";
 import type { ExecutionEvent, ExecutionNode } from "./observability/recorder.js";
 import { ReportRecorder } from "./observability/recorder.js";
-import { writeReport } from "./observability/report.js";
+import { drenarIndices, writeReport } from "./observability/report.js";
 import { consoleLogger } from "./observability/logger.js";
 import { newRunContext, withRun } from "./run-context.js";
 import { Canal, criarRunHandle } from "./run-handle.js";
@@ -177,6 +177,11 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
       for (const { abort } of emVoo) abort(new Error("[thena] app encerrado"));
       await Promise.allSettled([...emVoo].map((r) => r.result));
       emVoo.clear();
+
+      // Depois de drenar as runs, porque cada uma que termina agenda um índice.
+      // O índice é escrito fora do caminho crítico; sem esta espera, quem lê
+      // `index.html` logo após o `dispose()` veria a versão anterior.
+      await drenarIndices();
 
       for (const plugin of plugins) {
         try {

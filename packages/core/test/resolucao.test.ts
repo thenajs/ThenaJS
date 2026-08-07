@@ -28,6 +28,91 @@ describe("provider", () => {
     ).resolves.toBe("da classe");
   });
 
+  it("o erro do construtor sobe intacto, não virado do avesso", async () => {
+    // O caso mais comum de todos: variável de ambiente faltando. O `TypeError`
+    // que sai daí era confundido com "não dava para chamar com `new`", e o que
+    // chegava ao usuário era uma mensagem sobre semântica de `new`.
+    class ProviderProprio extends FakeProvider {
+      constructor() {
+        super();
+        process.env.CHAVE_QUE_NAO_EXISTE!.trim();
+      }
+    }
+
+    const rodar = runWorkflow(
+      criarWorkflow([criarAgente({ provider: ProviderProprio })]),
+      "vai",
+    );
+
+    await expect(rodar).rejects.toThrow(/reading 'trim'/);
+    await expect(rodar).rejects.not.toThrow(/without 'new'/);
+  });
+
+  it("aceita uma factory declarada como `function`", async () => {
+    function fabricar() {
+      return new FakeProvider([{ content: "da factory" }]);
+    }
+
+    await expect(
+      runWorkflow(criarWorkflow([criarAgente({ provider: fabricar })]), "vai"),
+    ).resolves.toBe("da factory");
+  });
+
+  it("uma factory que falha não é executada duas vezes", async () => {
+    // `function` tem `prototype`, então a heurística antiga tentava `new` antes
+    // — e, quando o construtor lá dentro falhava, executava a factory de novo.
+    // Todo efeito colateral dela acontecia em dobro, por passo de agente.
+    let chamadas = 0;
+    function fabricar(): FakeProvider {
+      chamadas++;
+      return new (class extends FakeProvider {
+        constructor() {
+          super();
+          process.env.CHAVE_QUE_NAO_EXISTE!.trim();
+        }
+      })();
+    }
+
+    await expect(
+      runWorkflow(criarWorkflow([criarAgente({ provider: fabricar })]), "vai"),
+    ).rejects.toThrow(/reading 'trim'/);
+    expect(chamadas).toBe(1);
+  });
+
+  it("aceita uma arrow factory, chamada por execução", async () => {
+    let chamadas = 0;
+
+    await expect(
+      runWorkflow(
+        criarWorkflow([
+          criarAgente({
+            provider: () => {
+              chamadas++;
+              return new FakeProvider([{ content: "da arrow" }]);
+            },
+          }),
+        ]),
+        "vai",
+      ),
+    ).resolves.toBe("da arrow");
+    expect(chamadas).toBe(1);
+  });
+
+  it("uma classe que não estende Providers diz exatamente isso", async () => {
+    class ProviderSolto {
+      chat() {
+        return Promise.resolve("nunca");
+      }
+    }
+
+    await expect(
+      runWorkflow(
+        criarWorkflow([criarAgente({ provider: ProviderSolto as never })]),
+        "vai",
+      ),
+    ).rejects.toThrow(/ProviderSolto parece uma classe de provider/);
+  });
+
   it("a instância é compartilhada entre os passos que a declaram", async () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
 

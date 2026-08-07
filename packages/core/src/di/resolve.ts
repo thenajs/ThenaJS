@@ -6,29 +6,36 @@ import type { ProviderCtor, ProviderFactory, ProviderInput } from "../types.js";
  * Instância já configurada é usada direto; classe é instanciada; factory é
  * chamada.
  *
- * Distinguir classe de factory sem `new.target` exige heurística: uma classe
- * tem `prototype` com métodos próprios, uma arrow function não tem `prototype`
- * nenhum. Chamar uma classe sem `new` lança `TypeError`, então na dúvida o
- * `try` resolve — e o custo é uma vez por execução.
+ * Classe e factory se distinguem pela **cadeia de protótipo**, não por tentar
+ * `new` e ver o que acontece: todo provider estende `Providers`, então
+ * `fn.prototype instanceof Providers` responde sem executar nada. Arrow
+ * function e `async function` têm `prototype === undefined`, e `undefined
+ * instanceof` é `false` sem lançar.
+ *
+ * A heurística anterior era um `try { new fn() } catch (TypeError)`, e o corpo
+ * do construtor rodava dentro do `try`. Um `TypeError` do construtor do usuário
+ * — variável de ambiente faltando, config `undefined` desestruturada — era lido
+ * como "não dava para chamar com `new`", o erro real sumia, e o que subia era
+ * `Class constructor X cannot be invoked without 'new'`: uma mensagem sobre
+ * semântica de `new` para um problema de `.env`. Uma factory declarada como
+ * `function` (tem `prototype`) ainda por cima rodava duas vezes.
  */
 export function resolveProvider(input: ProviderInput): Providers {
   if (input instanceof Providers) return input;
 
   const fn = input as ProviderCtor | ProviderFactory;
+  if (fn.prototype instanceof Providers) return new (fn as ProviderCtor)();
 
-  // Arrow function não tem `prototype` — só pode ser factory.
-  if (!Object.prototype.hasOwnProperty.call(fn, "prototype")) {
-    return (fn as ProviderFactory)();
+  // Sem esta checagem, uma classe que não estende `Providers` cairia na branch
+  // de factory e morreria com a mesma mensagem enganosa de antes.
+  if (/^class[\s{]/.test(Function.prototype.toString.call(fn))) {
+    throw new Error(
+      `[thena] ${fn.name || "O provider"} parece uma classe de provider mas não ` +
+        `estende Providers. Estenda a classe base, ou passe uma instância.`,
+    );
   }
 
-  try {
-    return new (fn as ProviderCtor)();
-  } catch (err) {
-    // `function () { return new X() }` tem prototype mas não é construtor de
-    // provider; e uma factory comum chamada com `new` devolveria o objeto errado.
-    if (err instanceof TypeError) return (fn as ProviderFactory)();
-    throw err;
-  }
+  return (fn as ProviderFactory)();
 }
 
 /**

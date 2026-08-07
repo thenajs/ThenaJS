@@ -6,8 +6,8 @@ que `^0.x.y` as instale sozinho.
 
 ## [Não lançado]
 
-Duas correções no isolamento por execução, e o contexto da tool passando a
-alcançar a execução.
+Correções no isolamento por execução, no report e na resolução do provider, e o
+contexto da tool passando a alcançar a execução.
 
 ### Adicionado
 
@@ -111,6 +111,66 @@ alcançar a execução.
   extensões `.js` de sempre.
 
 ### Corrigido
+
+- **O erro do seu construtor de provider chega inteiro.** Para distinguir uma
+  classe de uma factory, o framework tentava `new SeuProvider()` e tratava
+  qualquer `TypeError` como "não dava para chamar com `new`". Só que o corpo do
+  construtor rodava dentro desse `try` — então o `TypeError` mais comum que
+  existe, o de uma variável de ambiente faltando, era confundido com o outro:
+
+  ```
+  antes:   Class constructor OpenAIProvider cannot be invoked without 'new'
+  agora:   Cannot read properties of undefined (reading 'apiKey')
+  ```
+
+  O erro de verdade era descartado, e o que sobrava mandava você depurar
+  semântica de `new` em vez de olhar o `.env`. Agora a distinção sai da cadeia de
+  protótipo (`fn.prototype instanceof Providers`), sem executar nada para
+  descobrir: o erro do construtor sobe intacto.
+
+  Duas consequências: uma factory declarada como `function` (e não como arrow)
+  **deixa de ser executada duas vezes** quando o provider dentro dela falha — o
+  `catch` a chamava de novo, e todo efeito colateral acontecia em dobro, por
+  passo de agente. E uma classe que não estende `Providers` passa a dizer isso,
+  em vez de ser instanciada em silêncio e falhar mais adiante.
+
+- **O report deixa de travar o event loop a cada run concluída.** O
+  `<dir>/index.html` era regenerado do zero toda vez: `readdirSync` da pasta e
+  `JSON.parse` de **todo** `report.json` histórico — árvores completas, com
+  prompts e respostas — para extrair cinco escalares por run. Síncrono, e antes
+  de a promise da run resolver, então toda requisição em voo do processo
+  atravessava a barreira. Medido, com 5.000 runs de ~40 KB na pasta:
+
+  ```
+  antes:   632 ms de event loop travado por run concluída
+  agora:   1,1 ms
+  ```
+
+  E era O(N²) ao longo da vida do processo: a run 5.000 lia 5.000 arquivos, a
+  10.000 lia 10.000. Num servidor de longa duração isso só piorava.
+
+  Agora a pasta de report ganha um **`runs.jsonl`** — um ledger append-only com
+  uma linha por run. O caminho crítico é um append dessa linha; o índice é
+  renderizado a partir do ledger, de forma assíncrona e coalescida (uma rajada
+  de runs vira um render só). Nenhuma árvore é reaberta.
+
+  Junto vieram três correções que caíram no mesmo lugar:
+
+  - **runs concorrentes não se apagam mais do índice.** Era um
+    read-modify-write sem coordenação — duas runs terminando juntas liam a
+    pasta e escreviam `index.html`, last-writer-wins. O append de uma linha
+    curta é atômico até entre processos;
+  - **o índice não pode mais ser lido pela metade.** A escrita é em arquivo
+    temporário e `rename`, em vez de um `writeFileSync` por cima do arquivo
+    vivo;
+  - **`format: "json"` entra no índice.** Ele só era atualizado no ramo de HTML,
+    então uma run sem HTML nunca aparecia. Agora aparece, linkando o
+    `report.json`.
+
+  Uma pasta de report que já existe não perde histórico: na primeira run do
+  formato novo ela é varrida uma vez para semear o ledger. Quem versiona ou
+  limpa essa pasta agora tem o `runs.jsonl` para considerar — apagá-lo só custa
+  uma nova varredura.
 
 - **Cancelamento no último passo deixava de ser notado.** O `signal` é checado
   *entre* passos, então um `abort()` durante o passo final não tinha mais

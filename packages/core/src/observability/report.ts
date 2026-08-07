@@ -1,16 +1,22 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFile, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExecutionNode } from "./recorder.js";
 import type { ReportOptions } from "../config.js";
 
-/** O resumo de uma run, lido de volta do disco para montar o índice. */
+/** O resumo de uma run — uma linha do ledger, e uma linha do índice. */
 interface ResumoDeRun {
   runId: string;
   nome: string;
   status: string;
   durationMs: number;
   startedAt: number;
+  /** A run gerou HTML? Decide se o índice linka `index.html` ou `report.json`. */
+  html: boolean;
 }
+
+/** O ledger append-only das runs, na raiz da pasta de report. */
+const LEDGER = "runs.jsonl";
 
 /**
  * Escreve o report (HTML e/ou JSON) e devolve o caminho principal.
@@ -18,6 +24,9 @@ interface ResumoDeRun {
  * Cada execução ganha a própria subpasta (`<dir>/<runId>/`). Antes o caminho
  * era fixo, e duas runs concorrentes sobrescreviam o report uma da outra.
  * O `<dir>/index.html` passa a ser um índice das runs.
+ *
+ * Continua síncrona de propósito: roda no `onComplete` do recorder, que é
+ * síncrono. O que **saiu** daqui é o índice — ver `agendarIndice`.
  */
 export function writeReport(
   root: ExecutionNode,
@@ -35,27 +44,165 @@ export function writeReport(
     writeFileSync(jsonPath, JSON.stringify(root, null, 2));
     main = jsonPath;
   }
-  if (format === "html" || format === "both") {
+  const html = format === "html" || format === "both";
+  if (html) {
     const htmlPath = join(dir, "index.html");
     writeFileSync(htmlPath, renderHtml(root));
     main = htmlPath;
-    escreverIndice(base);
   }
+
+  // Em qualquer formato: antes o índice só era atualizado no branch de HTML, e
+  // uma run em `format: "json"` nunca aparecia nele.
+  agendarIndice(base, {
+    runId,
+    nome: root.name,
+    status: root.status,
+    durationMs: root.durationMs ?? 0,
+    startedAt: root.startedAt,
+    html,
+  });
+
   return main;
 }
 
+// ---------- índice ----------
+
+/** Um worker de índice por pasta, e os appends que ele ainda não consumiu. */
+const trabalho = new Map<string, Promise<void>>();
+const sujo = new Map<string, Promise<unknown>[]>();
+/** Pastas já varridas atrás de runs anteriores ao ledger — uma vez cada. */
+const semeadas = new Set<string>();
+
 /**
- * Regenera o índice das runs a partir do que está no disco — sem estado
- * acumulado em memória, então funciona também entre processos diferentes.
+ * Registra a run no ledger e agenda o render do índice.
+ *
+ * O índice **não é mais reconstruído lendo as árvores**. Antes, cada run
+ * concluída fazia `readdirSync` da pasta e `JSON.parse` de todo `report.json`
+ * histórico — árvores completas, com prompts e respostas — para extrair cinco
+ * escalares por run. Síncrono, e no caminho crítico: medido, 632 ms de event
+ * loop travado por run concluída com 5.000 runs de ~40 KB na pasta, crescendo
+ * com a pasta. Num servidor de longa duração, toda requisição em voo atravessa
+ * essa barreira.
+ *
+ * Agora o caminho crítico é um `appendFile` de uma linha, e o render acontece
+ * fora dele. A escrita do ledger é atômica entre processos: uma linha curta com
+ * `O_APPEND` fica abaixo de `PIPE_BUF`, o que de quebra resolve o
+ * read-modify-write concorrente que havia aqui — duas runs terminando juntas
+ * liam a pasta e escreviam `index.html`, last-writer-wins.
+ *
+ * Um processo que morre sem `dispose()` pode perder o último render, mas não o
+ * dado: o append já aconteceu, e o próximo render inclui a run.
  */
-function escreverIndice(base: string): void {
+function agendarIndice(base: string, resumo: ResumoDeRun): void {
+  const registro = appendFile(join(base, LEDGER), `${JSON.stringify(resumo)}\n`).catch(
+    aviso,
+  );
+
+  const pendentes = sujo.get(base) ?? [];
+  pendentes.push(registro);
+  sujo.set(base, pendentes);
+
+  // Um worker por pasta. Se já há um rodando, ele vai encontrar esta linha na
+  // próxima volta — é o que faz uma rajada de runs virar um render só, em vez
+  // de um por run.
+  if (trabalho.has(base)) return;
+
+  const worker = (async () => {
+    while (sujo.has(base)) {
+      const appends = sujo.get(base)!;
+      sujo.delete(base);
+      // O ledger precisa estar completo antes de ser lido.
+      await Promise.allSettled(appends);
+      await renderizarIndice(base).catch(aviso);
+    }
+    // Sem `await` entre a condição do `while` e este delete: nada se intercala,
+    // então nenhum append fica órfão sem worker para consumi-lo.
+    trabalho.delete(base);
+  })();
+
+  trabalho.set(base, worker);
+}
+
+/** Report é observabilidade: um erro de I/O aqui não derruba a run. */
+function aviso(err: unknown): void {
+  console.error(`[thena] Não foi possível atualizar o índice do report:`, err);
+}
+
+/**
+ * Relê o ledger e reescreve o índice.
+ *
+ * A escrita é em arquivo temporário + `rename` — atômico no mesmo filesystem.
+ * O `writeFileSync` de antes permitia que um leitor pegasse HTML truncado.
+ */
+async function renderizarIndice(base: string): Promise<void> {
+  const linhas = await lerLedger(base);
+
+  // Dedup por runId: a última linha vence. Cobre uma run que reescreve o
+  // próprio report, e a semeadura de uma pasta anterior ao ledger.
+  const porId = new Map<string, ResumoDeRun>();
+  for (const resumo of linhas) porId.set(resumo.runId, resumo);
+
+  if (!semeadas.has(base)) {
+    semeadas.add(base);
+    for (const antiga of await semear(base, porId)) porId.set(antiga.runId, antiga);
+  }
+
+  const runs = [...porId.values()].sort((a, b) => b.startedAt - a.startedAt);
+
+  const tmp = join(base, `.index.${process.pid}.tmp`);
+  await writeFile(tmp, renderIndice(runs));
+  await rename(tmp, join(base, "index.html"));
+}
+
+/** O ledger, linha a linha. Pasta sem ledger ainda é uma lista vazia. */
+async function lerLedger(base: string): Promise<ResumoDeRun[]> {
+  let bruto: string;
+  try {
+    bruto = await readFile(join(base, LEDGER), "utf-8");
+  } catch {
+    return [];
+  }
+
+  const runs: ResumoDeRun[] = [];
+  for (const linha of bruto.split("\n")) {
+    if (!linha) continue;
+    try {
+      runs.push(JSON.parse(linha));
+    } catch {
+      // Linha truncada por uma queda no meio da escrita. Ignora e segue.
+    }
+  }
+  return runs;
+}
+
+/**
+ * Pasta de report anterior ao ledger: varre as subpastas uma vez e grava no
+ * ledger as runs que faltam, para o histórico não sumir do índice na primeira
+ * run do formato novo.
+ *
+ * É o custo que era pago a cada run — pago aqui **uma vez por pasta e por
+ * processo**, e fora do caminho crítico. Numa pasta já convertida, é um
+ * `readdir` e nenhuma leitura: tudo que está lá já está no ledger.
+ */
+async function semear(
+  base: string,
+  conhecidas: Map<string, ResumoDeRun>,
+): Promise<ResumoDeRun[]> {
   const runs: ResumoDeRun[] = [];
 
-  for (const entrada of readdirSync(base, { withFileTypes: true })) {
+  let entradas;
+  try {
+    entradas = await readdir(base, { withFileTypes: true });
+  } catch {
+    return runs;
+  }
+
+  for (const entrada of entradas) {
     if (!entrada.isDirectory()) continue;
+    if (conhecidas.has(entrada.name)) continue;
     try {
       const node: ExecutionNode = JSON.parse(
-        readFileSync(join(base, entrada.name, "report.json"), "utf-8"),
+        await readFile(join(base, entrada.name, "report.json"), "utf-8"),
       );
       runs.push({
         runId: entrada.name,
@@ -63,6 +210,9 @@ function escreverIndice(base: string): void {
         status: node.status,
         durationMs: node.durationMs ?? 0,
         startedAt: node.startedAt,
+        // Sem como saber o formato de uma run antiga sem um `stat` a mais por
+        // subpasta. `true` reproduz o link que o índice antigo gerava.
+        html: true,
       });
     } catch {
       // Subpasta sem report.json legível (run em andamento, formato "html",
@@ -70,8 +220,24 @@ function escreverIndice(base: string): void {
     }
   }
 
-  runs.sort((a, b) => b.startedAt - a.startedAt);
-  writeFileSync(join(base, "index.html"), renderIndice(runs));
+  if (runs.length) {
+    await appendFile(
+      join(base, LEDGER),
+      runs.map((r) => `${JSON.stringify(r)}\n`).join(""),
+    );
+  }
+  return runs;
+}
+
+/**
+ * Espera os índices pendentes. O `dispose()` do app chama isto: sem ele, um
+ * teste — ou um CLI — que lê `index.html` logo depois da run veria o arquivo
+ * anterior.
+ */
+export async function drenarIndices(): Promise<void> {
+  // Um worker se remove do mapa antes de resolver, então o laço só dá outra
+  // volta se trabalho novo chegou durante a espera.
+  while (trabalho.size) await Promise.allSettled([...trabalho.values()]);
 }
 
 // ---------- helpers ----------
@@ -279,7 +445,9 @@ function renderHtml(root: ExecutionNode): string {
 function renderIndice(runs: ResumoDeRun[]): string {
   const linhas = runs
     .map(
-      (r) => `<a class="run" href="./${esc(r.runId)}/index.html">
+      (
+        r,
+      ) => `<a class="run" href="./${esc(r.runId)}/${r.html ? "index.html" : "report.json"}">
       <span class="name">${esc(r.nome)}</span>
       <span class="dur">${ms(r.durationMs)}</span>
       ${r.status === "error" ? '<span class="err">erro</span>' : ""}
