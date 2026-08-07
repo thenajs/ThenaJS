@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build": "tsc -b tsconfig.build.json && npm run build:ui --workspace @thenajs/flow",
-    "clean": "tsc -b tsconfig.build.json --clean",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:types": "tsc --noEmit -p tsconfig.test.json",
@@ -18,7 +18,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "build:clean": "npm run clean && npm run build"
   },
   "dependencies": {
     "@thenajs/core": "*",

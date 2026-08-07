@@ -4,10 +4,39 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
-## [Não lançado]
+## [0.9.0] — 2026-08-07
 
-Correções no isolamento por execução, no report e na resolução do provider, e o
-contexto da tool passando a alcançar a execução.
+Isolamento por execução, cancelamento, streaming, custo e configuração por
+execução. É a release que torna o ThenaJS utilizável em processo de longa
+duração: antes, o framework guardava três estados mutáveis no escopo de módulo,
+e duas runs concorrentes se sobrescreviam — um servidor HTTP que chamasse
+`app.run()` por request estava quebrado, e uma suíte de testes não tinha como
+existir sem os testes se contaminarem.
+
+Consolida o que ficou em três marcos de desenvolvimento (`0.7.0`, `0.8.0` e o
+trabalho seguinte) e nunca chegou ao npm: quem instalou até aqui está na
+`0.6.0`, então esta é a primeira release que vê tudo isso.
+
+### ⚠️ Quebras desde a 0.6.0
+
+São cinco. Nenhuma atinge quem tem `^0.6.0` no `package.json` — em `0.x` o
+caret não sobe minor —, mas todas atingem quem instalar novo ou subir de versão
+de propósito.
+
+| O quê | O que fazer |
+| --- | --- |
+| `app.run()` **rejeita** em vez de engolir o erro | trate a rejeição; antes a falha sumia |
+| `app.run()` devolve `RunHandle`, não `Promise` | `await` continua funcionando; `.then().catch()` encadeado não |
+| O report vai para `<dir>/<runId>/`, não `<dir>/` | ajuste caminho em script/CI que lia `report/index.html` |
+| O orçamento vale **dentro** das runs aninhadas | passe `budget` explícito ao `runtime.run()` se quiser teto próprio |
+| A execução só é observada quando alguém observa | use `run({ observe: true })` se usa `onEvent`/`onToken` sem `report`, `log` nem plugin |
+
+Continuam funcionando, como alias: `bootstrapWorkflow` (use `Thena.create`) e
+`AgentContext` (use `Context`).
+
+O `thena create` passa a gerar projeto CommonJS, no padrão do `nest new` — o que
+muda só projeto novo. E o `engines` de todos os pacotes pede **Node ≥ 20.19**,
+versão em que `require()` de ESM a partir de CommonJS entrou.
 
 ### Adicionado
 
@@ -110,129 +139,6 @@ contexto da tool passando a alcançar a execução.
   Projetos existentes não precisam mudar: ESM continua funcionando, com as
   extensões `.js` de sempre.
 
-### Corrigido
-
-- **O erro do seu construtor de provider chega inteiro.** Para distinguir uma
-  classe de uma factory, o framework tentava `new SeuProvider()` e tratava
-  qualquer `TypeError` como "não dava para chamar com `new`". Só que o corpo do
-  construtor rodava dentro desse `try` — então o `TypeError` mais comum que
-  existe, o de uma variável de ambiente faltando, era confundido com o outro:
-
-  ```
-  antes:   Class constructor OpenAIProvider cannot be invoked without 'new'
-  agora:   Cannot read properties of undefined (reading 'apiKey')
-  ```
-
-  O erro de verdade era descartado, e o que sobrava mandava você depurar
-  semântica de `new` em vez de olhar o `.env`. Agora a distinção sai da cadeia de
-  protótipo (`fn.prototype instanceof Providers`), sem executar nada para
-  descobrir: o erro do construtor sobe intacto.
-
-  Duas consequências: uma factory declarada como `function` (e não como arrow)
-  **deixa de ser executada duas vezes** quando o provider dentro dela falha — o
-  `catch` a chamava de novo, e todo efeito colateral acontecia em dobro, por
-  passo de agente. E uma classe que não estende `Providers` passa a dizer isso,
-  em vez de ser instanciada em silêncio e falhar mais adiante.
-
-- **O report deixa de travar o event loop a cada run concluída.** O
-  `<dir>/index.html` era regenerado do zero toda vez: `readdirSync` da pasta e
-  `JSON.parse` de **todo** `report.json` histórico — árvores completas, com
-  prompts e respostas — para extrair cinco escalares por run. Síncrono, e antes
-  de a promise da run resolver, então toda requisição em voo do processo
-  atravessava a barreira. Medido, com 5.000 runs de ~40 KB na pasta:
-
-  ```
-  antes:   632 ms de event loop travado por run concluída
-  agora:   1,1 ms
-  ```
-
-  E era O(N²) ao longo da vida do processo: a run 5.000 lia 5.000 arquivos, a
-  10.000 lia 10.000. Num servidor de longa duração isso só piorava.
-
-  Agora a pasta de report ganha um **`runs.jsonl`** — um ledger append-only com
-  uma linha por run. O caminho crítico é um append dessa linha; o índice é
-  renderizado a partir do ledger, de forma assíncrona e coalescida (uma rajada
-  de runs vira um render só). Nenhuma árvore é reaberta.
-
-  Junto vieram três correções que caíram no mesmo lugar:
-
-  - **runs concorrentes não se apagam mais do índice.** Era um
-    read-modify-write sem coordenação — duas runs terminando juntas liam a
-    pasta e escreviam `index.html`, last-writer-wins. O append de uma linha
-    curta é atômico até entre processos;
-  - **o índice não pode mais ser lido pela metade.** A escrita é em arquivo
-    temporário e `rename`, em vez de um `writeFileSync` por cima do arquivo
-    vivo;
-  - **`format: "json"` entra no índice.** Ele só era atualizado no ramo de HTML,
-    então uma run sem HTML nunca aparecia. Agora aparece, linkando o
-    `report.json`.
-
-  Uma pasta de report que já existe não perde histórico: na primeira run do
-  formato novo ela é varrida uma vez para semear o ledger. Quem versiona ou
-  limpa essa pasta agora tem o `runs.jsonl` para considerar — apagá-lo só custa
-  uma nova varredura.
-
-- **Cancelamento no último passo deixava de ser notado.** O `signal` é checado
-  *entre* passos, então um `abort()` durante o passo final não tinha mais
-  ninguém para percebê-lo e a run resolvia normalmente. Agora há uma checagem
-  ao fim do workflow — cancelamento ignorado em silêncio é pior do que não ter
-  cancelamento.
-
-- ⚠️ **O orçamento de uma run vale dentro das runs aninhadas.** Um sub-workflow
-  disparado por uma tool recebia um `BudgetTracker` **novo e vazio**, ou seja,
-  ficava sem teto nenhum. Na prática `maxCostUsd`/`maxTokens`/`maxChatCalls`
-  eram contornáveis por qualquer agente com uma tool que disparasse workflow, e
-  o gasto de dentro não aparecia em lugar nenhum. Uma recursão (workflow → tool
-  → o mesmo workflow) não tinha freio algum.
-
-  Agora, sem `budget` próprio, a run aninhada **usa o tracker do pai**; com
-  `budget` próprio, ganha um encadeado — conta nos dois, e corta quem estourar
-  primeiro. O `mode` que decide entre parar e lançar é o de quem estourou.
-
-  Junto vieram duas mudanças necessárias para o teto funcionar de fato:
-
-  - a chamada ao modelo passa a ser contada **na ida**, e só o consumo
-    (tokens/custo) na volta. Uma tool executa *dentro* de `provider.chat`, e
-    contar só na volta deixava o contador em zero durante toda a descida de uma
-    recursão;
-  - `BudgetExceededError` e **cancelamento** deixam de virar observação de tool.
-    Uma tool que dispara sub-workflow fazia o aviso de "acabou o orçamento" (ou
-    o abort) voltar para o modelo **como texto**, e a run seguia.
-
-  Se você dependia de um sub-workflow com orçamento ilimitado, passe um `budget`
-  explícito para ele em `runtime.run(Fluxo, { budget })`.
-
-- ⚠️ **A execução só é observada quando alguém observa.** O `RunHandle` era
-  ligado ao recorder em toda run, o que mantinha o recorder sempre ativo: a
-  árvore inteira construída, dois `ExecutionEvent` por passo alocados e
-  bufferizados, e o provider recebendo um sink de token — logo pedindo resposta
-  em **streaming** — mesmo sem ninguém ler nada. Medido: ~2,2× o tempo de CPU
-  por run, e ~13 KB retidos por handle vivo.
-
-  Agora a observação liga sozinha com `report`, `log` ou um plugin com
-  `onEvent`. Sem nenhum deles, a run não constrói árvore, não emite evento e não
-  transmite — o caminho de custo zero que a documentação promete.
-
-  **Quem usa `exec.onEvent`/`eventStream`/`onToken`/`textStream` sem `report`,
-  `log` nem plugin precisa pedir a observação:**
-
-  ```ts
-  const exec = app.run({ input, observe: true });
-  for await (const e of exec.eventStream) sse(e);
-  ```
-
-  Um handle mudo avisa uma vez no console dizendo exatamente isso, em vez de
-  ficar em silêncio.
-
-## [0.8.0] — 2026-08-07
-
-Streaming, cancelamento, custo, configuração por execução e segurança.
-`app.run()` deixa de ser uma `Promise` e passa a devolver a **execução**.
-
-**Release com uma quebra** — o retorno do `app.run()`, que continua funcionando
-com `await`.
-
-### Adicionado
 
 - ⚠️ **`app.run()` devolve um `RunHandle`**, de forma síncrona. Com `await`
   você pede o resultado; sem `await`, a execução:
@@ -365,55 +271,6 @@ com `await`.
   quem escreve um provider com streaming. Resolvem o que é chato: um chunk da
   rede não respeita fronteira de linha nem de caractere UTF-8.
 
-### Corrigido
-
-- **`stripThinkTags` apagava a resposta inteira** quando o texto continha uma
-  tag de prefixo parecido — `<thinker>`, `<thoughts>`, `<reasoningEngine>`. O
-  padrão casava `<think` e tratava o resto como atributo; a segunda regex, que
-  vai até o fim do texto, comia tudo. Sem erro, sem aviso: só resposta vazia.
-- **`transport.ts` descartava o timeout** quando um `signal` vinha de fora
-  (`init.signal ?? timeout`). Agora é `AbortSignal.any`.
-- **Um abort era retentado** — `isRetryableByDefault` tratava qualquer erro sem
-  status como transitório. Novo `isAbortError`.
-- **O backoff não era cancelável**: um abort no meio esperava os 8s antes de
-  perceber.
-- **`zod` era `dependencies`** em `agentflow` e `tools`, em vez de
-  `peerDependencies`. O usuário criava o schema com um zod e o framework
-  chamava `z.toJSONSchema()` com outro.
-
-### Alterado
-
-- **`app.dispose()` drena**: aborta as execuções em voo e espera elas soltarem
-  antes de encerrar os plugins.
-- **`z.toJSONSchema` é memoizada** por schema, num WeakMap. Rodava a cada
-  requisição: com 10 tools e 20 turnos, 200 conversões onde bastavam 10.
-- Ids dos nós do report viraram contador em vez de `randomUUID()` por nó. O
-  `runId` segue UUID.
-- `engines: { node: ">=20" }` declarado em todos os pacotes.
-
-### Infraestrutura
-
-- **367 testes** (eram 143), incluindo os módulos do engine que eram pura
-  heurística sem verificação — os 5 parsers de JSON, a normalização de envelope
-  de tool call e o retry.
-- **Régua de performance**: 14 testes que medem contagem de round-trips, tokens
-  enviados, estabilidade do prefixo do prompt e trabalho repetido. Protegem o
-  que regride em silêncio.
-- ESLint, Prettier e `.editorconfig`, rodando no CI.
-- `README.md` em `@thenajs/core` e `@thenajs/agentflow`, mais `SECURITY.md` e
-  `CONTRIBUTING.md`.
-
-## [0.7.0] — 2026-08-06
-
-Isolamento por execução. O framework guardava três estados mutáveis no escopo de
-módulo, então duas runs concorrentes se sobrescreviam — um servidor HTTP que
-chamasse `app.run()` por request estava quebrado, e uma suíte de testes não
-tinha como existir sem os testes se contaminarem.
-
-**Release com quebras pontuais** — duas, ambas na saída do `app.run()` e no
-caminho do report. O resto da API não mudou de forma.
-
-### Adicionado
 
 - **Middlewares em `ThenaPlugin`.** Além de observar com `onEvent`, um plugin
   agora **intercepta**: `tool` envolve cada execução de tool e `chat` cada
@@ -494,6 +351,15 @@ caminho do report. O resto da API não mudou de forma.
 
 ### Alterado
 
+- **`app.dispose()` drena**: aborta as execuções em voo e espera elas soltarem
+  antes de encerrar os plugins.
+- **`z.toJSONSchema` é memoizada** por schema, num WeakMap. Rodava a cada
+  requisição: com 10 tools e 20 turnos, 200 conversões onde bastavam 10.
+- Ids dos nós do report viraram contador em vez de `randomUUID()` por nó. O
+  `runId` segue UUID.
+- `engines: { node: ">=20" }` declarado em todos os pacotes.
+
+
 - ⚠️ **Falha de tool virou observação por padrão, e `toolErrors` deixou de
   existir.** Antes, um `throw` do `execute` derrubava a run a menos que você
   descobrisse o flag `toolErrors: "observe"`.
@@ -544,6 +410,134 @@ caminho do report. O resto da API não mudou de forma.
 
 ### Corrigido
 
+- **O erro do seu construtor de provider chega inteiro.** Para distinguir uma
+  classe de uma factory, o framework tentava `new SeuProvider()` e tratava
+  qualquer `TypeError` como "não dava para chamar com `new`". Só que o corpo do
+  construtor rodava dentro desse `try` — então o `TypeError` mais comum que
+  existe, o de uma variável de ambiente faltando, era confundido com o outro:
+
+  ```
+  antes:   Class constructor OpenAIProvider cannot be invoked without 'new'
+  agora:   Cannot read properties of undefined (reading 'apiKey')
+  ```
+
+  O erro de verdade era descartado, e o que sobrava mandava você depurar
+  semântica de `new` em vez de olhar o `.env`. Agora a distinção sai da cadeia de
+  protótipo (`fn.prototype instanceof Providers`), sem executar nada para
+  descobrir: o erro do construtor sobe intacto.
+
+  Duas consequências: uma factory declarada como `function` (e não como arrow)
+  **deixa de ser executada duas vezes** quando o provider dentro dela falha — o
+  `catch` a chamava de novo, e todo efeito colateral acontecia em dobro, por
+  passo de agente. E uma classe que não estende `Providers` passa a dizer isso,
+  em vez de ser instanciada em silêncio e falhar mais adiante.
+
+- **O report deixa de travar o event loop a cada run concluída.** O
+  `<dir>/index.html` era regenerado do zero toda vez: `readdirSync` da pasta e
+  `JSON.parse` de **todo** `report.json` histórico — árvores completas, com
+  prompts e respostas — para extrair cinco escalares por run. Síncrono, e antes
+  de a promise da run resolver, então toda requisição em voo do processo
+  atravessava a barreira. Medido, com 5.000 runs de ~40 KB na pasta:
+
+  ```
+  antes:   632 ms de event loop travado por run concluída
+  agora:   1,1 ms
+  ```
+
+  E era O(N²) ao longo da vida do processo: a run 5.000 lia 5.000 arquivos, a
+  10.000 lia 10.000. Num servidor de longa duração isso só piorava.
+
+  Agora a pasta de report ganha um **`runs.jsonl`** — um ledger append-only com
+  uma linha por run. O caminho crítico é um append dessa linha; o índice é
+  renderizado a partir do ledger, de forma assíncrona e coalescida (uma rajada
+  de runs vira um render só). Nenhuma árvore é reaberta.
+
+  Junto vieram três correções que caíram no mesmo lugar:
+
+  - **runs concorrentes não se apagam mais do índice.** Era um
+    read-modify-write sem coordenação — duas runs terminando juntas liam a
+    pasta e escreviam `index.html`, last-writer-wins. O append de uma linha
+    curta é atômico até entre processos;
+  - **o índice não pode mais ser lido pela metade.** A escrita é em arquivo
+    temporário e `rename`, em vez de um `writeFileSync` por cima do arquivo
+    vivo;
+  - **`format: "json"` entra no índice.** Ele só era atualizado no ramo de HTML,
+    então uma run sem HTML nunca aparecia. Agora aparece, linkando o
+    `report.json`.
+
+  Uma pasta de report que já existe não perde histórico: na primeira run do
+  formato novo ela é varrida uma vez para semear o ledger. Quem versiona ou
+  limpa essa pasta agora tem o `runs.jsonl` para considerar — apagá-lo só custa
+  uma nova varredura.
+
+- **Cancelamento no último passo deixava de ser notado.** O `signal` é checado
+  *entre* passos, então um `abort()` durante o passo final não tinha mais
+  ninguém para percebê-lo e a run resolvia normalmente. Agora há uma checagem
+  ao fim do workflow — cancelamento ignorado em silêncio é pior do que não ter
+  cancelamento.
+
+- ⚠️ **O orçamento de uma run vale dentro das runs aninhadas.** Um sub-workflow
+  disparado por uma tool recebia um `BudgetTracker` **novo e vazio**, ou seja,
+  ficava sem teto nenhum. Na prática `maxCostUsd`/`maxTokens`/`maxChatCalls`
+  eram contornáveis por qualquer agente com uma tool que disparasse workflow, e
+  o gasto de dentro não aparecia em lugar nenhum. Uma recursão (workflow → tool
+  → o mesmo workflow) não tinha freio algum.
+
+  Agora, sem `budget` próprio, a run aninhada **usa o tracker do pai**; com
+  `budget` próprio, ganha um encadeado — conta nos dois, e corta quem estourar
+  primeiro. O `mode` que decide entre parar e lançar é o de quem estourou.
+
+  Junto vieram duas mudanças necessárias para o teto funcionar de fato:
+
+  - a chamada ao modelo passa a ser contada **na ida**, e só o consumo
+    (tokens/custo) na volta. Uma tool executa *dentro* de `provider.chat`, e
+    contar só na volta deixava o contador em zero durante toda a descida de uma
+    recursão;
+  - `BudgetExceededError` e **cancelamento** deixam de virar observação de tool.
+    Uma tool que dispara sub-workflow fazia o aviso de "acabou o orçamento" (ou
+    o abort) voltar para o modelo **como texto**, e a run seguia.
+
+  Se você dependia de um sub-workflow com orçamento ilimitado, passe um `budget`
+  explícito para ele em `runtime.run(Fluxo, { budget })`.
+
+- ⚠️ **A execução só é observada quando alguém observa.** O `RunHandle` era
+  ligado ao recorder em toda run, o que mantinha o recorder sempre ativo: a
+  árvore inteira construída, dois `ExecutionEvent` por passo alocados e
+  bufferizados, e o provider recebendo um sink de token — logo pedindo resposta
+  em **streaming** — mesmo sem ninguém ler nada. Medido: ~2,2× o tempo de CPU
+  por run, e ~13 KB retidos por handle vivo.
+
+  Agora a observação liga sozinha com `report`, `log` ou um plugin com
+  `onEvent`. Sem nenhum deles, a run não constrói árvore, não emite evento e não
+  transmite — o caminho de custo zero que a documentação promete.
+
+  **Quem usa `exec.onEvent`/`eventStream`/`onToken`/`textStream` sem `report`,
+  `log` nem plugin precisa pedir a observação:**
+
+  ```ts
+  const exec = app.run({ input, observe: true });
+  for await (const e of exec.eventStream) sse(e);
+  ```
+
+  Um handle mudo avisa uma vez no console dizendo exatamente isso, em vez de
+  ficar em silêncio.
+
+
+- **`stripThinkTags` apagava a resposta inteira** quando o texto continha uma
+  tag de prefixo parecido — `<thinker>`, `<thoughts>`, `<reasoningEngine>`. O
+  padrão casava `<think` e tratava o resto como atributo; a segunda regex, que
+  vai até o fim do texto, comia tudo. Sem erro, sem aviso: só resposta vazia.
+- **`transport.ts` descartava o timeout** quando um `signal` vinha de fora
+  (`init.signal ?? timeout`). Agora é `AbortSignal.any`.
+- **Um abort era retentado** — `isRetryableByDefault` tratava qualquer erro sem
+  status como transitório. Novo `isAbortError`.
+- **O backoff não era cancelável**: um abort no meio esperava os 8s antes de
+  perceber.
+- **`zod` era `dependencies`** em `agentflow` e `tools`, em vez de
+  `peerDependencies`. O usuário criava o schema com um zod e o framework
+  chamava `z.toJSONSchema()` com outro.
+
+
 - O `memory` do `ThenaConfig` era resolvido na **compilação** dos passos, que
   acontecia fora do escopo da execução. Com o `RunContext`, a compilação passou
   para dentro do escopo; fora dele, o runtime agora falha alto em vez de cair
@@ -558,6 +552,18 @@ caminho do report. O resto da API não mudou de forma.
   `@thenajs/core`. Idem `budget()` / `withBudget()`, absorvidos pelo
   `RunContext`, e `ReportRecorder.capturarConteudo()`, que existia só para
   mutar um recorder compartilhado depois do fato.
+
+### Infraestrutura
+
+- **367 testes** (eram 143), incluindo os módulos do engine que eram pura
+  heurística sem verificação — os 5 parsers de JSON, a normalização de envelope
+  de tool call e o retry.
+- **Régua de performance**: 14 testes que medem contagem de round-trips, tokens
+  enviados, estabilidade do prefixo do prompt e trabalho repetido. Protegem o
+  que regride em silêncio.
+- ESLint, Prettier e `.editorconfig`, rodando no CI.
+- `README.md` em `@thenajs/core` e `@thenajs/agentflow`, mais `SECURITY.md` e
+  `CONTRIBUTING.md`.
 
 ## [0.6.0] — 2026-08-04
 
