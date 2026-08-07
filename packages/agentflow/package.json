@@ -1,7 +1,7 @@
 {
   "name": "@thenajs/agentflow",
   "version": "0.6.0",
-  "description": "Engine de execu\u00e7\u00e3o do ThenaJS: pipeline, providers (Ollama/OpenAI), estado e tools (Zod).",
+  "description": "Engine de execução do ThenaJS: pipeline, providers (Ollama/OpenAI), estado e tools (Zod).",
   "license": "MIT",
   "author": "castroneto",
   "repository": {
@@ -17,7 +17,8 @@
     ".": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
