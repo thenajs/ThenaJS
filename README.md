@@ -692,10 +692,10 @@ O ponto de entrada da aplicação fica em `src/main.ts`:
 
 ```ts
 // src/main.ts
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 
-const app = await bootstrapWorkflow(ExplorerWorkflow);
+const app = Thena.create(ExplorerWorkflow);
 
 const saida = await app.run({
   input: { message: "Olá" },
@@ -705,7 +705,7 @@ const saida = await app.run({
 console.log(saida);
 ```
 
-`bootstrapWorkflow(WorkflowClass)` devolve um `app`; `app.run({ input, memory })`
+`Thena.create(WorkflowClass)` devolve um `app`; `app.run({ input, memory })`
 executa o workflow e devolve a **execução** — que, com `await`, resolve na
 saída. Um erro **rejeita** — nada é engolido, nada é impresso e o
 `process.exitCode` não é tocado: o que fazer com a falha é decisão da
@@ -844,7 +844,7 @@ apps diferentes no mesmo processo — não se contaminam, o que torna o `app`
 utilizável dentro de um servidor:
 
 ```ts
-const app = await bootstrapWorkflow(ChatWorkflow, config);
+const app = Thena.create(ChatWorkflow, config);
 
 server.post("/chat", async (req, res) => {
   res.json({ resposta: await app.run({ input: req.body }) });
@@ -1039,7 +1039,7 @@ class ExplorerAgent implements AgentHooks {
 
 ## Report de execução
 
-O `bootstrapWorkflow` aceita um `config`. Com `report: true`, ao final da run é
+O `Thena.create` aceita um `config`. Com `report: true`, ao final da run é
 gerado um **report estilo Playwright** (HTML + JSON) em `report/<runId>/`, com a
 árvore da execução (`workflow → loop / parallel → agent → chat → tool`), durações,
 status e o conteúdo de cada passo (o que foi enviado ao modelo, a resposta, a
@@ -1059,7 +1059,7 @@ export const config: ThenaConfig = {
 };
 
 // src/main.ts
-const app = await bootstrapWorkflow(ExplorerWorkflow, config);
+const app = Thena.create(ExplorerWorkflow, config);
 ```
 
 Rode `npm start` e abra **`report/index.html`** — o índice das execuções, que
@@ -1097,25 +1097,24 @@ o modelo não achar que a conversa começou ali e repetir trabalho já feito.
 > default trocaria uma falha ruidosa e cara por uma degradação muda. Meça
 > primeiro — o nó `chat` do report traz `promptTokens`.
 
-### Multi-tenant: configuração por execução
+### Configuração por execução
 
-O `provider` do `@Agent` aceita uma **factory chamada por execução**, então
-chave, modelo e endpoint podem variar por tenant:
+O `provider` do `@Agent` aceita uma **factory chamada por execução**, dentro do
+escopo da run. Ela lê `context()`, então chave, modelo e endpoint podem sair
+dos dados daquela execução:
 
 ```ts
-import { currentRun } from "@thenajs/core";
+import { context } from "@thenajs/core";
 
 @Agent({
-  provider: () => new OpenAIProvider({
-    apiKey: chaveDe(currentRun().data.tenant as string),
-  }),
+  provider: () => new OpenAIProvider({ apiKey: minhaChave(context().data) }),
   prompt: "./a.agent.md",
 })
 export class MeuAgente {}
 ```
 
 ```ts
-await app.run({ input, data: { tenant: "acme" } });
+await app.run({ input, data: { contaId: "acme", regiao: "sa-east-1" } });
 ```
 
 `data` é o canal de dados da execução — e a diferença para o `memory` é
@@ -1126,9 +1125,16 @@ importante:
 | `run({ memory })` | **sim** (vira mensagem `system`) | sim |
 | `run({ data })` | não | não |
 
-Use `memory` para contexto que o modelo **deve** ler; `data` para tenant,
-credencial e id de usuário. Os dois são herdados por sub-workflows, e `data`
-chega no `ctx`, alcançável por `@context()` numa tool.
+Use `memory` para o contexto que o modelo **deve** ler; `data` para o que a
+execução carrega e o modelo não deve ver. Os dois são herdados por
+sub-workflows, e `data` chega no `ctx`, alcançável por `@context()` numa tool.
+
+> **O framework não interpreta o `data`.** Ele transporta, propaga e mantém
+> fora do modelo — nada além disso. Não existe `tenantId`, `userId` nem campo
+> nomeado equivalente, e isso é decisão de projeto: o eixo pelo qual você separa
+> execuções — conta, ambiente, região, usuário — é do seu domínio, não do
+> framework. As três formas do `provider` (instância, classe, factory) são o
+> mecanismo de escopo; o significado é seu.
 
 ### O que vai para o disco
 

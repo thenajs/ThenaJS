@@ -90,24 +90,25 @@ export class MeuProvider extends OpenAIProvider {
 }
 ```
 
-Para chave **por tenant**, o `provider` do `@Agent` aceita uma factory chamada
-por execução:
+Para a chave variar **por execução** — uma conta, um ambiente, uma região —, o
+`provider` do `@Agent` aceita uma factory chamada dentro do escopo da run:
 
 ```ts
 @Agent({
-  provider: () => new OpenAIProvider({
-    apiKey: chaveDe(currentRun().data.tenant as string),
-  }),
+  provider: () => new OpenAIProvider({ apiKey: minhaChave(context().data) }),
   prompt: "./a.agent.md",
 })
 ```
 
-E use `run({ data })` — **não** `run({ memory })` — para passar tenant, id de
-usuário ou credencial. O `memory` é serializado direto na mensagem `system`:
-tudo que vai nele o modelo lê e o report grava. O `data` não sai do processo.
+E use `run({ data })` — **não** `run({ memory })` — para passar credencial ou
+qualquer identificador que o modelo não deva ver. O `memory` é serializado
+direto na mensagem `system`: tudo que vai nele o modelo lê e o report grava. O
+`data` não sai do processo.
 
 Uma ressalva: os `VectorStore` continuam instanciados **uma vez por app**, no
-bootstrap. Um store por tenant exige memoização em user-land.
+bootstrap, e não têm resolução por execução. Se você precisa de coleções
+separadas por algum critério, a separação é feita em user-land — hoje o
+framework não oferece esse ponto de extensão (está no ROADMAP).
 
 ### Custo é uma superfície de risco
 

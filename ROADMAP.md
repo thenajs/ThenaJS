@@ -53,7 +53,7 @@ O que ela rendeu além do previsto:
 - **Duas dívidas ficaram visíveis** como aviso do ESLint, com o motivo no
   config: `no-explicit-any` (24) e `no-unsafe-function-type` (19). A segunda
   merece tarefa própria — introduzir um `ClassLike` e trocar 19 assinaturas,
-  várias públicas, porque hoje `bootstrapWorkflow(() => {})` compila.
+  várias públicas, porque hoje `Thena.create(() => {})` compila.
 - **`SECURITY.md`** virou mais que canal de reporte: documenta o report gravando
   a conversa em disco, a `ShellTool` sem sandbox, a ausência de defesa contra
   prompt injection e o custo como superfície de risco.
@@ -247,14 +247,19 @@ tool reinventa o mesmo corte, é sinal de que falta no framework.
 
 ---
 
-## ~~Fase G~~ — Configuração injetável (multi-tenant) ✅
+## ~~Fase G~~ — Configuração por execução ✅
 
 **~2 dias · depende de C**
 
 O provider é resolvido do decorator, e `new ProviderCtor()` é chamado **sem
 argumentos** — com credenciais fixas na subclasse. `VectorStoreCtor` tem o mesmo
-problema. Não há como injetar chave de secret manager, escolher modelo por
-tenant, ou mockar provider no teste do usuário.
+problema. Não há como injetar chave de secret manager, variar o modelo conforme
+a execução, ou mockar provider no teste do usuário.
+
+> **Escopo, não multi-tenancy.** O que a fase entrega é o mecanismo — resolver
+> configuração dentro do escopo da run. Multi-tenancy é *uma* aplicação dele,
+> ao lado de dev/prod, região e usuário. O framework não nomeia nenhuma: ver
+> "Sobre conceitos de domínio", no fim deste documento.
 
 Escopo:
 
@@ -262,7 +267,7 @@ Escopo:
 - `VectorStoreCtor` aceitando credenciais;
 - `run({ context })` — um canal de dados de execução que **não** passe pelo
   modelo (hoje `run({ memory })` é serializado direto no system prompt);
-- exportar `currentRun()`.
+- expor o contexto da execução (hoje `context()`).
 
 **Nota:** a Fase 1 do `RunContext` encurtou muito este caminho — a compilação
 dos passos agora acontece dentro do escopo da execução, então um provider
@@ -279,7 +284,7 @@ construído por factory já consegue ler o contexto da run.
 | **`WorkflowStep` aberto** | União fechada + `if/else` em `compileStep`. Adicionar `branch`/`race` exige editar o core. Violação de OCP que sobrevive ao refactor. |
 | **Decorators TC39** | Decorator de parâmetro **não existe** no padrão. Toda a DI de `@input`/`@state`/`@context`/`@memory` depende de um recurso legado sem caminho de migração. Maior risco de longo prazo; precisa de um plano B (API funcional `defineAgent({...})`) antes de virar urgência. |
 | **Tradução para inglês** | API, comentários e docs em português limitam a adoção. Trabalho grande e mecânico; melhor depois que a API parar de mudar. |
-| **`ClassLike` no lugar de `Function`** | 19 assinaturas, várias públicas (`runWorkflow`, `bootstrapWorkflow`, `getAgentMetadata`). Hoje `bootstrapWorkflow(() => {})` compila. Visível como aviso do ESLint desde a Fase A. |
+| **`ClassLike` no lugar de `Function`** | 19 assinaturas, várias públicas (`runWorkflow`, `Thena.create`, `getAgentMetadata`). Hoje `Thena.create(() => {})` compila. Visível como aviso do ESLint desde a Fase A. |
 
 ---
 
@@ -293,7 +298,7 @@ construído por factory já consegue ler o contexto da run.
 | ~~4~~ | ~~**D** — segurança~~ | ✅ feito | **~82%** |
 | ~~5~~ | ~~**E** — streaming~~ | ✅ feito | |
 | ~~6~~ | ~~**F** — custo~~ | ✅ feito | |
-| ~~7~~ | ~~**G** — multi-tenant~~ | ✅ feito | **~89%** |
+| ~~7~~ | ~~**G** — configuração por execução~~ | ✅ feito | **~89%** |
 
 **As sete fases foram entregues.** O que ficou de fora está na tabela abaixo,
 com o motivo — e agora ela é o roadmap.
@@ -304,9 +309,16 @@ O que move mais daqui em diante, em ordem de impacto:
    Ler 5 arquivos são 5 round-trips hoje; seriam 1. Exige tirar a execução de
    tool do provider, e a cadeia de middleware já é a costura.
 2. **Ordem e isolamento no `parallel`** (~4 horas) — ver abaixo.
-3. **Store vetorial por tenant** (~1 dia) — o que faltou da Fase G.
+3. **Escopo de execução para os stores vetoriais** (~1 dia) — o que faltou da
+   Fase G. Hoje `config.memory` só aceita classe, resolvida **uma vez** no
+   bootstrap; o `provider` já aceita as três formas (instância, classe,
+   factory). Aplicar a mesma tríade ao `memory` fecha a assimetria — e quem
+   decide o eixo (conta, ambiente, usuário) continua sendo quem usa. Cuidado
+   com a contrapartida: factory por execução joga fora o "uma conexão e um
+   `ensureCollection` por store", então provavelmente precisa de memoização
+   por chave fornecida pelo usuário.
 4. **`ClassLike` no lugar de `Function`** (~1 dia) — 19 assinaturas; hoje
-   `bootstrapWorkflow(() => {})` compila.
+   `Thena.create(() => {})` compila.
 5. **Decorators TC39** — o maior risco de longo prazo, sem urgência imediata.
 
 ---
@@ -367,3 +379,39 @@ A ordem não é por tamanho: **A e B primeiro porque criam a régua**. Sem
 cobertura do engine e sem teste de performance, as fases E e F são impossíveis
 de defender — e F em particular é o tipo de otimização que regride sem quebrar
 nada.
+
+---
+
+## Sobre conceitos de domínio
+
+Uma regra de projeto, para as decisões seguintes não precisarem ser
+redebatidas:
+
+> **O framework pode nomear o que ele possui. Não pode nomear o que a aplicação
+> possui.**
+
+`runId`, `budget`, `signal`, `recorder`, a profundidade de aninhamento — o
+framework os cria, os incrementa e age sobre eles. Ninguém inventaria
+"profundidade de aninhamento" se o framework não aninhasse.
+
+`tenant`, `usuário`, `sessão`, `organização`, `ambiente` — a aplicação tem esses
+conceitos **com ou sem** ThenaJS. Nomeá-los num tipo público os transformaria em
+contrato, e o framework passaria a ter que responder o que faz com eles no
+report, no cache e na coleção vetorial. Cada resposta seria uma opinião sobre o
+domínio de outra pessoa.
+
+O teste, quando houver dúvida: *existe alguém construindo sobre isto que não
+teria esse conceito?* Para `tenantId`, sim — a maioria. Para `runId`, não.
+
+**O que o framework oferece no lugar** é o mecanismo:
+
+| Mecanismo | O que o framework garante | O que fica com você |
+| --- | --- | --- |
+| `run({ data })` | transporta, propaga para runs aninhadas, mantém fora do modelo | o que tem dentro |
+| `provider: instância \| classe \| factory` | quando cada forma é resolvida | o eixo do escopo |
+| `context()` / `@context()` | o contexto certo, em qualquer profundidade | como interpretá-lo |
+
+**Onde a opinião é bem-vinda:** na documentação. Uma página de receita
+mostrando como montar multi-tenancy sobre esses mecanismos é útil e deve
+existir — desde que fique claro que ela descreve **uma composição possível**, e
+não uma feature do framework. É a separação entre referência de API e guia.

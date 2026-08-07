@@ -4,10 +4,170 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [Não lançado]
+
+Duas correções no isolamento por execução, e o contexto da tool passando a
+alcançar a execução.
+
+### Adicionado
+
+- **O `ctx` de uma tool traz a execução, não só o passo.** O `@context()` —
+  a porta documentada — entregava `state`, `output` e `turn`, e mais nada. Quem
+  quisesse cancelar um `fetch`, correlacionar um log ou soltar um recurso
+  precisava descobrir sozinho o `currentRun()`. Agora o mesmo objeto traz:
+
+  ```ts
+  @Tool({ name: "buscar", description: "…", schema })
+  class BuscarTool {
+    async execute(@input() args: { url: string }, @context() ctx: Context) {
+      const conn = await pool.acquire();
+      ctx.onDispose(() => conn.release());        // solta no fim da run
+
+      const r = await fetch(args.url, { signal: ctx.signal });   // cancelável
+      ctx.meta({ status: r.status });             // vai para o report e o Flow
+
+      if (ctx.usage().costUsd > 5) ctx.stop();    // encerra com o que já tem
+      return r.text();
+    }
+  }
+  ```
+
+  | | |
+  | --- | --- |
+  | `ctx.runId` | o mesmo id que aparece em todo `ExecutionEvent` |
+  | `ctx.signal` | cancelamento da run — repasse ao seu `fetch` |
+  | `ctx.usage()` | consumo acumulado da execução até aqui |
+  | `ctx.abort(reason)` | cancela a execução inteira, de dentro |
+  | `ctx.stop()` | encerra **graciosamente**: pula o resto, devolve o output atual, sem lançar |
+  | `ctx.onDispose(fn)` | limpeza ao fim da run — sucesso, erro ou abort; ordem inversa, como um `defer` |
+  | `ctx.meta(dados)` | telemetria no nó deste passo |
+
+  **É aditivo**: nada do que o `ctx` já tinha mudou de lugar, e os hooks
+  (`beforePrompt`, `beforeTool`, `afterTool`, `onError`) recebem o mesmo objeto
+  enriquecido. O tipo `Context` é o nome preferido daqui em diante;
+  `AgentContext` continua válido e é o mesmo tipo.
+
+  Duas notas de ciclo de vida: `abort` e `stop` valem para a **execução
+  inteira** — pedir de dentro de um sub-workflow encerra tudo, como já
+  acontecia com o `signal`. Já o `onDispose` é de **cada run**: o fim de um
+  sub-workflow não solta recurso que ainda pertence a quem o chamou.
+
+- ⚠️ **`context` virou a porta única — como decorator e como função.** O mesmo
+  símbolo serve às duas, e devolve o mesmo objeto:
+
+  ```ts
+  // como decorator, dentro de uma tool
+  async execute(@input() args: Args, @context() ctx: Context) { … }
+
+  // como função, de qualquer lugar da execução
+  provider: () => new OpenAIProvider({ apiKey: minhaChave(context().data) }),
+  ```
+
+  **`currentRun()` deixou de ser exportado.** Ele nunca foi publicado (o npm
+  está no 0.6.0), então nenhuma aplicação existente quebra; quem seguiu a branch
+  troca `currentRun()` por `context()`.
+
+  Dentro de um passo, `context()` devolve o ctx do passo — com `state` e `turn`.
+  Fora dele — numa factory de provider, que roda na compilação do workflow —
+  devolve o da execução, e ler `state` lança dizendo por que ainda não existe.
+  O ciclo de vida vira mensagem de erro em vez de `undefined` silencioso.
+
+  Duas consequências registradas em teste:
+
+  - **`context()` sozinho não lança mais.** A resolução é preguiçosa, porque
+    `@context()` é avaliado no load do módulo, fora de qualquer execução, e não
+    pode explodir ali. A falha sai no primeiro acesso a um campo.
+  - **`ctx.data` deixou de ser opcional.** Sempre existe (objeto vazio quando
+    não informado), então o `?.` sumiu do acesso mais frequente da API.
+
+- ⚠️ **O `thena create` passa a gerar um projeto CommonJS**, como o `nest new`.
+
+  Em ESM nativo o Node não completa extensão, então todo import relativo tinha
+  que apontar para o arquivo **de saída**: `from "./config.js"` dentro de um
+  arquivo `.ts`. Em CommonJS a resolução completa sozinha:
+
+  ```ts
+  import { config } from "./config";   // era "./config.js"
+  ```
+
+  A troca cobra o `await` de topo, que não existe em CommonJS. O `main.ts`
+  gerado embrulha a inicialização numa função — o mesmo `bootstrap()` do Nest:
+
+  ```ts
+  async function bootstrap() {
+    const app = Thena.create(AssistantWorkflow, config);
+    console.log(await app.run({ input: { message } }));
+    await app.dispose();
+  }
+
+  bootstrap();
+  ```
+
+  Os pacotes `@thenajs/*` **continuam ESM** — muda só o projeto gerado. O Node
+  moderno permite `require()` de ESM a partir de CommonJS, e é por isso que o
+  `engines` subiu para **`>=20.19`**, versão em que esse suporte entrou.
+
+  Projetos existentes não precisam mudar: ESM continua funcionando, com as
+  extensões `.js` de sempre.
+
+### Corrigido
+
+- **Cancelamento no último passo deixava de ser notado.** O `signal` é checado
+  *entre* passos, então um `abort()` durante o passo final não tinha mais
+  ninguém para percebê-lo e a run resolvia normalmente. Agora há uma checagem
+  ao fim do workflow — cancelamento ignorado em silêncio é pior do que não ter
+  cancelamento.
+
+- ⚠️ **O orçamento de uma run vale dentro das runs aninhadas.** Um sub-workflow
+  disparado por uma tool recebia um `BudgetTracker` **novo e vazio**, ou seja,
+  ficava sem teto nenhum. Na prática `maxCostUsd`/`maxTokens`/`maxChatCalls`
+  eram contornáveis por qualquer agente com uma tool que disparasse workflow, e
+  o gasto de dentro não aparecia em lugar nenhum. Uma recursão (workflow → tool
+  → o mesmo workflow) não tinha freio algum.
+
+  Agora, sem `budget` próprio, a run aninhada **usa o tracker do pai**; com
+  `budget` próprio, ganha um encadeado — conta nos dois, e corta quem estourar
+  primeiro. O `mode` que decide entre parar e lançar é o de quem estourou.
+
+  Junto vieram duas mudanças necessárias para o teto funcionar de fato:
+
+  - a chamada ao modelo passa a ser contada **na ida**, e só o consumo
+    (tokens/custo) na volta. Uma tool executa *dentro* de `provider.chat`, e
+    contar só na volta deixava o contador em zero durante toda a descida de uma
+    recursão;
+  - `BudgetExceededError` e **cancelamento** deixam de virar observação de tool.
+    Uma tool que dispara sub-workflow fazia o aviso de "acabou o orçamento" (ou
+    o abort) voltar para o modelo **como texto**, e a run seguia.
+
+  Se você dependia de um sub-workflow com orçamento ilimitado, passe um `budget`
+  explícito para ele em `runtime.run(Fluxo, { budget })`.
+
+- ⚠️ **A execução só é observada quando alguém observa.** O `RunHandle` era
+  ligado ao recorder em toda run, o que mantinha o recorder sempre ativo: a
+  árvore inteira construída, dois `ExecutionEvent` por passo alocados e
+  bufferizados, e o provider recebendo um sink de token — logo pedindo resposta
+  em **streaming** — mesmo sem ninguém ler nada. Medido: ~2,2× o tempo de CPU
+  por run, e ~13 KB retidos por handle vivo.
+
+  Agora a observação liga sozinha com `report`, `log` ou um plugin com
+  `onEvent`. Sem nenhum deles, a run não constrói árvore, não emite evento e não
+  transmite — o caminho de custo zero que a documentação promete.
+
+  **Quem usa `exec.onEvent`/`eventStream`/`onToken`/`textStream` sem `report`,
+  `log` nem plugin precisa pedir a observação:**
+
+  ```ts
+  const exec = app.run({ input, observe: true });
+  for await (const e of exec.eventStream) sse(e);
+  ```
+
+  Um handle mudo avisa uma vez no console dizendo exatamente isso, em vez de
+  ficar em silêncio.
+
 ## [0.8.0] — 2026-08-07
 
-Streaming, cancelamento, custo, multi-tenant e segurança. `app.run()` deixa de
-ser uma `Promise` e passa a devolver a **execução**.
+Streaming, cancelamento, custo, configuração por execução e segurança.
+`app.run()` deixa de ser uma `Promise` e passa a devolver a **execução**.
 
 **Release com uma quebra** — o retorno do `app.run()`, que continua funcionando
 com `await`.
@@ -95,25 +255,28 @@ com `await`.
 
   ```ts
   @Agent({
-    provider: () => new OpenAIProvider({
-      apiKey: chaveDe(currentRun().data.tenant as string),
-    }),
+    provider: () => new OpenAIProvider({ apiKey: minhaChave(currentRun().data) }),
     prompt: "./a.agent.md",
   })
   ```
 
   Antes o provider era instanciado **sem argumentos**, com as credenciais fixas
-  na subclasse: dois tenants batiam no mesmo endpoint com a mesma chave.
+  na subclasse: duas execuções batiam no mesmo endpoint com a mesma chave, sem
+  como variar.
 
   `run({ data })` é o canal de dados da execução que **não passa pelo modelo** —
   a diferença para o `run({ memory })`, que é serializado na mensagem `system` e
   portanto lido pelo modelo e gravado no report. Disponível em
   `currentRun().data` e em `ctx.data`, e herdado pelas runs aninhadas.
 
+  O framework **não interpreta** o `data` e não define campo nomeado nenhum
+  dentro dele: as três formas do `provider` são o mecanismo de escopo, e o eixo
+  — conta, ambiente, região, usuário — é do seu domínio.
+
   `currentRun()` passou a ser exportado.
 
-  Os `VectorStore` continuam instanciados uma vez por app; um store por tenant
-  exige mudar o ciclo de vida deles, e a memoização fica em user-land.
+  Os `VectorStore` continuam instanciados uma vez por app, sem resolução por
+  execução; separá-los por algum critério fica em user-land.
 
 - **`janelaDeContexto()`** — middleware que corta o histórico antes de enviá-lo.
 
