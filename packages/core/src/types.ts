@@ -13,8 +13,27 @@ import type { RunHandle } from "./run-handle.js";
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
 
-/** Provider aceito no decorator: uma instância já configurada ou a classe. */
-export type ProviderInput = Providers | ProviderCtor;
+/**
+ * Como o provider é resolvido pelo `@Agent`.
+ *
+ * - **instância** — configurada uma vez, compartilhada por todas as execuções;
+ * - **classe** — instanciada com `new`, sem argumentos;
+ * - **factory** — chamada **por execução**, já dentro do escopo da run. É o que
+ *   permite escolher chave, modelo ou endpoint por tenant:
+ *
+ * ```ts
+ * @Agent({
+ *   provider: () => new OpenAIProvider({
+ *     apiKey: chaveDe(currentRun().data.tenant as string),
+ *   }),
+ *   prompt: "./a.agent.md",
+ * })
+ * ```
+ */
+export type ProviderInput = Providers | ProviderCtor | ProviderFactory;
+
+/** Factory de provider, chamada uma vez por execução. */
+export type ProviderFactory = () => Providers;
 
 /** Configuração passada para `@Tool({ ... })`. */
 export interface ToolConfig {
@@ -105,6 +124,8 @@ export interface TurnInfo {
  */
 export type AgentContext = PipelineContext & {
   turn?: TurnInfo;
+  /** Os dados da execução (`run({ data })`). Nunca vão para o modelo. */
+  data?: Record<string, unknown>;
   /**
    * Consumo acumulado da run até aqui. Presente quando há `budget` — é a partir
    * daqui que se escreve política própria (dedupe, corte por heurística) num
@@ -296,6 +317,19 @@ export interface WorkflowRunOptions {
    * ```
    */
   signal?: AbortSignal;
+  /**
+   * Dados desta execução, disponíveis em `currentRun().data` e em `ctx.data`.
+   *
+   * **Não vai para o modelo** — é a diferença para o `memory` acima, que é
+   * serializado na mensagem `system` e portanto lido pelo modelo e gravado no
+   * report. Use `data` para tenant, credencial, id de usuário; use `memory`
+   * para contexto que o modelo **deve** ler.
+   *
+   * ```ts
+   * await app.run({ input, data: { tenant: "acme" } });
+   * ```
+   */
+  data?: Record<string, unknown>;
 }
 
 /** Handle retornado por `bootstrapWorkflow` — o "app" do workflow. */

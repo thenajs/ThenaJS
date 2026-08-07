@@ -130,6 +130,7 @@ export async function bootstrapWorkflow<T = string>(
         signal,
         // O provider só transmite se houver sink; o handle sempre oferece um.
         onToken: (t) => tokens.publicar(t),
+        data: options.data,
         // Lido a cada run, e não no bootstrap: um plugin registrado depois
         // vale para as execuções seguintes, igual aos ouvintes do recorder.
         middleware: {

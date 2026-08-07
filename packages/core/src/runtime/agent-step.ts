@@ -59,6 +59,10 @@ export function buildAgentStep(
       const execucao = currentRun();
       const agentCtx = ctx as AgentContext;
 
+      // Os dados da execução ficam no ctx, para uma tool alcançá-los com
+      // `@context()`. Diferente do `state.memory`, isto **não** vai ao modelo.
+      agentCtx.data = execucao.data;
+
       // Checagem entre unidades de trabalho: um turno é uma chamada ao modelo
       // mais, no máximo, uma tool.
       //

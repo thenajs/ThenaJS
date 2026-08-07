@@ -60,6 +60,16 @@ export interface RunContext {
    * poluiria o tipo e quebraria quem monta a árvore a partir dele.
    */
   onToken?: (token: string) => void;
+  /**
+   * Dados desta execução — tenant, id de usuário, credencial, o que for.
+   *
+   * **Não vai para o modelo.** É a diferença para o `run({ memory })`, que é
+   * serializado direto na mensagem `system`: tudo que você põe lá o modelo lê,
+   * e vai parar no report em disco. Aqui não.
+   *
+   * Herdado pelas runs aninhadas.
+   */
+  data: Record<string, unknown>;
 }
 
 /** As cadeias de middleware do usuário, por ponto de acoplamento. */
@@ -112,6 +122,7 @@ export interface RunContextOptions {
   middleware?: RunMiddleware;
   signal?: AbortSignal;
   onToken?: (token: string) => void;
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -128,6 +139,7 @@ export function newRunContext(options: RunContextOptions = {}): RunContext {
     middleware: options.middleware ?? SEM_MIDDLEWARE,
     signal: options.signal,
     onToken: options.onToken,
+    data: options.data ?? {},
   };
 }
 
@@ -144,6 +156,7 @@ export function childRunContext(parent: RunContext, budget?: RunBudget): RunCont
     middleware: parent.middleware,
     signal: parent.signal,
     onToken: parent.onToken,
+    data: parent.data,
   };
 }
 
