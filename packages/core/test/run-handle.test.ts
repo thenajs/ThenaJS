@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { bootstrapWorkflow, loop, untilAnswered } from "@thenajs/core";
+import { Thena, loop, untilAnswered } from "@thenajs/core";
 import type { ExecutionEvent, RunHandle } from "@thenajs/core";
 import {
   FakeProvider,
@@ -30,7 +30,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("o handle é thenable", () => {
   it("`await` devolve o resultado, como antes", async () => {
     const { Fluxo } = fluxo("resultado");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     await expect(app.run({ input: { message: "vai" } })).resolves.toBe("resultado");
     await app.dispose();
@@ -38,7 +38,7 @@ describe("o handle é thenable", () => {
 
   it("`.result` é uma Promise comum", async () => {
     const { Fluxo } = fluxo("resultado");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const exec = app.run({ input: { message: "vai" } });
     expect(exec.result).toBeInstanceOf(Promise);
@@ -57,7 +57,7 @@ describe("o handle é thenable", () => {
         },
       ),
     ]);
-    const app = await bootstrapWorkflow(Quebrado, {});
+    const app = Thena.create(Quebrado, {});
 
     let passouNoFinally = false;
     const saida = await app
@@ -72,7 +72,7 @@ describe("o handle é thenable", () => {
 
   it("compõe com Promise.all", async () => {
     const { Fluxo } = fluxo("x");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     await expect(
       Promise.all([
@@ -87,7 +87,7 @@ describe("o handle é thenable", () => {
 describe("runId síncrono", () => {
   it("está disponível antes do primeiro turno", async () => {
     const { Fluxo } = fluxo("x", 30);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     // Sem await: é o que permite responder `{ runId }` num POST.
     const exec = app.run({ input: { message: "vai" } });
@@ -99,7 +99,7 @@ describe("runId síncrono", () => {
 
   it("cada execução tem o seu", async () => {
     const { Fluxo } = fluxo();
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const a = app.run({ input: { message: "1" } });
     const b = app.run({ input: { message: "2" } });
@@ -111,10 +111,10 @@ describe("runId síncrono", () => {
 
   it("é o mesmo id que aparece nos eventos", async () => {
     const { Fluxo } = fluxo();
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const eventos: ExecutionEvent[] = [];
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     exec.onEvent((e) => eventos.push(e));
     await exec;
     await app.dispose();
@@ -126,7 +126,7 @@ describe("runId síncrono", () => {
 describe("abort", () => {
   it("corta a chamada em voo, sem esperar ela terminar", async () => {
     const { provider, Fluxo } = fluxo("nunca", 500);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const inicio = Date.now();
     const exec = app.run({ input: { message: "vai" } });
@@ -166,7 +166,7 @@ describe("abort", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     const exec = (caixa.exec = app.run({ input: { message: "vai" } }));
 
     expect((await capturarErro(exec)).name).toBe("AbortError");
@@ -176,7 +176,7 @@ describe("abort", () => {
 
   it("a razão do abort chega inteira no catch", async () => {
     const { Fluxo } = fluxo("x", 30);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     const minhaRazao = new Error("usuário desistiu");
 
     const exec = app.run({ input: { message: "vai" } });
@@ -188,7 +188,7 @@ describe("abort", () => {
 
   it("sem razão, é AbortError — distinguível de um erro comum", async () => {
     const { Fluxo } = fluxo("x", 30);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const exec = app.run({ input: { message: "vai" } });
     exec.abort();
@@ -203,7 +203,7 @@ describe("abort", () => {
       { provider },
       { onError: () => "recuperei" }, // tentaria engolir o abort
     );
-    const app = await bootstrapWorkflow(criarWorkflow([Agente]), {});
+    const app = Thena.create(criarWorkflow([Agente]), {});
 
     const exec = app.run({ input: { message: "vai" } });
     exec.abort();
@@ -216,7 +216,7 @@ describe("abort", () => {
 describe("signal vindo de fora", () => {
   it("um signal já abortado impede a execução", async () => {
     const { provider, Fluxo } = fluxo();
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const controller = new AbortController();
     controller.abort();
@@ -231,7 +231,7 @@ describe("signal vindo de fora", () => {
 
   it("AbortSignal.timeout corta, com TimeoutError", async () => {
     const { Fluxo } = fluxo("x", 200);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const erro = await capturarErro(
       app.run({ input: { message: "vai" }, signal: AbortSignal.timeout(20) }),
@@ -242,7 +242,7 @@ describe("signal vindo de fora", () => {
 
   it("o signal externo e o abort() do handle valem os dois", async () => {
     const { Fluxo } = fluxo("x", 200);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     const controller = new AbortController();
 
     // O handle aborta primeiro; o externo nunca dispara.
@@ -270,7 +270,7 @@ describe("signal vindo de fora", () => {
       [{ tool: { name: "sub", arguments: { x: "1" } } }],
       { delayMs: 20 },
     );
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([
         criarAgente({ provider: providerPai, tools: [SubTool as never] }),
       ]),
@@ -290,9 +290,9 @@ describe("signal vindo de fora", () => {
 describe("onEvent e eventStream", () => {
   it("quem assina DEPOIS do início recebe o que já passou", async () => {
     const { Fluxo } = fluxo("x", 40);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     // deixa a execução andar antes de assinar — o caso do SSE que conecta tarde
     await new Promise((r) => setTimeout(r, 15));
 
@@ -307,10 +307,10 @@ describe("onEvent e eventStream", () => {
 
   it("a assinatura pode ser cancelada", async () => {
     const { Fluxo } = fluxo("x", 30);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const vistos: ExecutionEvent[] = [];
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     const parar = exec.onEvent((e) => vistos.push(e));
     const quantosAoParar = vistos.length;
     parar();
@@ -322,9 +322,9 @@ describe("onEvent e eventStream", () => {
 
   it("eventStream termina quando a execução acaba", async () => {
     const { Fluxo } = fluxo();
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     const vistos: ExecutionEvent[] = [];
     for await (const e of exec.eventStream) vistos.push(e);
 
@@ -335,9 +335,9 @@ describe("onEvent e eventStream", () => {
 
   it("um assinante que lança não derruba a execução", async () => {
     const { Fluxo } = fluxo("intacto");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     exec.onEvent(() => {
       throw new Error("assinante ruim");
     });
@@ -350,7 +350,7 @@ describe("onEvent e eventStream", () => {
 describe("dispose drena as execuções em voo", () => {
   it("aborta o que está rodando e espera soltar", async () => {
     const { Fluxo } = fluxo("x", 500);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const exec = app.run({ input: { message: "vai" } });
     const capturado = capturarErro(exec);

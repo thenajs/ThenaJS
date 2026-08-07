@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { bootstrapWorkflow, janelaDeContexto, loop } from "@thenajs/core";
+import { Thena, janelaDeContexto, loop } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
 
 /**
@@ -27,7 +27,7 @@ async function rodar(
     }),
   ]);
 
-  const app = await bootstrapWorkflow(Fluxo, {});
+  const app = Thena.create(Fluxo, {});
   if (janela) await app.use({ name: "janela", chat: janela });
   await app.run({ input: { message: "pergunta inicial" } });
   await app.dispose();
@@ -95,7 +95,7 @@ describe("maxCharsPorTool", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "janela", chat: janelaDeContexto({ maxCharsPorTool: 100 }) });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -141,7 +141,7 @@ describe("telemetria", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {
+    const app = Thena.create(Fluxo, {
       log: (e) => e.kind === "chat" && e.data && eventos.push(e.data),
     });
     await app.use({ name: "janela", chat: janelaDeContexto({ maxTurnos: 2 }) });

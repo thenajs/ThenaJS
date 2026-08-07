@@ -59,10 +59,21 @@ export const registrarChat: ChatMiddleware = (inv, next) =>
     return turno;
   });
 
-/** Contabiliza a chamada e os tokens no orçamento da run. */
+/**
+ * Contabiliza a chamada e os tokens no orçamento da run.
+ *
+ * A chamada é contada **na ida** e o consumo **na volta**. A ida importa porque
+ * a tool roda dentro de `provider.chat`: se a chamada só fosse contada depois,
+ * um sub-workflow disparado por ela veria o contador ainda zerado — e uma
+ * recursão desceria para sempre sem nunca bater no teto.
+ *
+ * Um `throw` no meio deixa a chamada contada e o consumo não: erra para mais,
+ * que é o lado certo de errar num orçamento.
+ */
 export const contarChat: ChatMiddleware = async (inv, next) => {
+  inv.run.budget.abrirChat();
   const turno = await next();
-  inv.run.budget.addChat(turno.usage);
+  inv.run.budget.fecharChat(turno.usage);
   return turno;
 };
 

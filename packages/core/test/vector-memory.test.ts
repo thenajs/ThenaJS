@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Agent, Workflow, bootstrapWorkflow, memory } from "@thenajs/core";
+import { Agent, Workflow, Thena, memory } from "@thenajs/core";
 import type { VectorMemory } from "@thenajs/core";
 import { FakeProvider, FakeVectorStore, FakeVectorStoreB, PROMPT } from "./harness.js";
 
@@ -27,7 +27,7 @@ describe("injeção de memória", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, {
+    const app = Thena.create(Fluxo, {
       memory: [FakeVectorStore, FakeVectorStoreB],
     });
     await app.run({ input: { message: "vai" } });
@@ -53,7 +53,7 @@ describe("injeção de memória", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, {
+    const app = Thena.create(Fluxo, {
       memory: [FakeVectorStore, FakeVectorStoreB],
     });
     await app.run({ input: { message: "vai" } });
@@ -76,7 +76,7 @@ describe("injeção de memória", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, {
+    const app = Thena.create(Fluxo, {
       memory: [FakeVectorStore, FakeVectorStoreB],
     });
     await app.run({ input: { message: "vai" } });
@@ -106,7 +106,7 @@ describe("injeção de memória", () => {
     @Workflow({ steps: [A, B] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, { memory: [FakeVectorStore] });
+    const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -131,7 +131,7 @@ describe("remember / recall", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, { memory: [FakeVectorStore] });
+    const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
     await app.run({ input: { message: "vai" } });
 
     await mem!.remember("um texto qualquer");
@@ -161,7 +161,7 @@ describe("remember / recall", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, { memory: [FakeVectorStore] });
+    const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
     await app.run({ input: { message: "vai" } });
 
     await mem!.remember("lembrança", { dataset: "notas" });
@@ -191,7 +191,7 @@ describe("remember / recall", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, { memory: [FakeVectorStore] });
+    const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
     await app.run({ input: { message: "vai" } });
 
     await mem!.remember("x");

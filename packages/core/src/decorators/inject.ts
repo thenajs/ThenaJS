@@ -1,4 +1,6 @@
 import type { VectorStoreCtor } from "@thenajs/agentflow";
+import { resolverContexto } from "../vista-da-run.js";
+import type { Context, DadosDaRun } from "../types.js";
 
 /**
  * Injeção por decorator de parâmetro.
@@ -51,13 +53,52 @@ function marcar(ponto: PontoDeInjecao): ParameterDecorator {
 export const input = (): ParameterDecorator => marcar({ tipo: "input" });
 
 /**
- * O contexto da execução.
+ * O contexto da execução — **duas portas para o mesmo objeto**.
  *
- * Só faz sentido em **métodos** chamados durante a execução (o `execute` de uma
- * tool). No construtor de um agente o contexto ainda não existe — usar lá é erro
- * e o runtime avisa.
+ * Como decorator, injeta o contexto no parâmetro:
+ *
+ * ```ts
+ * async execute(@input() args: Args, @context() ctx: Context) {
+ *   await fetch(args.url, { signal: ctx.signal });
+ * }
+ * ```
+ *
+ * Como função, devolve o contexto de onde você estiver:
+ *
+ * ```ts
+ * provider: () => new OpenAIProvider({ apiKey: minhaChave(context().data) }),
+ * ```
+ *
+ * As duas devolvem a mesma coisa. A diferença é **quando**: dentro de um passo
+ * vem o ctx do passo, com `state` e `turn`; fora dele — numa factory de
+ * provider, que roda na compilação — vem o da execução, e tocar em `state`
+ * lança com a explicação.
+ *
+ * O `Proxy` existe por causa disto: `@context()` precisa devolver algo
+ * *chamável* (o decorator), e `context()` precisa devolver algo *legível* (o
+ * contexto). Um objeto que é as duas coisas é o preço de ter um nome só.
  */
-export const context = (): ParameterDecorator => marcar({ tipo: "context" });
+export const context = <D extends DadosDaRun = DadosDaRun>(): ParameterDecorator &
+  Context<D> => {
+  const decorator = marcar({ tipo: "context" });
+
+  return new Proxy(decorator, {
+    // Aqui `@context()` é aplicado — no load do módulo, fora de qualquer run.
+    // Nada do contexto é resolvido neste caminho.
+    apply: (alvo, esteArg, args) =>
+      Reflect.apply(alvo as (...a: unknown[]) => unknown, esteArg, args),
+
+    get: (alvo, prop, receiver) => {
+      // Props da própria função (`name`, `length`) e símbolos de inspeção não
+      // podem resolver o contexto: `console.log(context())` sondaria dezenas
+      // deles e explodiria fora de uma execução.
+      if (typeof prop === "symbol" || prop in alvo) {
+        return Reflect.get(alvo, prop, receiver);
+      }
+      return (resolverContexto() as Record<string, unknown>)[prop];
+    },
+  }) as ParameterDecorator & Context<D>;
+};
 
 /**
  * O estado do workflow, declarado em `@Workflow({ state })`.

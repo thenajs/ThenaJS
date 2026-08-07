@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bootstrapWorkflow, loop, untilAnswered } from "@thenajs/core";
+import { Thena, loop, untilAnswered } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
 /**
@@ -19,10 +19,10 @@ function fluxo(...respostas: string[]) {
 describe("onToken", () => {
   it("entrega o texto em pedaços, na ordem", async () => {
     const { Fluxo } = fluxo("Olá mundo bonito");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     const pedacos: string[] = [];
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     exec.onToken((t) => pedacos.push(t));
     const texto = await exec;
     await app.dispose();
@@ -34,9 +34,9 @@ describe("onToken", () => {
 
   it("quem assina atrasado recebe o texto que já saiu", async () => {
     const { Fluxo } = fluxo("um dois tres");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     await exec; // assina só depois de tudo pronto
 
     const pedacos: string[] = [];
@@ -59,9 +59,9 @@ describe("onToken", () => {
         maxIterations: 5,
       }),
     ]);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     const pedacos: string[] = [];
     exec.onToken((t) => pedacos.push(t));
     await exec;
@@ -75,9 +75,9 @@ describe("onToken", () => {
     // emite tudo de forma síncrona durante o `run()`, e o que se veria seria o
     // replay do buffer, não a entrega ao vivo.
     const provider = new FakeProvider([{ content: "a b c d e" }], { delayMs: 20 });
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     const pedacos: string[] = [];
     const parar = exec.onToken((t) => pedacos.push(t));
     parar();
@@ -89,9 +89,9 @@ describe("onToken", () => {
 
   it("um assinante que lança não derruba a execução", async () => {
     const { Fluxo } = fluxo("intacto");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     exec.onToken(() => {
       throw new Error("assinante ruim");
     });
@@ -104,9 +104,9 @@ describe("onToken", () => {
 describe("textStream", () => {
   it("percorre o texto com for await e termina junto com a execução", async () => {
     const { Fluxo } = fluxo("um dois tres");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     const pedacos: string[] = [];
     for await (const t of exec.textStream) pedacos.push(t);
 
@@ -116,9 +116,9 @@ describe("textStream", () => {
 
   it("é um canal separado do eventStream", async () => {
     const { Fluxo } = fluxo("texto");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ input: { message: "vai" }, observe: true });
     const eventos: unknown[] = [];
     const tokens: string[] = [];
     exec.onEvent((e) => eventos.push(e));
@@ -133,9 +133,31 @@ describe("textStream", () => {
 });
 
 describe("o sink é o que liga o streaming", () => {
-  it("o provider recebe um sink porque o handle sempre oferece um", async () => {
+  it("com observe, o provider recebe o sink e transmite", async () => {
     const { provider, Fluxo } = fluxo("x");
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
+    await app.run({ input: { message: "vai" }, observe: true }).result;
+    await app.dispose();
+
+    expect(provider.chamadas[0].streaming).toBe(true);
+  });
+
+  it("SEM observador, o provider NÃO recebe sink — nada de stream à toa", async () => {
+    const { provider, Fluxo } = fluxo("x");
+    const app = Thena.create(Fluxo, {});
+    await app.run({ input: { message: "vai" } });
+    await app.dispose();
+
+    // O handle já ofereceu um sink em toda run, e isso fazia o provider pedir
+    // resposta em stream — com parsing de SSE e um callback por pedaço — mesmo
+    // sem ninguém ler um único token.
+    expect(provider.chamadas[0].streaming).toBe(false);
+  });
+
+  it("um plugin que observa também liga o streaming", async () => {
+    const { provider, Fluxo } = fluxo("x");
+    const app = Thena.create(Fluxo, {});
+    await app.use({ name: "olheiro", onEvent: () => {} });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 

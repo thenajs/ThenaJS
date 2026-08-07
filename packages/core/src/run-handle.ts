@@ -177,25 +177,52 @@ export function criarRunHandle<T>(peças: {
   abort: (reason?: unknown) => void;
   eventos: Canal<ExecutionEvent>;
   tokens: Canal<string>;
+  /** A execução está sendo observada? Ver `run({ observe })`. */
+  observando: boolean;
 }): RunHandle<T> {
-  const { runId, result, signal, abort, eventos, tokens } = peças;
+  const { runId, result, signal, abort, eventos, tokens, observando } = peças;
 
   // Sem isto, o padrão do POST+SSE derruba o processo: ninguém deu `await`
   // ainda quando a execução falha, e o Node dispara `unhandledRejection`. O
   // erro continua disponível em `.result` — só deixa de ser "não tratado".
   result.catch(() => {});
 
+  /**
+   * Uma execução não observada não emite nada, e um canal silencioso é
+   * indistinguível de um bug. Avisa uma vez, dizendo o que fazer — o preço de
+   * ter tornado a observação opcional é não deixar ninguém descobrir isso
+   * olhando um `for await` que nunca rende.
+   */
+  let avisou = false;
+  const avisarSeMudo = (metodo: string) => {
+    if (observando || avisou) return;
+    avisou = true;
+    console.warn(
+      `[thena] ${metodo} não vai receber nada: esta execução não está sendo ` +
+        `observada. Use \`run({ observe: true })\`, ou ligue \`report\`, \`log\` ` +
+        `ou um plugin com \`onEvent\`.`,
+    );
+  };
+
   return {
     runId,
     result,
     signal,
     abort,
-    onEvent: (cb) => eventos.assinar(cb),
+    onEvent: (cb) => {
+      avisarSeMudo("onEvent()");
+      return eventos.assinar(cb);
+    },
     get eventStream() {
+      avisarSeMudo("eventStream");
       return eventos.iterar();
     },
-    onToken: (cb) => tokens.assinar(cb),
+    onToken: (cb) => {
+      avisarSeMudo("onToken()");
+      return tokens.assinar(cb);
+    },
     get textStream() {
+      avisarSeMudo("textStream");
       return tokens.iterar();
     },
     then: (ok, err) => result.then(ok, err),

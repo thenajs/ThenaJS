@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { bootstrapWorkflow, redactSecrets } from "@thenajs/core";
+import { Thena, redactSecrets } from "@thenajs/core";
 import type { ExecutionNode } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
 
@@ -83,7 +83,7 @@ describe("no report", () => {
     ]);
     const Fluxo = criarWorkflow([criarAgente({ provider, tools: [tool] })]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "consulte" } });
     await app.dispose();
 
@@ -103,7 +103,7 @@ describe("no report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-prompt-"));
 
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
       { report: { dir } },
     );
@@ -119,7 +119,7 @@ describe("no report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-off-"));
 
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
       { report: { dir }, redact: false },
     );
@@ -135,7 +135,7 @@ describe("no report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-fn-"));
 
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
       {
         report: { dir },
@@ -157,7 +157,7 @@ describe("no report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = mkdtempSync(join(tmpdir(), "thena-sem-content-"));
 
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([criarAgente({ provider: new FakeProvider([{ content: "oi" }]) })]),
       { report: { dir, content: false } },
     );

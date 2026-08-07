@@ -16,16 +16,10 @@ export {
 export { run, runWorkflow } from "./runtime/run-workflow.js";
 export { buildAgentStep } from "./runtime/agent-step.js";
 export { WorkflowRuntime } from "./runtime/workflow-runtime.js";
-export { bootstrapWorkflow } from "./bootstrap.js";
+export { Thena, bootstrapWorkflow } from "./bootstrap.js";
 export { input, context, state, memory } from "./decorators/inject.js";
 export type { ThenaPlugin } from "./plugin.js";
 export type { RunContext, RunMiddleware } from "./run-context.js";
-/**
- * O contexto da execução em curso — `runId`, `data`, `budget`, `signal`.
- * Lança fora de uma run. É o que uma factory de provider usa para escolher
- * credencial ou modelo por tenant.
- */
-export { currentRun } from "./run-context.js";
 export type { RunHandle } from "./run-handle.js";
 
 /** Middlewares: o ponto de acoplamento de `app.use({ tool, chat })`. */
@@ -54,6 +48,9 @@ export type {
   AgentMetadata,
   AgentClass,
   AgentContext,
+  Context,
+  RunControls,
+  DadosDaRun,
   AgentHooks,
   TurnInfo,
   ToolCall,

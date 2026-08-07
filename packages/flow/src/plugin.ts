@@ -6,7 +6,7 @@ import type { FlowOptions } from "./tipos.js";
  * Sobe o site do Flow e transmite a execução para ele ao vivo.
  *
  * ```ts
- * const app = await bootstrapWorkflow(MeuWorkflow, { log: true });
+ * const app = Thena.create(MeuWorkflow, { log: true });
  * await app.use(thenaFlow({ port: 4100 }));
  * await app.run({ input: { message: "olá" } });
  * ```

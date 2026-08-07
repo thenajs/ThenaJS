@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import type { ExecutionEvent, ExecutionNode } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
@@ -44,8 +44,8 @@ describe("isolamento entre execuções", () => {
       { content: "l3" },
     ]);
 
-    const curto = await bootstrapWorkflow(fluxoDeTresPassos(providerCurto), {});
-    const longo = await bootstrapWorkflow(fluxoDeTresPassos(providerLongo), {});
+    const curto = Thena.create(fluxoDeTresPassos(providerCurto), {});
+    const longo = Thena.create(fluxoDeTresPassos(providerLongo), {});
 
     const [saidaCurto, saidaLongo] = await Promise.all([
       curto.run({ input: { message: "a" }, budget: { maxChatCalls: 1 } }),
@@ -66,10 +66,10 @@ describe("isolamento entre execuções", () => {
     const eventosA: ExecutionEvent[] = [];
     const eventosB: ExecutionEvent[] = [];
 
-    const appA = await bootstrapWorkflow(fluxoLento(30, "A"), {
+    const appA = Thena.create(fluxoLento(30, "A"), {
       log: (e) => eventosA.push(e),
     });
-    const appB = await bootstrapWorkflow(fluxoLento(5, "B"), {
+    const appB = Thena.create(fluxoLento(5, "B"), {
       log: (e) => eventosB.push(e),
     });
 
@@ -94,10 +94,10 @@ describe("isolamento entre execuções", () => {
     const dirA = mkdtempSync(join(tmpdir(), "thena-iso-a-"));
     const dirB = mkdtempSync(join(tmpdir(), "thena-iso-b-"));
 
-    const appA = await bootstrapWorkflow(fluxoLento(30, "resposta A"), {
+    const appA = Thena.create(fluxoLento(30, "resposta A"), {
       report: { dir: dirA },
     });
-    const appB = await bootstrapWorkflow(fluxoLento(10, "resposta B"), {
+    const appB = Thena.create(fluxoLento(10, "resposta B"), {
       report: { dir: dirB },
     });
 
@@ -128,8 +128,8 @@ describe("isolamento entre execuções", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     const eventosB: ExecutionEvent[] = [];
-    const appA = await bootstrapWorkflow(fluxoLento(0, "a"), { log: () => {} });
-    const appB = await bootstrapWorkflow(fluxoLento(0, "b"), {
+    const appA = Thena.create(fluxoLento(0, "a"), { log: () => {} });
+    const appB = Thena.create(fluxoLento(0, "b"), {
       log: (e) => eventosB.push(e),
     });
 
@@ -144,7 +144,7 @@ describe("isolamento entre execuções", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     const eventos: ExecutionEvent[] = [];
-    const app = await bootstrapWorkflow(fluxoLento(0, "x"), {
+    const app = Thena.create(fluxoLento(0, "x"), {
       log: (e) => eventos.push(e),
     });
 

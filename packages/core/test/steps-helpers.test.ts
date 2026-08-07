@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
-  bootstrapWorkflow,
+  Thena,
   calledTool,
   loop,
   runWorkflow,
@@ -214,7 +214,7 @@ describe("wasExhausted", () => {
 describe("entrada da run", () => {
   it("input.message vira a primeira mensagem user", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({ input: { message: "olá mundo" } });
     await app.dispose();
 
@@ -224,7 +224,7 @@ describe("entrada da run", () => {
 
   it("sem message, o objeto inteiro é serializado", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({ input: { userId: 7, acao: "revisar" } });
     await app.dispose();
 
@@ -234,7 +234,7 @@ describe("entrada da run", () => {
 
   it("memory da run é semeada no state e projetada como system", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({
       input: { message: "oi" },
       memory: { sessionId: "abc" },

@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   MAX_FAILS_PADRAO,
   MAX_ITERATIONS_PADRAO,
-  bootstrapWorkflow,
+  Thena,
   loop,
   untilAnswered,
 } from "@thenajs/core";
@@ -60,7 +60,7 @@ describe("freios do loop", () => {
     // Nenhum teto declarado: os defaults é que seguram.
     const Fluxo = criarWorkflow([loop({ steps: [Agente], until: untilAnswered })]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "leia" } });
     await app.dispose();
 
@@ -76,7 +76,7 @@ describe("freios do loop", () => {
       loop({ steps: [criarAgente({ provider })], until: () => false }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -114,7 +114,7 @@ describe("freios do loop", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     const saida = await app.run({ input: { message: "leia" } });
     await app.dispose();
 
@@ -151,7 +151,7 @@ describe("freios do loop", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "leia" } });
     await app.dispose();
 
@@ -175,7 +175,7 @@ describe("freios do loop", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "leia" } });
     await app.dispose();
 
@@ -193,7 +193,7 @@ describe("freios do loop", () => {
       loop({ steps: [Agente], until: untilAnswered, maxFails: 2 }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "leia" } });
     await app.dispose();
 
@@ -219,7 +219,7 @@ describe("freios do loop", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.run({
       input: { message: "leia" },
       // Sem este teto, este teste rodaria para sempre. É o risco que os
@@ -267,7 +267,7 @@ describe("freios do loop", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "leia" } });
     await app.dispose();
 

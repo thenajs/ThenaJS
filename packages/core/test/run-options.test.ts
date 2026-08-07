@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
 /**
@@ -9,11 +9,11 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 describe("opções de run", () => {
   it("memory entra no system prompt enviado ao modelo", async () => {
     const provider = new FakeProvider([{ content: "ok" }]);
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
 
     await app.run({
       input: { message: "Olá" },
-      memory: { tenant: "acme", chaveInterna: "segredo-123" },
+      memory: { conta: "acme", chaveInterna: "segredo-123" },
     });
     await app.dispose();
 
@@ -29,7 +29,7 @@ describe("opções de run", () => {
 
   it("não há canal para dado de execução que não vá para o prompt", async () => {
     const provider = new FakeProvider([{ content: "ok" }]);
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
 
     await app.run({ input: { message: "Olá" } });
     await app.dispose();

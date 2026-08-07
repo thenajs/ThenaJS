@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { runWorkflow, toInitial } from "./runtime/run-workflow.js";
-import type { WorkflowApp, WorkflowRunOptions } from "./types.js";
+import type { DadosDaRun, WorkflowApp } from "./types.js";
 import type { ThenaPlugin } from "./plugin.js";
 import type { ThenaConfig, LogConfig, ReportOptions } from "./config.js";
 import type { ExecutionEvent, ExecutionNode } from "./observability/recorder.js";
@@ -10,27 +10,10 @@ import { consoleLogger } from "./observability/logger.js";
 import { newRunContext, withRun } from "./run-context.js";
 import { Canal, criarRunHandle } from "./run-handle.js";
 
-/**
- * Ponto de entrada de uma aplicação ThenaJS. Prepara o workflow e devolve um
- * "app" cujo `run(...)` o executa.
- *
- * - `config.report` — gera um report HTML + JSON ao final da run (estilo Playwright).
- * - `config.log` — loga ao vivo o que está sendo executado.
- * - `app.use(plugin)` — acopla um observador do stream ao vivo.
- *
- * ```ts
- * const app = await bootstrapWorkflow(ExplorerWorkflow, { log: true, report: true });
- * await app.use(thenaFlow({ port: 4100 }));
- * await app.run({ input: { message: "Olá" } });
- * ```
- *
- * Cada `run(...)` monta o próprio `RunContext`: duas execuções concorrentes —
- * de um mesmo app ou de apps diferentes no mesmo processo — não se contaminam.
- */
-export async function bootstrapWorkflow<T = string>(
+function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
   WorkflowClass: Function,
   config: ThenaConfig = {},
-): Promise<WorkflowApp<T>> {
+): WorkflowApp<T, D> {
   // Instanciados uma vez por app, e compartilhados por todas as runs: uma
   // conexão e um `ensureCollection` por store, não um por execução.
   const memory = (config.memory ?? []).map((Store) => new Store());
@@ -48,15 +31,21 @@ export async function bootstrapWorkflow<T = string>(
   /** Execuções em voo, para o `dispose()` conseguir drená-las. */
   const emVoo = new Set<{ abort: (r?: unknown) => void; result: Promise<unknown> }>();
 
-  /** Monta o recorder desta execução, ligado ao report, ao log e aos plugins. */
+  /**
+   * Monta o recorder desta execução, ligado ao report, ao log e aos plugins.
+   *
+   * `eventos` só é ligado quando a execução está sendo observada. Ligá-lo
+   * sempre — como já foi — mantinha o recorder ativo em **toda** run: a árvore
+   * inteira era construída, dois `ExecutionEvent` por passo eram alocados e
+   * bufferizados, e nada disso tinha leitor. Medido, custava ~2× o tempo de CPU
+   * de uma run e ~13 KB retidos por handle vivo.
+   */
   function recorderDaRun(
     runId: string,
-    options: WorkflowRunOptions,
-    eventos: Canal<ExecutionEvent>,
+    report: boolean | ReportOptions | undefined,
+    log: LogConfig | undefined,
+    eventos?: Canal<ExecutionEvent>,
   ): ReportRecorder {
-    const report = options.report ?? config.report;
-    const log = options.log ?? config.log;
-
     const reportOptions: ReportOptions = typeof report === "object" ? report : {};
     const onComplete = report
       ? (root: ExecutionNode) => {
@@ -73,7 +62,7 @@ export async function bootstrapWorkflow<T = string>(
     }
     // O handle é mais um consumidor do mesmo stream — empurrado (plugin) e
     // puxado (`onEvent`/`eventStream`) são duas torneiras no mesmo cano.
-    ouvintes.push((e) => eventos.publicar(e));
+    if (eventos) ouvintes.push((e) => eventos.publicar(e));
 
     return new ReportRecorder({
       runId,
@@ -82,8 +71,8 @@ export async function bootstrapWorkflow<T = string>(
       // Só captura conteúdo quando alguém vai usá-lo. Um plugin que observa
       // precisa dele; do contrário receberia eventos sem prompt nem resposta.
       // `report: { content: false }` desliga mesmo com report ligado.
-      // O handle sempre observa, então o recorder nunca fica inativo — mas só
-      // captura **conteúdo** se alguém for de fato usá-lo.
+      // Inalterado de propósito: quem observa só pelo handle continua recebendo
+      // a árvore e a telemetria, sem o conteúdo.
       captureContent:
         reportOptions.content !== false &&
         (Boolean(report) || log === "verbose" || plugins.some((p) => p.onEvent)),
@@ -91,7 +80,7 @@ export async function bootstrapWorkflow<T = string>(
     });
   }
 
-  const app: WorkflowApp<T> = {
+  const app: WorkflowApp<T, D> = {
     async use(plugin) {
       try {
         await plugin.setup?.();
@@ -112,24 +101,37 @@ export async function bootstrapWorkflow<T = string>(
       const eventos = new Canal<ExecutionEvent>();
       const tokens = new Canal<string>();
 
-      // O signal de quem chamou e o `abort()` deste handle valem os dois — o
-      // que disparar primeiro vence.
-      const controller = new AbortController();
-      const signal = options.signal
-        ? AbortSignal.any([options.signal, controller.signal])
-        : controller.signal;
+      const report = options.report ?? config.report;
+      const log = options.log ?? config.log;
 
-      // Este contexto carrega o que é do **app**: id, settings, recorder e
-      // signal. O orçamento fica de fora porque quem o cria é o `runWorkflow`,
-      // ao derivar o contexto filho — é o mesmo caminho de um sub-workflow, e
-      // mantê-lo único evita dois trackers para a mesma run.
+      // **Alguém está olhando esta execução?** Se ninguém está, o recorder fica
+      // inativo e a run não constrói árvore, não emite evento e não pede
+      // streaming ao provider — o caminho de custo zero que o framework promete.
+      //
+      // `observe: true` liga na mão, para o padrão POST+SSE, em que o único
+      // consumidor é o handle e não há report, log nem plugin.
+      const observando =
+        options.observe ??
+        (Boolean(report) || Boolean(log) || plugins.some((p) => p.onEvent));
+
+      // O signal de quem chamou e o `abort()` desta execução valem os dois — o
+      // que disparar primeiro vence. Quem compõe é o `newRunContext`, para o
+      // `abort()` existir também num `runWorkflow` direto, sem app.
+
+      // Este contexto carrega o que é do **app** e o teto da execução. O
+      // orçamento nasce aqui, e não no `runWorkflow`, para a run ter um único
+      // tracker: o `childRunContext` reaproveita este quando o passo aninhado
+      // não pede teto próprio, e é isso que faz o teto do topo valer lá dentro.
       const execucao = newRunContext({
         runId,
         settings: { memory },
-        recorder: recorderDaRun(runId, options, eventos),
-        signal,
-        // O provider só transmite se houver sink; o handle sempre oferece um.
-        onToken: (t) => tokens.publicar(t),
+        recorder: recorderDaRun(runId, report, log, observando ? eventos : undefined),
+        budget: options.budget,
+        signal: options.signal,
+        // A presença do sink é o que **liga o streaming** no provider. Oferecê-lo
+        // sempre — como já foi — fazia toda run pedir resposta em stream, com
+        // parsing de SSE e um callback por pedaço, mesmo sem ninguém lendo.
+        onToken: observando ? (t) => tokens.publicar(t) : undefined,
         data: options.data,
         // Lido a cada run, e não no bootstrap: um plugin registrado depois
         // vale para as execuções seguintes, igual aos ouvintes do recorder.
@@ -142,16 +144,13 @@ export async function bootstrapWorkflow<T = string>(
       // A exceção sobe. Engoli-la e devolver `undefined` obrigava todo call
       // site a adivinhar o que deu errado — e num handler HTTP escondia a
       // falha por completo.
+      // Sem `budget` aqui: ele já está no contexto acima. Passá-lo de novo
+      // criaria um segundo tracker com os mesmos limites, medindo o mesmo gasto.
       const result = withRun(execucao, () =>
-        runWorkflow<T>(
-          WorkflowClass,
-          toInitial(options.input),
-          options.memory,
-          options.budget,
-        ),
+        runWorkflow<T>(WorkflowClass, toInitial(options.input), options.memory),
       );
 
-      const registro = { abort: (r?: unknown) => controller.abort(r), result };
+      const registro = { abort: execucao.abort, result };
       emVoo.add(registro);
       result
         .finally(() => {
@@ -164,10 +163,11 @@ export async function bootstrapWorkflow<T = string>(
       return criarRunHandle<T>({
         runId,
         result,
-        signal,
+        signal: execucao.signal!,
         abort: registro.abort,
         eventos,
         tokens,
+        observando,
       });
     },
 
@@ -190,4 +190,46 @@ export async function bootstrapWorkflow<T = string>(
   };
 
   return app;
+}
+
+/**
+ * O ponto de entrada de uma aplicação ThenaJS.
+ *
+ * ```ts
+ * import { Thena } from "@thenajs/core";
+ *
+ * async function bootstrap() {
+ *   const app = Thena.create(ExplorerWorkflow, { log: true, report: true });
+ *   await app.use(thenaFlow({ port: 4100 }));
+ *
+ *   console.log(await app.run({ input: { message: "Olá" } }));
+ *   await app.dispose();
+ * }
+ *
+ * bootstrap();
+ * ```
+ *
+ * `create` **não é `async`**: montar o app não espera nada. Quem espera é o
+ * `run(...)`. E cada `run(...)` abre o próprio `RunContext` — duas execuções
+ * concorrentes, do mesmo app ou de apps diferentes no mesmo processo, não se
+ * contaminam.
+ */
+export const Thena = {
+  create: criarApp,
+};
+
+/**
+ * @deprecated Use `Thena.create(...)`, que não é `async`:
+ *
+ * ```ts
+ * const app = Thena.create(MeuWorkflow, config);   // sem await
+ * ```
+ *
+ * Mantido para não quebrar quem veio do 0.6.
+ */
+export async function bootstrapWorkflow<T = string, D extends DadosDaRun = DadosDaRun>(
+  WorkflowClass: Function,
+  config: ThenaConfig = {},
+): Promise<WorkflowApp<T, D>> {
+  return criarApp<T, D>(WorkflowClass, config);
 }

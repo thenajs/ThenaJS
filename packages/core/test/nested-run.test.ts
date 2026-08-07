@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { Tool, bootstrapWorkflow, runWorkflow } from "@thenajs/core";
+import { Tool, Thena, runWorkflow } from "@thenajs/core";
 import type { ExecutionNode, WorkflowRuntime } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("run aninhada", () => {
-  it("o sub-workflow tem orçamento próprio, independente do pai", async () => {
+  it("o sub-workflow herda o teto do pai — aninhar não é escapatória", async () => {
     const providerFilho = new FakeProvider([{ content: "resposta do filho" }]);
     const SubFluxo = criarWorkflow([criarAgente({ provider: providerFilho })]);
 
@@ -48,14 +48,16 @@ describe("run aninhada", () => {
       }),
     ]);
 
-    // O pai já esgota o teto no próprio turno. Se o orçamento fosse
-    // compartilhado, o agente do filho seria pulado e não haveria chamada.
-    const saida = await runWorkflow(Fluxo, "vai", undefined, {
-      maxChatCalls: 1,
-    });
+    // O pai esgota o teto no próprio turno que dispara a tool. O filho não
+    // ganha crédito novo: sem `budget` próprio ele usa o tracker do pai.
+    //
+    // Este teste já afirmou o contrário ("orçamento próprio, independente do
+    // pai"), e era o que tornava `maxCostUsd` contornável por qualquer agente
+    // com uma tool que disparasse workflow. A matriz completa (teto próprio
+    // mais apertado, mais largo, throw, recursão) está em `nested-budget`.
+    await runWorkflow(Fluxo, "vai", undefined, { maxChatCalls: 1 });
 
-    expect(providerFilho.chamadas).toHaveLength(1);
-    expect(saida).toBe("resposta do filho");
+    expect(providerFilho.chamadas).toHaveLength(0);
   });
 
   it("os nós do sub-workflow aninham sob o nó da tool no report do pai", async () => {
@@ -75,7 +77,7 @@ describe("run aninhada", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 

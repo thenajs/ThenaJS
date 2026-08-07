@@ -27,7 +27,7 @@ export interface ReportOptions {
  */
 export type LogConfig = boolean | "verbose" | ((event: ExecutionEvent) => void);
 
-/** Configuração opcional passada ao `bootstrapWorkflow`. */
+/** Configuração opcional passada ao `Thena.create`. */
 export interface ThenaConfig {
   /**
    * Gera um report da execução (HTML + JSON) ao final da run, estilo Playwright.

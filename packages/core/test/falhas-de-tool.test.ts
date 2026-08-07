@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { FatalToolError, bootstrapWorkflow } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { BudgetExceededError, FatalToolError, Tool, Thena } from "@thenajs/core";
+import type { WorkflowRuntime } from "@thenajs/core";
+import {
+  FakeProvider,
+  capturarErro,
+  criarAgente,
+  criarTool,
+  criarWorkflow,
+} from "./harness.js";
 
 /**
  * As formas de uma tool falhar. Todas viram **observação** para o modelo —
@@ -26,10 +33,7 @@ describe("falhas de tool", () => {
     const tool = criarTool({ name: "eco", description: "eco", schema }, () => {
       throw new Error("boom");
     });
-    const app = await bootstrapWorkflow(
-      montar(tool, { name: "eco", arguments: { x: "1" } }),
-      {},
-    );
+    const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
     await expect(app.run({ input: { message: "vai" } })).resolves.toBe("boom");
     await app.dispose();
@@ -40,17 +44,14 @@ describe("falhas de tool", () => {
       content: "não deu",
       isError: true,
     }));
-    const app = await bootstrapWorkflow(
-      montar(tool, { name: "eco", arguments: { x: "1" } }),
-      {},
-    );
+    const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
     await expect(app.run({ input: { message: "vai" } })).resolves.toBe("não deu");
     await app.dispose();
   });
 
   it("tool inexistente vira observação", async () => {
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       montar(eco(), { name: "nao_existe", arguments: { x: "1" } }),
       {},
     );
@@ -62,7 +63,7 @@ describe("falhas de tool", () => {
   });
 
   it("argumentos fora do schema viram observação, com a mensagem do zod", async () => {
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       // o schema pede { x: string }; o modelo mandou { y: 1 }
       montar(eco(), { name: "eco", arguments: { y: 1 } }),
       {},
@@ -82,7 +83,7 @@ describe("falhas de tool", () => {
       { content: '{"name":"eco","arguments":{"y":1}}' },
     ]);
     const Fluxo = criarWorkflow([criarAgente({ provider, tools: [eco()] })]);
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
 
     await expect(app.run({ input: { message: "vai" } })).resolves.toContain(
       "resgatada do texto",
@@ -94,10 +95,7 @@ describe("falhas de tool", () => {
     const tool = criarTool({ name: "eco", description: "eco", schema }, () => {
       throw new FatalToolError("banco indisponível");
     });
-    const app = await bootstrapWorkflow(
-      montar(tool, { name: "eco", arguments: { x: "1" } }),
-      {},
-    );
+    const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toBeInstanceOf(
       FatalToolError,
@@ -110,10 +108,7 @@ describe("falhas de tool", () => {
     const tool = criarTool({ name: "eco", description: "eco", schema }, () => {
       throw new FatalToolError("banco indisponível", { cause: original });
     });
-    const app = await bootstrapWorkflow(
-      montar(tool, { name: "eco", arguments: { x: "1" } }),
-      {},
-    );
+    const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
     const erro = await app
       .run({ input: { message: "vai" } })
@@ -154,12 +149,98 @@ describe("falhas de tool", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     const saida = await app.run({ input: { message: "leia o arquivo" } });
     await app.dispose();
 
     // É o ponto do default: a falha não derruba a run, vira informação.
     expect(tentativas).toEqual(["errado.ts", "certo.ts"]);
     expect(saida).toBe("achei o arquivo");
+  });
+});
+
+/**
+ * O que **não** pode virar observação.
+ *
+ * Uma tool executa dentro de `provider.chat`, então tudo que é lançado lá
+ * dentro atravessa o `execute` na volta — inclusive coisas que não são "a tool
+ * falhou". Transformá-las em texto para o modelo é pior do que engolir um erro:
+ * é entregar a ele o aviso de parada e deixá-lo tentar de novo.
+ *
+ * Estes dois casos só aparecem com sub-workflow, porque é lá dentro que os
+ * checkpoints de orçamento e de cancelamento rodam.
+ */
+describe("erros de controle de fluxo não viram observação", () => {
+  const runtimeQueRoda = (SubFluxo: Function) => {
+    const Classe = class {
+      constructor(private readonly runtime: WorkflowRuntime) {}
+      execute() {
+        return this.runtime.run<string>(SubFluxo, { input: { message: "sub" } });
+      }
+    };
+    Tool({ name: "sub", description: "sub", schema })(Classe as never);
+    return Classe as never;
+  };
+
+  it("BudgetExceededError sobe em vez de voltar como texto para o modelo", async () => {
+    const dentro = new FakeProvider([{ content: "nunca" }]);
+    const Sub = criarWorkflow([criarAgente({ provider: dentro })]);
+    const pai = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
+
+    const app = Thena.create(
+      criarWorkflow([criarAgente({ provider: pai, tools: [runtimeQueRoda(Sub)] })]),
+      {},
+    );
+
+    // O teto estoura dentro do sub-workflow. Sem a correção isto resolvia com
+    // a mensagem do erro como saída — o modelo "lia" que ficou sem orçamento.
+    await expect(
+      app.run({
+        input: { message: "vai" },
+        budget: { maxChatCalls: 1, mode: "throw" },
+      }),
+    ).rejects.toBeInstanceOf(BudgetExceededError);
+    await app.dispose();
+  });
+
+  it("cancelamento sobe em vez de voltar como texto para o modelo", async () => {
+    const dentro = new FakeProvider([{ content: "nunca" }], { delayMs: 50 });
+    const Sub = criarWorkflow([criarAgente({ provider: dentro })]);
+    const pai = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
+
+    const app = Thena.create(
+      criarWorkflow([criarAgente({ provider: pai, tools: [runtimeQueRoda(Sub)] })]),
+      {},
+    );
+
+    const execucao = app.run({ input: { message: "vai" } });
+    setTimeout(() => execucao.abort(new Error("chega")), 10);
+
+    const erro = await capturarErro(execucao.result);
+    // Sem a correção, o abort virava `{ content: "chega", isError: true }` e a
+    // run seguia em frente com "a tool falhou" no histórico.
+    expect((erro as Error).message).toBe("chega");
+    await app.dispose();
+  });
+
+  it("uma falha comum continua virando observação, com sub-workflow no meio", async () => {
+    // Trava de regressão: o filtro acima não pode ter engolido o caso normal.
+    const Quebrada = class {
+      execute(): string {
+        throw new Error("quebrou de verdade");
+      }
+    };
+    Tool({ name: "sub", description: "sub", schema })(Quebrada as never);
+
+    const pai = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
+    const app = Thena.create(
+      criarWorkflow([criarAgente({ provider: pai, tools: [Quebrada as never] })]),
+      {},
+    );
+
+    await expect(app.run({ input: { message: "vai" } })).resolves.toBe(
+      "quebrou de verdade",
+    );
+    await app.dispose();
   });
 });

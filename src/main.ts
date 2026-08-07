@@ -1,8 +1,8 @@
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 import { config } from "./config.js";
 
-const app = await bootstrapWorkflow(ExplorerWorkflow, config);
+const app = Thena.create(ExplorerWorkflow, config);
 
 // Para acompanhar a execução ao vivo, num grafo no navegador:
 //

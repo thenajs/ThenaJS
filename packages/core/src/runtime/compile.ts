@@ -71,6 +71,10 @@ export function compileStep(
 
       // Mesmos checkpoints do passo de agente.
       throwIfAborted();
+      if (currentRun().parada.pedida) {
+        stoppedBy = "stop";
+        return true;
+      }
       if (currentRun().budget.checkpoint()) {
         stoppedBy = "budget";
         return true;

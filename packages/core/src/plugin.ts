@@ -13,7 +13,7 @@ import type { ToolMiddleware } from "./middleware/tool.js";
  *   chamada ao modelo, podendo medir, transformar ou curto-circuitar.
  *
  * ```ts
- * const app = await bootstrapWorkflow(MeuWorkflow, config);
+ * const app = Thena.create(MeuWorkflow, config);
  *
  * await app.use(thenaFlow({ port: 4100 }));   // observa
  *

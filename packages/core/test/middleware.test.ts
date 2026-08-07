@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { FatalToolError, bootstrapWorkflow } from "@thenajs/core";
+import { FatalToolError, Thena } from "@thenajs/core";
 import type { ChatMiddleware, ExecutionNode, ToolMiddleware } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
 
@@ -46,7 +46,7 @@ describe("middleware de tool", () => {
     };
 
     const { Fluxo } = fluxoComTool();
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "espia", tool: espia });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -63,7 +63,7 @@ describe("middleware de tool", () => {
       return "da tool";
     });
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
     const saida = await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -89,7 +89,7 @@ describe("middleware de tool", () => {
       { beforeTool: (call: any) => ({ ...call, args: { x: "reescrito" } }) },
     );
 
-    const app = await bootstrapWorkflow(criarWorkflow([Agente]), {});
+    const app = Thena.create(criarWorkflow([Agente]), {});
     await app.use({ name: "auditor", tool: auditor });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -122,7 +122,7 @@ describe("middleware de tool", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
     const saida = await app.run({
       input: { message: "vai" },
@@ -143,7 +143,7 @@ describe("middleware de tool", () => {
     };
     const { Fluxo } = fluxoComTool();
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "authz", tool: nega });
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
@@ -159,7 +159,7 @@ describe("middleware de tool", () => {
     });
     const { Fluxo } = fluxoComTool();
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "authz", tool: nega });
     const saida = await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -179,7 +179,7 @@ describe("middleware de tool", () => {
       };
 
     const { Fluxo } = fluxoComTool();
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "a", tool: marcar("a") });
     await app.use({ name: "b", tool: marcar("b") });
     await app.run({ input: { message: "vai" } });
@@ -196,7 +196,7 @@ describe("middleware de chat", () => {
       assistant: { role: "assistant", content: "do cache" },
     });
 
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
     await app.use({ name: "cache", chat: cache });
     const saida = await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -218,7 +218,7 @@ describe("middleware de chat", () => {
       };
     };
 
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([
         criarAgente({ provider }),
         criarAgente({ provider }),
@@ -247,7 +247,7 @@ describe("inv.meta — o middleware escreve no report", () => {
       return { assistant: { role: "assistant", content: "do cache" } };
     };
 
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
       { report: { dir } },
     );
@@ -273,7 +273,7 @@ describe("inv.meta — o middleware escreve no report", () => {
     };
 
     const { Fluxo } = fluxoComTool();
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.use({ name: "cache", tool: cache });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -292,7 +292,7 @@ describe("inv.meta — o middleware escreve no report", () => {
 
     const { Fluxo } = fluxoComTool();
     // sem `report` nem `log`: o recorder fica inativo
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
 
     await expect(app.run({ input: { message: "vai" } })).resolves.toBe("do cache");
@@ -325,7 +325,7 @@ describe("herança em run aninhada", () => {
     const providerPai = new FakeProvider([
       { tool: { name: "sub", arguments: { x: "1" } } },
     ]);
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([
         criarAgente({ provider: providerPai, tools: [SubTool as never] }),
       ]),

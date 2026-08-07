@@ -1,5 +1,6 @@
 import { toToolOutput } from "@thenajs/agentflow";
 import type { ToolOutput } from "@thenajs/agentflow";
+import { BudgetExceededError } from "../budget.js";
 import type { ExecutionNode } from "../observability/recorder.js";
 import type { RunContext } from "../run-context.js";
 import { FatalToolError } from "../tool-error.js";
@@ -102,16 +103,32 @@ export const contarTool: ToolMiddleware = (inv, next) => {
 
 /**
  * Falha de tool é **observação**: o texto do erro volta para o modelo, que tem
- * a chance de corrigir no turno seguinte. A exceção é a `FatalToolError`, com
- * que a tool declara que a falha não é recuperável.
+ * a chance de corrigir no turno seguinte.
+ *
+ * Três coisas não são "a tool falhou" e por isso continuam subindo:
+ *
+ * - `FatalToolError` — a tool declarando que a falha não é recuperável;
+ * - `BudgetExceededError` — o teto da run estourou. Virar observação seria
+ *   entregar ao modelo, como texto, o aviso de que não há mais orçamento — e
+ *   deixá-lo tentar de novo, gastando o que já não existe;
+ * - **cancelamento** — quem mandou parar não quer que a run siga com "a tool
+ *   falhou, tente outra coisa" no histórico.
+ *
+ * Os dois últimos só apareciam por aqui quando uma tool dispara um
+ * sub-workflow: é lá dentro que o checkpoint de orçamento e o de abort rodam,
+ * e a exceção deles atravessa o `execute` da tool na volta.
  *
  * Envolve só o centro da cadeia — um `throw` vindo de um hook continua subindo.
  */
-export const politicaDeErroDaTool: ToolMiddleware = async (_inv, next) => {
+export const politicaDeErroDaTool: ToolMiddleware = async (inv, next) => {
   try {
     return await next();
   } catch (err) {
     if (err instanceof FatalToolError) throw err;
+    if (err instanceof BudgetExceededError) throw err;
+    // O `reason` de um abort é livre (`controller.abort(qualquerCoisa)`), então
+    // a pergunta certa é sobre o signal, não sobre o tipo do erro.
+    if (inv.run.signal?.aborted) throw err;
     return {
       content: (err as Error)?.message ?? String(err),
       isError: true,

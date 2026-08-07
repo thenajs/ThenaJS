@@ -1,46 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  Agent,
-  Tool,
-  Workflow,
-  bootstrapWorkflow,
-  context,
-  currentRun,
-  runWorkflow,
-} from "@thenajs/core";
+import { Agent, Tool, Workflow, Thena, context, runWorkflow } from "@thenajs/core";
 import type { AgentContext } from "@thenajs/core";
 import { FakeProvider, PROMPT, criarAgente, criarWorkflow } from "./harness.js";
 
 /**
- * Configuração por execução — o que destrava multi-tenant.
+ * Configuração resolvida dentro do escopo da execução.
  *
  * O provider era resolvido do decorator e instanciado **sem argumentos**, com
- * as credenciais fixas na subclasse: o tenant A e o tenant B batiam no mesmo
- * endpoint com a mesma chave.
+ * as credenciais fixas na subclasse: duas execuções batiam no mesmo endpoint
+ * com a mesma chave, sem como variar.
+ *
+ * O que estes testes fixam é o **mecanismo** — `run({ data })` propaga sem ser
+ * interpretado, e a factory do provider roda dentro do escopo e enxerga esses
+ * dados. Os valores usados abaixo (`conta`, `regiao`) são domínio de exemplo:
+ * o framework não conhece nenhum deles, e é de propósito que não conheça.
  */
 
 const schema = z.object({ x: z.string() });
 
 describe("run({ data })", () => {
-  it("chega em currentRun().data", async () => {
+  it("chega em context().data", async () => {
     let visto: unknown;
     const provider = new FakeProvider();
 
     @Agent({ provider, prompt: PROMPT, tools: [] })
     class Agente {
       beforePrompt() {
-        visto = currentRun().data;
+        visto = context().data;
       }
     }
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, {});
-    await app.run({ input: { message: "oi" }, data: { tenant: "acme" } });
+    const app = Thena.create(Fluxo, {});
+    await app.run({ input: { message: "oi" }, data: { conta: "acme" } });
     await app.dispose();
 
-    expect(visto).toEqual({ tenant: "acme" });
+    expect(visto).toEqual({ conta: "acme" });
   });
 
   it("chega no ctx, alcançável por @context() numa tool", async () => {
@@ -57,19 +54,19 @@ describe("run({ data })", () => {
     const provider = new FakeProvider([
       { tool: { name: "quem", arguments: { x: "1" } } },
     ]);
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([criarAgente({ provider, tools: [QuemTool] })]),
       {},
     );
-    await app.run({ input: { message: "oi" }, data: { tenant: "acme" } });
+    await app.run({ input: { message: "oi" }, data: { conta: "acme" } });
     await app.dispose();
 
-    expect(visto).toEqual({ tenant: "acme" });
+    expect(visto).toEqual({ conta: "acme" });
   });
 
   it("NÃO vai para o modelo — a diferença para o `memory`", async () => {
     const provider = new FakeProvider();
-    const app = await bootstrapWorkflow(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
     await app.run({
       input: { message: "oi" },
       data: { chaveInterna: "segredo-nunca-visto" },
@@ -89,7 +86,7 @@ describe("run({ data })", () => {
     @Agent({ provider: providerFilho, prompt: PROMPT, tools: [] })
     class Filho {
       beforePrompt() {
-        vistoNoFilho = currentRun().data;
+        vistoNoFilho = context().data;
       }
     }
     @Workflow({ steps: [Filho] })
@@ -106,16 +103,16 @@ describe("run({ data })", () => {
     const providerPai = new FakeProvider([
       { tool: { name: "sub", arguments: { x: "1" } } },
     ]);
-    const app = await bootstrapWorkflow(
+    const app = Thena.create(
       criarWorkflow([
         criarAgente({ provider: providerPai, tools: [SubTool as never] }),
       ]),
       {},
     );
-    await app.run({ input: { message: "pai" }, data: { tenant: "acme" } });
+    await app.run({ input: { message: "pai" }, data: { conta: "acme" } });
     await app.dispose();
 
-    expect(vistoNoFilho).toEqual({ tenant: "acme" });
+    expect(vistoNoFilho).toEqual({ conta: "acme" });
   });
 
   it("sem data, é um objeto vazio — nunca undefined", async () => {
@@ -123,7 +120,7 @@ describe("run({ data })", () => {
     const provider = new FakeProvider();
     const Agente = criarAgente(
       { provider },
-      { beforePrompt: () => void (visto = currentRun().data) },
+      { beforePrompt: () => void (visto = context().data) },
     );
 
     await runWorkflow(criarWorkflow([Agente]), "oi");
@@ -137,9 +134,9 @@ describe("provider como factory", () => {
 
     @Agent({
       provider: () => {
-        const tenant = String(currentRun().data.tenant);
-        criados.push(tenant);
-        return new FakeProvider([{ content: `resposta de ${tenant}` }]);
+        const conta = String(context().data.conta);
+        criados.push(conta);
+        return new FakeProvider([{ content: `resposta de ${conta}` }]);
       },
       prompt: PROMPT,
       tools: [],
@@ -148,9 +145,9 @@ describe("provider como factory", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, {});
-    const a = await app.run({ input: { message: "x" }, data: { tenant: "acme" } });
-    const b = await app.run({ input: { message: "x" }, data: { tenant: "globex" } });
+    const app = Thena.create(Fluxo, {});
+    const a = await app.run({ input: { message: "x" }, data: { conta: "acme" } });
+    const b = await app.run({ input: { message: "x" }, data: { conta: "globex" } });
     await app.dispose();
 
     // Duas execuções, dois providers, credenciais diferentes.
@@ -159,11 +156,11 @@ describe("provider como factory", () => {
     expect(b).toBe("resposta de globex");
   });
 
-  it("execuções concorrentes de tenants diferentes não se misturam", async () => {
+  it("execuções concorrentes com dados diferentes não se misturam", async () => {
     @Agent({
       provider: () =>
-        new FakeProvider([{ content: String(currentRun().data.tenant) }], {
-          delayMs: Number(currentRun().data.atraso),
+        new FakeProvider([{ content: String(context().data.conta) }], {
+          delayMs: Number(context().data.atraso),
         }),
       prompt: PROMPT,
       tools: [],
@@ -172,10 +169,10 @@ describe("provider como factory", () => {
     @Workflow({ steps: [Agente] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, {});
+    const app = Thena.create(Fluxo, {});
     const [a, b] = await Promise.all([
-      app.run({ input: { message: "x" }, data: { tenant: "acme", atraso: 30 } }),
-      app.run({ input: { message: "x" }, data: { tenant: "globex", atraso: 5 } }),
+      app.run({ input: { message: "x" }, data: { conta: "acme", atraso: 30 } }),
+      app.run({ input: { message: "x" }, data: { conta: "globex", atraso: 5 } }),
     ]);
     await app.dispose();
 
@@ -213,8 +210,16 @@ describe("provider como factory", () => {
   });
 });
 
-describe("currentRun fora de uma execução", () => {
-  it("falha alto, em vez de devolver defaults em silêncio", () => {
-    expect(() => currentRun()).toThrow(/Nenhuma execução em curso/);
+describe("context() fora de uma execução", () => {
+  it("falha alto ao ler, em vez de devolver defaults em silêncio", () => {
+    expect(() => context().data).toThrow(/Nenhuma execução em curso/);
+  });
+
+  it("mas `context()` sozinho NÃO lança — a resolução é preguiçosa", () => {
+    // Consequência de o mesmo símbolo servir de decorator: `@context()` é
+    // avaliado no load do módulo, fora de qualquer execução, e não pode
+    // explodir ali. O preço é a falha sair no primeiro acesso, e não na
+    // chamada. Fixado em teste para a mudança não passar despercebida.
+    expect(() => context()).not.toThrow();
   });
 });

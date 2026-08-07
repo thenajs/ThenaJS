@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
 /** O contrato do `app.run()`: devolve, propaga, e não escreve no stdout. */
@@ -33,7 +33,7 @@ describe("app.run", () => {
   it("devolve a saída e não imprime nada", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const app = await bootstrapWorkflow(fluxoOk("resultado"), {});
+    const app = Thena.create(fluxoOk("resultado"), {});
     const saida = await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -44,7 +44,7 @@ describe("app.run", () => {
   it("rejeita com o erro original, sem tocar no process.exitCode", async () => {
     const erro = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const app = await bootstrapWorkflow(fluxoQueLanca("falhou feio"), {});
+    const app = Thena.create(fluxoQueLanca("falhou feio"), {});
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toThrow("falhou feio");
     expect(process.exitCode).toBeUndefined();
@@ -54,7 +54,7 @@ describe("app.run", () => {
   });
 
   it("uma run que falha não impede a seguinte no mesmo app", async () => {
-    const app = await bootstrapWorkflow(fluxoOk("ok"), {});
+    const app = Thena.create(fluxoOk("ok"), {});
 
     await app.run({ input: { message: "1" } });
     await app.run({ input: { message: "2" } });
@@ -69,7 +69,7 @@ describe("app.run", () => {
     const doApp = vi.fn();
     const daRun = vi.fn();
 
-    const app = await bootstrapWorkflow(fluxoOk("ok"), { log: doApp });
+    const app = Thena.create(fluxoOk("ok"), { log: doApp });
 
     await app.run({ input: { message: "1" }, log: daRun });
     expect(daRun).toHaveBeenCalled();

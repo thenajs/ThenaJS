@@ -1,6 +1,13 @@
 import { Pipeline, StateManager } from "@thenajs/agentflow";
 import { getWorkflowMetadata } from "../decorators/metadata.js";
-import { childRunContext, newRunContext, peekRun, withRun } from "../run-context.js";
+import {
+  childRunContext,
+  drenarDescartes,
+  newRunContext,
+  peekRun,
+  throwIfAborted,
+  withRun,
+} from "../run-context.js";
 import type { RunBudget } from "../budget.js";
 import type { WorkflowInput } from "../types.js";
 import { buildAgentStep } from "./agent-step.js";
@@ -45,7 +52,8 @@ export async function runWorkflow<T = string>(
   runBudget?: RunBudget,
 ): Promise<T> {
   // Uma run aninhada (tool que dispara outro workflow) herda id, recorder e
-  // settings do pai, e ganha orçamento próprio. Chamado fora de qualquer run,
+  // settings do pai. Sem `runBudget`, herda também o teto — um sub-workflow
+  // não é uma forma de sair do orçamento da run. Chamado fora de qualquer run,
   // abre um contexto de topo com os defaults.
   const pai = peekRun();
   const execucao = pai
@@ -74,13 +82,33 @@ export async function runWorkflow<T = string>(
     pipeline.new(meta.steps.map((s) => compileStep(s, pipeline, estado)));
 
     return execucao.recorder.around("workflow", WorkflowClass.name, async (node) => {
+      const antes = execucao.budget.usage();
       try {
         const ctx = await pipeline.run(input);
+        // O cancelamento é checado **entre** passos. Sem esta última checagem,
+        // um `ctx.abort()` no passo final não teria mais ninguém para notá-lo,
+        // e a run resolveria normalmente — cancelamento silenciosamente
+        // ignorado é pior do que não ter cancelamento.
+        throwIfAborted(execucao);
         return ctx.output as T;
       } finally {
-        // No nó raiz mesmo quando a run falha — o consumo já aconteceu.
+        // Antes da telemetria: uma limpeza pode gastar (fechar conexão, gravar
+        // algo), e o nó deve refletir o que a execução custou de verdade.
+        await drenarDescartes(execucao);
+
+        // O **delta**, e não o acumulado: uma run aninhada compartilha o
+        // tracker do pai, então ler o acumulado aqui atribuiria ao
+        // sub-workflow o que quem o chamou já tinha gasto. Na run de topo o
+        // ponto de partida é zero e o delta é o próprio acumulado.
+        //
+        // No nó mesmo quando a run falha — o consumo já aconteceu.
+        const agora = execucao.budget.usage();
         execucao.recorder.meta(node, {
-          ...execucao.budget.usage(),
+          chatCalls: agora.chatCalls - antes.chatCalls,
+          toolCalls: agora.toolCalls - antes.toolCalls,
+          tokens: agora.tokens - antes.tokens,
+          costUsd: agora.costUsd - antes.costUsd,
+          elapsedMs: agora.elapsedMs - antes.elapsedMs,
           exceeded: execucao.budget.exceeded(),
         });
       }

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { bootstrapWorkflow, loop } from "@thenajs/core";
+import { Thena, loop } from "@thenajs/core";
 import type { ExecutionNode } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
 
@@ -38,7 +38,7 @@ describe("report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -58,7 +58,7 @@ describe("report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "1" } });
     await app.run({ input: { message: "2" } });
     await app.dispose();
@@ -91,7 +91,7 @@ describe("report", () => {
     ]);
     const Fluxo = criarWorkflow([criarAgente({ provider, tools: [Ferramenta] })]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -119,7 +119,7 @@ describe("report", () => {
       }),
     ]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -139,7 +139,7 @@ describe("report", () => {
     ]);
     const Fluxo = criarWorkflow([criarAgente({ provider })]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
@@ -162,7 +162,7 @@ describe("report", () => {
     ]);
     const Fluxo = criarWorkflow([criarAgente({ provider, tools: [Ferramenta] })]);
 
-    const app = await bootstrapWorkflow(Fluxo, { report: { dir } });
+    const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 

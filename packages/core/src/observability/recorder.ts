@@ -183,6 +183,20 @@ export class ReportRecorder {
   }
 
   /**
+   * O mesmo que `meta`, mas no nó que está aberto **agora** — o passo em que
+   * quem chamou está executando.
+   *
+   * É o que permite uma tool escrever telemetria sem receber o nó por
+   * parâmetro: o `around` já mantém o frame na ALS, então "o nó atual" é uma
+   * pergunta que o recorder sabe responder sozinho. No-op fora de qualquer
+   * passo, ou sem observação ativa.
+   */
+  metaAtual(data: Record<string, unknown>): void {
+    const node = this.als.getStore()?.node;
+    if (node) this.meta(node, data);
+  }
+
+  /**
    * Marca o nó como erro **sem lançar** — para falhas observadas, em que a
    * execução segue (ex.: tool que devolveu `isError: true`).
    */

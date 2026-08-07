@@ -8,8 +8,9 @@ import type { Disponivel } from "../di/params.js";
 import { compose } from "../middleware/compose.js";
 import { cadeiaDeChat as chatMiddlewares } from "../middleware/chat.js";
 import type { ChatInvocation } from "../middleware/chat.js";
-import { currentRun, throwIfAborted } from "../run-context.js";
-import type { AgentContext } from "../types.js";
+import { currentRun, pedirParada, throwIfAborted } from "../run-context.js";
+import type { RunContext } from "../run-context.js";
+import type { AgentContext, RunControls } from "../types.js";
 import { buildToolStep } from "./tool-step.js";
 import { WorkflowRuntime } from "./workflow-runtime.js";
 
@@ -25,6 +26,34 @@ import { WorkflowRuntime } from "./workflow-runtime.js";
  * classe define `run(input, ctx)`, ela assume o controle total e os hooks
  * automáticos não são chamados (escape hatch).
  */
+/**
+ * Projeta a execução no ctx do passo.
+ *
+ * Escrito uma vez por passo, e não a cada leitura: `data` e `signal` são a
+ * mesma referência da run inteira, e as operações são fechaduras sobre ela.
+ */
+function ligarExecucao(ctx: AgentContext, run: RunContext): void {
+  // `Object.assign` e não atribuição campo a campo: `runId` e `signal` são
+  // `readonly`, e essa promessa é para **quem usa** o ctx — não para o runtime
+  // que o monta. Assim o tipo continua honesto lá fora, sem cast aqui dentro.
+  const controles: RunControls & { data: Record<string, unknown> } = {
+    runId: run.runId,
+    signal: run.signal!,
+    data: run.data,
+    usage: () => run.budget.usage(),
+    abort: (reason?: unknown) => run.abort(reason),
+    stop: () => pedirParada(run),
+    onDispose: (fn: () => void | Promise<void>) => void run.descartes.push(fn),
+    meta: (dados: Record<string, unknown>) => run.recorder.metaAtual(dados),
+  };
+
+  Object.assign(ctx, controles);
+
+  // A partir daqui `context()` — a função — resolve para o ctx deste passo,
+  // e não mais para a vista da run.
+  run.passo = ctx;
+}
+
 export function buildAgentStep(
   AgentClass: Function,
   estado?: object,
@@ -59,18 +88,21 @@ export function buildAgentStep(
       const execucao = currentRun();
       const agentCtx = ctx as AgentContext;
 
-      // Os dados da execução ficam no ctx, para uma tool alcançá-los com
-      // `@context()`. Diferente do `state.memory`, isto **não** vai ao modelo.
-      agentCtx.data = execucao.data;
+      // A execução é projetada no ctx do passo, para uma tool alcançá-la com
+      // `@context()` — que é a porta documentada. Sem isto, `signal`, `runId`
+      // e as operações só existiam do lado de fora do `run()`.
+      //
+      // Aditivo: nada do que o ctx já tinha mudou de lugar.
+      ligarExecucao(agentCtx, execucao);
 
       // Checagem entre unidades de trabalho: um turno é uma chamada ao modelo
       // mais, no máximo, uma tool.
       //
       // Cancelamento sempre lança — quem pediu para parar não quer meia
-      // resposta apresentada como resposta. Orçamento pode só pular: no modo
-      // "stop" a run termina com o output que já tinha.
+      // resposta apresentada como resposta. Orçamento e `ctx.stop()` podem só
+      // pular: a run termina com o output que já tinha.
       throwIfAborted(execucao);
-      if (execucao.budget.checkpoint()) return ctx;
+      if (execucao.parada.pedida || execucao.budget.checkpoint()) return ctx;
 
       // Texto do último turno — passado ao escape hatch `run`.
       const last = ctx.state.history.at(-1) as Message | string | undefined;

@@ -4,7 +4,7 @@ import {
   Agent,
   Tool,
   Workflow,
-  bootstrapWorkflow,
+  Thena,
   context,
   input,
   loop,
@@ -258,7 +258,7 @@ describe("mensagens de erro da injeção", () => {
     @Workflow({ steps: [PedeMemoria] })
     class Fluxo {}
 
-    const app = await bootstrapWorkflow(Fluxo, { memory: [FakeVectorStore] });
+    const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
       /@memory\(FakeVectorStoreB\).*não está.*registrado/s,

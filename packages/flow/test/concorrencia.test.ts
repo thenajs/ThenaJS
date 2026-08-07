@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import type { ExecutionEvent } from "@thenajs/core";
 import { FakeProvider, criarAgente, criarWorkflow } from "../../core/test/harness.js";
 import { MemoriaDeRuns } from "../src/server/memoria.js";
@@ -21,8 +21,8 @@ describe("Flow com execuções concorrentes", () => {
     const publicar = (e: ExecutionEvent) => memoria.registrar(e);
 
     // Um app por workflow, como no uso real; os dois publicam no mesmo Flow.
-    const appA = await bootstrapWorkflow(fluxoLento(30, "A"), { log: publicar });
-    const appB = await bootstrapWorkflow(fluxoLento(5, "B"), { log: publicar });
+    const appA = Thena.create(fluxoLento(30, "A"), { log: publicar });
+    const appB = Thena.create(fluxoLento(5, "B"), { log: publicar });
 
     const [a, b] = await Promise.all([
       appA.run({ input: { message: "a" } }),
@@ -62,8 +62,8 @@ describe("Flow com execuções concorrentes", () => {
       ),
     ]);
 
-    const appOk = await bootstrapWorkflow(fluxoLento(20, "ok"), { log: publicar });
-    const appRuim = await bootstrapWorkflow(Quebrado, { log: publicar });
+    const appOk = Thena.create(fluxoLento(20, "ok"), { log: publicar });
+    const appRuim = Thena.create(Quebrado, { log: publicar });
 
     const [ok, ruim] = await Promise.all([
       appOk.run({ input: { message: "a" } }),
