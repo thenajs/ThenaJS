@@ -25,14 +25,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20.19"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install
         run: npm ci
 
+      # `build:clean` e não `build`: o `tsc -b` é incremental e não remove a
+      # saída de um fonte que deixou de existir. Sem o rm, um refactor deixa
+      # .js órfão no dist — e ele é publicado.
       - name: Build
-        run: npm run build
+        run: npm run build:clean
 
       - name: Publish (na ordem de dependência)
         run: |

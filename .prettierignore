@@ -1,0 +1,8 @@
+dist/
+node_modules/
+docs/
+report/
+package-lock.json
+
+# Markdown é formatado à mão — tabelas e blocos de código alinhados de propósito.
+*.md

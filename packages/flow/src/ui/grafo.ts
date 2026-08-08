@@ -1,47 +1,47 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { FlowEvent } from "../tipos.js";
 
-export interface DadosDoNo extends Record<string, unknown> {
+export interface NodeData extends Record<string, unknown> {
   rotulo: string;
   kind: FlowEvent["kind"];
-  estado: "rodando" | "ok" | "error";
+  workflowState: "rodando" | "ok" | "error";
   duracaoMs?: number;
   erro?: string;
   payload?: Record<string, unknown>;
 }
 
-export type NoDoFluxo = Node<DadosDoNo>;
+export type FlowNode = Node<NodeData>;
 
 interface Bruto {
   id: string;
   parentId?: string;
-  dados: DadosDoNo;
+  dados: NodeData;
   filhos: string[];
 }
 
-const LARGURA = 200;
-const ALTURA = 52;
-const VAO_X = 96;
-const VAO_Y = 22;
+const WIDTH = 200;
+const HEIGHT = 52;
+const GAP_X = 96;
+const GAP_Y = 22;
 
 /**
  * Reduz o stream de eventos à árvore da execução. O recorder já emite `id` e
  * `parentId`, então não há nada a inferir: `start` cria o nó, `end` o fecha.
  */
-export function montarArvore(eventos: FlowEvent[]): Map<string, Bruto> {
+export function buildTree(events: FlowEvent[]): Map<string, Bruto> {
   const nos = new Map<string, Bruto>();
 
-  for (const evento of eventos) {
+  for (const evento of events) {
     if (evento.phase === "start") {
       if (nos.has(evento.id)) continue;
       nos.set(evento.id, {
         id: evento.id,
         parentId: evento.parentId,
         filhos: [],
-        dados: { rotulo: evento.name, kind: evento.kind, estado: "rodando" },
+        dados: { rotulo: evento.name, kind: evento.kind, workflowState: "rodando" },
       });
-      const pai = evento.parentId ? nos.get(evento.parentId) : undefined;
-      if (pai) pai.filhos.push(evento.id);
+      const parent = evento.parentId ? nos.get(evento.parentId) : undefined;
+      if (parent) parent.filhos.push(evento.id);
       continue;
     }
 
@@ -49,7 +49,7 @@ export function montarArvore(eventos: FlowEvent[]): Map<string, Bruto> {
     if (!no) continue;
     no.dados = {
       ...no.dados,
-      estado: evento.status === "error" ? "error" : "ok",
+      workflowState: evento.status === "error" ? "error" : "ok",
       duracaoMs: evento.durationMs,
       erro: evento.error,
       payload: evento.data,
@@ -66,7 +66,7 @@ export function montarArvore(eventos: FlowEvent[]): Map<string, Bruto> {
  * quando o irmão seguinte chega.
  */
 export function posicionar(nos: Map<string, Bruto>): {
-  nodes: NoDoFluxo[];
+  nodes: FlowNode[];
   edges: Edge[];
 } {
   const raizes = [...nos.values()].filter((n) => !n.parentId || !nos.has(n.parentId));
@@ -77,7 +77,7 @@ export function posicionar(nos: Map<string, Bruto>): {
     const no = nos.get(id)!;
     if (!no.filhos.length) {
       const linha = proximaLinha++;
-      y.set(id, linha * (ALTURA + VAO_Y));
+      y.set(id, linha * (HEIGHT + GAP_Y));
       return y.get(id)!;
     }
     const filhos = no.filhos.map(medir);
@@ -89,22 +89,22 @@ export function posicionar(nos: Map<string, Bruto>): {
 
   const profundidade = (no: Bruto): number => {
     let d = 0;
-    let atual = no;
-    while (atual.parentId && nos.has(atual.parentId)) {
-      atual = nos.get(atual.parentId)!;
+    let current = no;
+    while (current.parentId && nos.has(current.parentId)) {
+      current = nos.get(current.parentId)!;
       d++;
     }
     return d;
   };
 
-  const nodes: NoDoFluxo[] = [];
+  const nodes: FlowNode[] = [];
   const edges: Edge[] = [];
 
   for (const no of nos.values()) {
     nodes.push({
       id: no.id,
       type: "passo",
-      position: { x: profundidade(no) * (LARGURA + VAO_X), y: y.get(no.id) ?? 0 },
+      position: { x: profundidade(no) * (WIDTH + GAP_X), y: y.get(no.id) ?? 0 },
       data: no.dados,
     });
     if (no.parentId && nos.has(no.parentId)) {
@@ -112,8 +112,8 @@ export function posicionar(nos: Map<string, Bruto>): {
         id: `${no.parentId}->${no.id}`,
         source: no.parentId,
         target: no.id,
-        animated: no.dados.estado === "rodando",
-        style: { stroke: no.dados.estado === "error" ? "#f87171" : "#4b5563" },
+        animated: no.dados.workflowState === "rodando",
+        style: { stroke: no.dados.workflowState === "error" ? "#f87171" : "#4b5563" },
       });
     }
   }

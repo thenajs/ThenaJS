@@ -24,13 +24,13 @@ export class ReadFileTool {
    */
   async execute(
     @input() { path }: { path: string },
-    @state() estado: ExplorerState,
+    @state() workflowState: ExplorerState,
   ) {
     try {
       const conteudo = await readFile(path, "utf8");
 
       // O revisor lê isto para saber o que já foi investigado.
-      estado.arquivosLidos.push(path);
+      workflowState.arquivosLidos.push(path);
 
       return conteudo.length <= MAX_CHARS
         ? conteudo

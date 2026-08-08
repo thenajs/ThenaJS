@@ -1,0 +1,21 @@
+{
+  "name": "multi-tenancy",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "build": "tsc && copyfiles -u 1 \"src/**/*.md\" dist",
+    "start:prod": "node dist/main",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@thenajs/core": "file:../../packages/core",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "copyfiles": "^2.4.1"
+  }
+}

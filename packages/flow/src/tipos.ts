@@ -1,9 +1,10 @@
 import type { ExecutionEvent } from "@thenajs/core";
 
-/** Um evento da execução, já carimbado com a run a que pertence. */
+/**
+ * Um evento da execução, já carimbado pelo servidor. O `runId` vem do próprio
+ * `ExecutionEvent` — é o core que decide a qual execução o evento pertence.
+ */
 export interface FlowEvent extends ExecutionEvent {
-  /** Execução (`app.run`) a que este evento pertence. */
-  runId: string;
   /** Ordem de chegada dentro da run — o navegador usa para não reordenar. */
   seq: number;
   /** Epoch ms em que o servidor recebeu o evento. */
@@ -13,20 +14,20 @@ export interface FlowEvent extends ExecutionEvent {
 /** Resumo de uma execução, para a lista lateral. */
 export interface FlowRun {
   id: string;
-  nome: string;
+  name: string;
   inicioEm: number;
   fimEm?: number;
   duracaoMs?: number;
   status: "rodando" | "ok" | "error";
   /** Quantidade de passos concluídos. */
-  passos: number;
+  steps: number;
 }
 
 /** O que o navegador recebe ao conectar. */
 export interface FlowSnapshot {
   runs: FlowRun[];
   runAtual?: string;
-  eventos: FlowEvent[];
+  events: FlowEvent[];
 }
 
 /** Opções do `thenaFlow(...)`. */

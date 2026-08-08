@@ -7,12 +7,34 @@ import type {
 } from "@thenajs/agentflow";
 import type { BudgetUsage, RunBudget } from "./budget.js";
 import type { ThenaPlugin } from "./plugin.js";
+import type { LogConfig, ReportOptions } from "./config.js";
+import type { RunHandle } from "./run-handle.js";
 
 /** Classe de provider que o framework instancia com `new ProviderCtor()`. */
 export type ProviderCtor = new (...args: any[]) => Providers;
 
-/** Provider aceito no decorator: uma instância já configurada ou a classe. */
-export type ProviderInput = Providers | ProviderCtor;
+/**
+ * Como o provider é resolvido pelo `@Agent`.
+ *
+ * As três formas são um mecanismo de **escopo**, e quem escolhe o eixo é você:
+ *
+ * - **instância** — configurada uma vez, compartilhada por todas as execuções;
+ * - **classe** — instanciada com `new`, sem argumentos;
+ * - **factory** — chamada **por execução**, já dentro do escopo da run. Lê
+ *   `context()`, então chave, modelo e endpoint podem sair dos dados
+ *   daquela execução:
+ *
+ * ```ts
+ * @Agent({
+ *   provider: () => new OpenAIProvider({ apiKey: minhaChave(context().data) }),
+ *   prompt: "./a.agent.md",
+ * })
+ * ```
+ */
+export type ProviderInput = Providers | ProviderCtor | ProviderFactory;
+
+/** Factory de provider, chamada uma vez por execução. */
+export type ProviderFactory = () => Providers;
 
 /** Configuração passada para `@Tool({ ... })`. */
 export interface ToolConfig {
@@ -101,18 +123,112 @@ export interface TurnInfo {
  * grava o resumo do último turno em `ctx.turn` (a prop explícita vence o índice,
  * então fica tipada).
  */
-export type AgentContext = PipelineContext & {
-  turn?: TurnInfo;
+export type AgentContext<D extends RunData = RunData> = PipelineContext &
+  RunControls<D> & {
+    turn?: TurnInfo;
+    /**
+     * Consumo acumulado da run até aqui. Presente quando há `budget` — é a
+     * partir daqui que se escreve política própria (dedupe, corte por
+     * heurística) num `beforeTool` ou num `until`, sem o framework opinar.
+     */
+    budget?: BudgetUsage;
+  } & Record<string, unknown>;
+
+/**
+ * A forma do `run({ data })`.
+ *
+ * Aberto por padrão, porque o framework **não interpreta nada** aqui — o que
+ * tem dentro é da sua aplicação. Declare o seu para não precisar de cast a cada
+ * leitura:
+ *
+ * ```ts
+ * type MinhaExecucao = { contaId: string; regiao: string };
+ *
+ * const app = Thena.create<string, MinhaExecucao>(Fluxo, config);
+ * await app.run({ input, data: { contaId: "acme", regiao: "sa-east-1" } });
+ *
+ * context<MinhaExecucao>().data.contaId;   // string, sem cast
+ * ```
+ *
+ * Prefira `type` a `interface X extends DadosDaRun`: a interface herda o índice
+ * livre desta assinatura, e aí um campo inexistente passa como `unknown` em vez
+ * de dar erro de compilação.
+ */
+export type RunData = Record<string, unknown>;
+
+/**
+ * O que uma tool ou um hook alcança **da execução**, e não do passo.
+ *
+ * Estes campos existem no mesmo `ctx` que o `@context()` já injeta — a adição
+ * é aditiva, e nada do que havia antes mudou de lugar. A separação importa
+ * porque os dois grupos têm ciclos de vida diferentes: `state`, `output` e
+ * `turn` são do passo (e num bloco `parallel` são compartilhados entre os
+ * ramos); os campos abaixo valem para a execução inteira.
+ */
+export interface RunControls<D extends RunData = RunData> {
+  /** Id da execução. O mesmo que aparece em todo `ExecutionEvent`. */
+  readonly runId: string;
   /**
-   * Consumo acumulado da run até aqui. Presente quando há `budget` — é a partir
-   * daqui que se escreve política própria (dedupe, corte por heurística) num
-   * `beforeTool` ou num `until`, sem o framework opinar sobre ela.
+   * O canal de dados da execução (`run({ data })`). **Nunca vai para o
+   * modelo** — é a diferença para o `run({ memory })`.
+   *
+   * Sempre presente (objeto vazio quando não informado), e não opcional: é o
+   * acesso mais frequente da API, e um `?.` aqui apareceria em todo call site
+   * por um caso que não existe. O objeto é seu — o framework não interpreta
+   * nada dentro dele, e o tipo é o que **você** declarar.
    */
-  budget?: BudgetUsage;
-} & Record<string, unknown>;
+  readonly data: D;
+  /**
+   * Cancelamento da execução. Repasse ao seu `fetch` para uma tool longa
+   * parar de verdade quando alguém aborta:
+   *
+   * ```ts
+   * await fetch(url, { signal: ctx.signal });
+   * ```
+   */
+  readonly signal: AbortSignal;
+  /** Consumo acumulado da execução até aqui. */
+  usage(): BudgetUsage;
+  /**
+   * Cancela a execução inteira, de dentro. A `reason` chega no `catch` de quem
+   * chamou `run()`. Encerra abrupto — o turno em voo é interrompido.
+   */
+  abort(reason?: unknown): void;
+  /**
+   * Encerra a execução **graciosamente**: os passos seguintes são pulados e a
+   * run devolve o output que já tinha, sem lançar.
+   *
+   * É a diferença para o `abort()` — e o mesmo comportamento do orçamento no
+   * modo `"stop"`. Use quando a tool descobre que já há resposta suficiente.
+   */
+  stop(): void;
+  /**
+   * Registra uma limpeza para o fim da execução — sucesso, erro ou abort.
+   * Roda na ordem inversa do registro, como um `defer`.
+   *
+   * ```ts
+   * const conn = await pool.acquire();
+   * ctx.onDispose(() => conn.release());
+   * ```
+   */
+  onDispose(fn: () => void | Promise<void>): void;
+  /**
+   * Grava telemetria no nó **deste passo**: aparece no `report.json` e no
+   * payload do nó no Flow. No-op sem observação ativa.
+   */
+  meta(dados: Record<string, unknown>): void;
+}
+
+/**
+ * O contexto que uma tool recebe com `@context()`.
+ *
+ * Nome preferido daqui em diante; `AgentContext` continua válido e é o mesmo
+ * tipo.
+ */
+export type Context<D extends RunData = RunData> = AgentContext<D>;
 
 /** Alias usado nos `until` de workflow — mesma forma do `AgentContext`. */
-export type WorkflowContext = AgentContext;
+export type WorkflowContext<D extends RunData = RunData> = AgentContext<D>;
 
 /** Chamada de tool interceptável por `beforeTool`. */
 export interface ToolCall {
@@ -125,7 +241,7 @@ export interface ToolResult {
   name: string;
   args: unknown;
   output: string;
-  /** A tool sinalizou falha (ou lançou, com `toolErrors: "observe"`). */
+  /** A tool sinalizou falha — devolvendo `isError`, ou lançando. */
   isError?: boolean;
 }
 
@@ -158,21 +274,14 @@ export interface AgentHooks {
   afterTool?(
     result: ToolResult,
     ctx: AgentContext,
-  ):
-    | string
-    | ToolOutput
-    | void
-    | Promise<string | ToolOutput | void>;
+  ): string | ToolOutput | void | Promise<string | ToolOutput | void>;
   /** Transforma a resposta final do passo do agente. */
   afterResponse?(
     response: string,
     ctx: AgentContext,
   ): string | void | Promise<string | void>;
   /** Trata erros do fluxo; o retorno (se houver) vira a saída do agente. */
-  onError?(
-    error: Error,
-    ctx: AgentContext,
-  ): string | void | Promise<string | void>;
+  onError?(error: Error, ctx: AgentContext): string | void | Promise<string | void>;
 }
 
 /**
@@ -197,6 +306,27 @@ export interface ParallelStep {
   steps: WorkflowStep[];
 }
 
+/**
+ * Uma falha de tool observada dentro de um loop, entregue ao `onFail`.
+ *
+ * O que o `maxFails` compara é `consecutive`: o sinal de "preso" é a
+ * repetição, não o acúmulo. Um agente que erra, corrige e avança tem `total`
+ * alto e `consecutive` baixo — e é exatamente o comportamento que se quer.
+ */
+export interface LoopFailure {
+  /** Falhas seguidas até agora. Uma tool que funciona zera a contagem. */
+  consecutive: number;
+  /** Falhas desde o início desta execução do loop. */
+  total: number;
+  /** A tool que falhou, quando o provider informou o nome. */
+  toolName?: string;
+  /** A observação de erro que voltou para o modelo. */
+  message: string;
+}
+
+/** Por que o loop terminou. Registrado no nó `loop` do report. */
+export type LoopStopReason = "until" | "exhausted" | "fails" | "budget" | "stop";
+
 /** Bloco de repetição criado por `loop({ ... })`. */
 export interface LoopStep {
   kind: "loop";
@@ -212,6 +342,12 @@ export interface LoopStep {
     ctx: WorkflowContext,
     iterations: number,
   ) => unknown | Promise<unknown>;
+  /**
+   * Falhas de tool **consecutivas** que encerram o loop. `Infinity` desliga.
+   */
+  maxFails?: number;
+  /** Chamado a cada falha de tool — para alertar antes de o corte acontecer. */
+  onFail?: (ctx: WorkflowContext, info: LoopFailure) => unknown | Promise<unknown>;
 }
 
 /** Configuração passada para `@Workflow({ ... })`. */
@@ -241,8 +377,13 @@ export interface WorkflowInput {
   [key: string]: unknown;
 }
 
-/** Opções de `app.run(...)`. */
-export interface WorkflowRunOptions {
+/**
+ * Opções de `app.run(...)`.
+ *
+ * `report` e `log` sobrescrevem o `ThenaConfig` **apenas nesta execução** —
+ * possível porque cada run tem o próprio contexto.
+ */
+export interface WorkflowRunOptions<D extends RunData = RunData> {
   input: WorkflowInput;
   /**
    * Contexto inicial / memória persistente do workflow. É semeada no `memory`
@@ -255,16 +396,73 @@ export interface WorkflowRunOptions {
    * nada é medido nem checado.
    */
   budget?: RunBudget;
+  /** Sobrescreve `ThenaConfig.report` só nesta execução. */
+  report?: boolean | ReportOptions;
+  /** Sobrescreve `ThenaConfig.log` só nesta execução. */
+  log?: LogConfig;
+  /**
+   * Liga a observação desta execução: `onEvent`/`eventStream` do handle passam
+   * a receber os passos, e `onToken`/`textStream` a receber o texto.
+   *
+   * **O default é ligado só quando já há um observador** — `report`, `log` ou
+   * um plugin com `onEvent`. Sem nenhum deles a run não constrói a árvore de
+   * execução, não emite eventos e não pede streaming ao provider: é o caminho
+   * de custo zero, e ele vale ~2× em tempo de CPU por run.
+   *
+   * Use `observe: true` no padrão POST+SSE, em que o único consumidor é o
+   * handle:
+   *
+   * ```ts
+   * const exec = app.run({ input, observe: true });
+   * res.json({ runId: exec.runId });
+   * for await (const e of exec.eventStream) sse(e);
+   * ```
+   */
+  observe?: boolean;
+  /**
+   * Cancela a execução. Combina com o `abort()` do handle: o que disparar
+   * primeiro vence.
+   *
+   * ```ts
+   * app.run({ input, signal: req.signal });              // cliente desconectou
+   * app.run({ input, signal: AbortSignal.timeout(30_000) });
+   * ```
+   */
+  signal?: AbortSignal;
+  /**
+   * O canal de dados desta execução, disponível em `context().data` e em
+   * `ctx.data`. O conteúdo é seu — o framework transporta e propaga, sem
+   * interpretar nem nomear nada.
+   *
+   * **Não vai para o modelo** — é a diferença para o `memory` acima, que é
+   * serializado na mensagem `system` e portanto lido pelo modelo e gravado no
+   * report. Use `data` para o que a execução precisa carregar e o modelo não
+   * deve ver; use `memory` para o contexto que o modelo **deve** ler.
+   *
+   * ```ts
+   * await app.run({ input, data: { contaId: "acme", regiao: "sa-east-1" } });
+   * ```
+   */
+  data?: D;
 }
 
-/** Handle retornado por `bootstrapWorkflow` — o "app" do workflow. */
-export interface WorkflowApp<T = string> {
-  run(options: WorkflowRunOptions): Promise<T | void>;
+/** O que `Thena.create(...)` devolve — o "app" do workflow. */
+export interface WorkflowApp<T = string, D extends RunData = RunData> {
+  /**
+   * Executa o workflow e devolve a execução, de forma **síncrona**.
+   *
+   * Com `await`, você pede o resultado; sem `await`, a execução — com
+   * `runId`, `abort()` e `onEvent()`. Rejeita quando a execução falha: o erro
+   * não é engolido, e o processo não é marcado por baixo dos panos.
+   *
+   * Chamadas concorrentes são seguras: cada uma abre o próprio `RunContext`.
+   */
+  run(options: WorkflowRunOptions<D>): RunHandle<T>;
   /**
    * Acopla um observador do stream ao vivo. Vários coexistem, e nenhum toma o
    * lugar do `log` do config. Chame antes do `run`.
    */
-  use(plugin: ThenaPlugin): Promise<WorkflowApp<T>>;
-  /** Encerra os plugins e solta o recorder. */
+  use(plugin: ThenaPlugin): Promise<WorkflowApp<T, D>>;
+  /** Aborta as execuções em voo, espera elas soltarem, e encerra os plugins. */
   dispose(): Promise<void>;
 }

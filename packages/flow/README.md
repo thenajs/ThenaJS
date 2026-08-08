@@ -9,11 +9,11 @@ npm install @thenajs/flow
 ```
 
 ```ts
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { thenaFlow } from "@thenajs/flow";
 import { MeuWorkflow } from "./workflows/meu.workflow.js";
 
-const app = await bootstrapWorkflow(MeuWorkflow, { log: true });
+const app = Thena.create(MeuWorkflow, { log: true });
 await app.use(thenaFlow());
 
 await app.run({ input: { message: "Olá" } });

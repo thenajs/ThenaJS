@@ -10,9 +10,9 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { FlowEvent, FlowRun, FlowSnapshot } from "../tipos.js";
-import { montarArvore, posicionar, type NoDoFluxo } from "./grafo.js";
+import { buildTree, posicionar, type FlowNode } from "./grafo.js";
 
-const ICONES: Record<string, string> = {
+const ICONS: Record<string, string> = {
   workflow: "▣",
   loop: "↻",
   parallel: "⇉",
@@ -21,16 +21,19 @@ const ICONES: Record<string, string> = {
   tool: "⚙",
 };
 
-function NoPasso({ data, selected }: NodeProps<NoDoFluxo>) {
+function StepNode({ data, selected }: NodeProps<FlowNode>) {
   return (
-    <div className={`no no--${data.kind} no--${data.estado}`} data-selecionado={selected}>
+    <div
+      className={`no no--${data.kind} no--${data.workflowState}`}
+      data-selecionado={selected}
+    >
       <Handle type="target" position={Position.Left} />
-      <span className="no__icone">{ICONES[data.kind] ?? "•"}</span>
+      <span className="no__icone">{ICONS[data.kind] ?? "•"}</span>
       <span className="no__texto">
         <strong>{data.rotulo}</strong>
         <small>
           {data.kind}
-          {data.duracaoMs != null && ` · ${formatarDuracao(data.duracaoMs)}`}
+          {data.duracaoMs != null && ` · ${formatDuration(data.duracaoMs)}`}
         </small>
       </span>
       <Handle type="source" position={Position.Right} />
@@ -38,9 +41,9 @@ function NoPasso({ data, selected }: NodeProps<NoDoFluxo>) {
   );
 }
 
-const TIPOS_DE_NO = { passo: NoPasso };
+const NODE_TYPES = { step: StepNode };
 
-function formatarDuracao(ms: number): string {
+function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
@@ -53,7 +56,7 @@ function formatarHora(epoch: number): string {
 export function App() {
   const [runs, setRuns] = useState<FlowRun[]>([]);
   const [runVisivel, setRunVisivel] = useState<string>();
-  const [eventos, setEventos] = useState<FlowEvent[]>([]);
+  const [events, setEventos] = useState<FlowEvent[]>([]);
   const [selecionado, setSelecionado] = useState<string>();
   const [conectado, setConectado] = useState(false);
 
@@ -74,7 +77,7 @@ export function App() {
       setConectado(true);
       setRuns(dados.runs);
       setRunVisivel(dados.runAtual);
-      setEventos(dados.eventos);
+      setEventos(dados.events);
     });
 
     fonte.addEventListener("run", (e) => {
@@ -87,7 +90,7 @@ export function App() {
         return copia;
       });
       // Run nova: só pula para ela se o usuário não estiver revendo uma antiga.
-      if (seguindo.current && run.passos === 0 && foco.current !== run.id) {
+      if (seguindo.current && run.steps === 0 && foco.current !== run.id) {
         foco.current = run.id;
         setRunVisivel(run.id);
         setEventos([]);
@@ -104,22 +107,22 @@ export function App() {
     return () => fonte.close();
   }, []);
 
-  const abrirRun = useCallback(async (run: FlowRun) => {
+  const openRun = useCallback(async (run: FlowRun) => {
     seguindo.current = run.status === "rodando";
     foco.current = run.id;
     setRunVisivel(run.id);
     setSelecionado(undefined);
     const resposta = await fetch(`/api/runs/${run.id}`);
-    const { eventos: carregados } = await resposta.json();
+    const { events: carregados } = await resposta.json();
     // Uma corrida com o SSE aqui só aconteceria se o usuário trocasse de run
     // durante o fetch; o guard devolve o controle a quem chegou por último.
     if (foco.current === run.id) setEventos(carregados ?? []);
   }, []);
 
   const { nodes, edges, mapa } = useMemo(() => {
-    const arvore = montarArvore(eventos);
+    const arvore = buildTree(events);
     return { ...posicionar(arvore), mapa: arvore };
-  }, [eventos]);
+  }, [events]);
 
   const detalhe = selecionado ? mapa.get(selecionado)?.dados : undefined;
   const run = runs.find((r) => r.id === runVisivel);
@@ -144,12 +147,12 @@ export function App() {
               <button
                 className={`run run--${r.status}`}
                 aria-current={r.id === runVisivel}
-                onClick={() => abrirRun(r)}
+                onClick={() => openRun(r)}
               >
-                <strong>{r.nome}</strong>
+                <strong>{r.name}</strong>
                 <small>
-                  {formatarHora(r.inicioEm)} · {r.passos} passos
-                  {r.duracaoMs != null && ` · ${formatarDuracao(r.duracaoMs)}`}
+                  {formatarHora(r.inicioEm)} · {r.steps} passos
+                  {r.duracaoMs != null && ` · ${formatDuration(r.duracaoMs)}`}
                 </small>
               </button>
             </li>
@@ -161,7 +164,7 @@ export function App() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          nodeTypes={TIPOS_DE_NO}
+          nodeTypes={NODE_TYPES}
           onNodeClick={(_, no) => setSelecionado(no.id)}
           onPaneClick={() => setSelecionado(undefined)}
           fitView
@@ -175,9 +178,9 @@ export function App() {
 
         {run && (
           <div className="rodape">
-            <strong>{run.nome}</strong>
+            <strong>{run.name}</strong>
             <span className={`etiqueta etiqueta--${run.status}`}>{run.status}</span>
-            {run.duracaoMs != null && <span>{formatarDuracao(run.duracaoMs)}</span>}
+            {run.duracaoMs != null && <span>{formatDuration(run.duracaoMs)}</span>}
           </div>
         )}
       </main>
@@ -194,11 +197,13 @@ export function App() {
             <dt>tipo</dt>
             <dd>{detalhe.kind}</dd>
             <dt>estado</dt>
-            <dd className={`estado estado--${detalhe.estado}`}>{detalhe.estado}</dd>
+            <dd className={`estado estado--${detalhe.workflowState}`}>
+              {detalhe.workflowState}
+            </dd>
             {detalhe.duracaoMs != null && (
               <>
                 <dt>duração</dt>
-                <dd>{formatarDuracao(detalhe.duracaoMs)}</dd>
+                <dd>{formatDuration(detalhe.duracaoMs)}</dd>
               </>
             )}
           </dl>

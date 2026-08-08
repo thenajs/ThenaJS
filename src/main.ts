@@ -1,8 +1,8 @@
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 import { config } from "./config.js";
 
-const app = await bootstrapWorkflow(ExplorerWorkflow, config);
+const app = Thena.create(ExplorerWorkflow, config);
 
 // Para acompanhar a execução ao vivo, num grafo no navegador:
 //
@@ -12,7 +12,9 @@ const app = await bootstrapWorkflow(ExplorerWorkflow, config);
 // O site fica em http://127.0.0.1:4100 e segura o processo aberto depois do
 // `run` — encerre com Ctrl+C, ou com `await app.dispose()`.
 
-await app.run({
+// O `run` devolve a saída e **propaga** o erro — quem imprime é a aplicação,
+// não o framework. Chamadas concorrentes são seguras: cada uma tem seu contexto.
+const saida = await app.run({
   input: {
     message: "Olá",
   },
@@ -21,3 +23,5 @@ await app.run({
     sessionId: "abc",
   },
 });
+
+console.log(saida);

@@ -81,6 +81,7 @@ import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 @Agent({
   provider: LocalOllamaProvider,
   tools: [ShellTool],
+  prompt: "./explorer.agent.md",
 })
 export class ExplorerAgent {}
 ```
@@ -112,8 +113,15 @@ export class ReadFileTool {
 }
 ```
 
-O pacote `@thenajs/tools` já traz a `ShellTool`; tools próprias do app ficam em
-`src/tools/`.
+O pacote `@thenajs/tools` já traz a `ShellTool`.
+
+> ⚠️ A `ShellTool` dá ao modelo **execução arbitrária de comando**. Um agente
+> que leia conteúdo de terceiro pode ser induzido a executar o que estiver
+> escrito lá. Use `shellTool({ allow: ["git", "ls"] })` sempre que o agente
+> puder ver entrada não confiável — a versão sem allowlist é para ambiente
+> controlado. Ver [SECURITY.md](./SECURITY.md).
+
+Tools próprias do app ficam em `src/tools/`.
 
 Por padrão o `execute` recebe **só os argumentos** já validados pelo schema — o
 que mantém a tool trivial de testar. Quando precisar de mais, decore os
@@ -132,31 +140,59 @@ async execute(
 }
 ```
 
-### Sinalizando falha
+### Quando a tool falha
 
-Devolver uma `string` continua sendo o caminho normal. Para marcar que a
-observação é um erro — sem lançar e sem derrubar a run — devolva um `ToolOutput`:
+**Falha de tool é observação, não exceção.** O erro volta para o modelo como
+resultado da tool, e ele tem a chance de corrigir no turno seguinte — é o que
+faz um loop ReAct funcionar. Vale para as quatro formas de falhar:
+
+| Como falha | O que acontece |
+| --- | --- |
+| `execute` lança | a mensagem do erro vira a observação |
+| `execute` devolve `{ content, isError: true }` | o seu texto vira a observação |
+| o modelo chama uma tool que não existe | observação dizendo isso |
+| o modelo manda argumentos fora do schema | observação com o erro do zod |
+
+Não há nada para configurar. O nó `tool` do report fica `status: "error"`, o
+hook `afterTool` recebe `isError`, e `ctx.turn.toolError` fica `true` — então
+`tool_error_rate` é uma contagem de nós, não uma regex sobre o texto.
+
+Devolver `isError` explicitamente é melhor do que deixar lançar, porque você
+escolhe o texto que o modelo lê:
 
 ```ts
 async execute({ path }: { path: string }) {
   try {
     return await readFile(path, "utf8");
   } catch (err) {
-    return { content: `Falhou: ${(err as Error).message}`, isError: true };
+    return { content: `Não achei "${path}". Confira o caminho.`, isError: true };
   }
 }
 ```
 
-O nó `tool` do report fica `status: "error"`, o hook `afterTool` recebe
-`isError`, e `ctx.turn.toolError` fica `true`. Com isso `tool_error_rate` é uma
-contagem de nós, não uma regex sobre o texto de saída.
+#### Falhas que o modelo não conserta
 
-Uma tool que **lança** continua derrubando a run por padrão. Se preferir que o
-erro volte ao modelo como observação, ligue a política no config:
+Um bug no seu código, uma credencial expirada ou um banco fora do ar não
+melhoram com retentativa: o modelo não tem como resolver, cada volta custa uma
+chamada, e a mensagem original pode carregar coisa que não deveria chegar ao
+contexto dele nem ao report em disco. Para esses casos, lance `FatalToolError`:
 
 ```ts
-export const config: ThenaConfig = { toolErrors: "observe" }; // default: "throw"
+import { FatalToolError } from "@thenajs/core";
+
+async execute({ query }: { query: string }) {
+  try {
+    return await db.query(query);
+  } catch (err) {
+    // Encerra a run. O erro original fica em `cause`, fora do contexto do modelo.
+    throw new FatalToolError("banco indisponível", { cause: err });
+  }
+}
 ```
+
+> Com falha virando observação, uma tool quebrada dentro de um loop vira custo
+> em vez de erro visível. É por isso que `loop()` vem com `maxFails: 5` ligado
+> por padrão — veja [Os freios do loop](#os-freios-do-loop).
 
 ### Uma tool chamando um workflow
 
@@ -600,7 +636,8 @@ e aninháveis:
 
 - **agente** (a classe) → passo sequencial; a saída de um alimenta o próximo;
 - **`parallel([...])`** → passos concorrentes sobre o mesmo contexto;
-- **`loop({ steps, until, maxIterations, onExhausted })`** → repete até `until(ctx)` ou o limite.
+- **`loop({ steps, until, ... })`** → repete até `until(ctx)`, ou até um dos
+  freios (`maxFails`, `maxIterations`) — ambos ligados por padrão.
 
 ```ts
 // src/workflows/explorer.state.ts — o estado desta execução
@@ -655,33 +692,169 @@ O ponto de entrada da aplicação fica em `src/main.ts`:
 
 ```ts
 // src/main.ts
-import { bootstrapWorkflow } from "@thenajs/core";
+import { Thena } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 
-const app = await bootstrapWorkflow(ExplorerWorkflow);
+const app = Thena.create(ExplorerWorkflow);
 
-await app.run({
+const saida = await app.run({
   input: { message: "Olá" },
   memory: { userId: "123", sessionId: "abc" },
 });
+
+console.log(saida);
 ```
 
-`bootstrapWorkflow(WorkflowClass)` devolve um `app`; `app.run({ input, memory })`
-executa o workflow, imprime a saída final e, em erro, loga e marca
-`exitCode = 1`. Rode com `npm start`.
+`Thena.create(WorkflowClass)` devolve um `app`; `app.run({ input, memory })`
+executa o workflow e devolve a **execução** — que, com `await`, resolve na
+saída. Um erro **rejeita** — nada é engolido, nada é impresso e o
+`process.exitCode` não é tocado: o que fazer com a falha é decisão da
+aplicação. Rode com `npm start`.
 
 - **`input.message`** é a entrada inicial do pipeline.
 - **`memory`** é o contexto inicial / memória persistente do workflow: é semeado
   em `state.memory` antes da execução e fica disponível para os agentes e para
   os `until` dos loops.
 
-Para obter o resultado no código, use `runWorkflow` diretamente:
+Para obter o resultado sem passar pelo `app`, use `runWorkflow` diretamente:
 
 ```ts
 import { runWorkflow } from "@thenajs/core";
 import { ExplorerWorkflow } from "./workflows/explorer.workflow.js";
 
 const parecer = await runWorkflow(ExplorerWorkflow, "Revise o diretório src/");
+```
+
+#### A execução: cancelar e acompanhar
+
+`app.run()` devolve a execução, de forma **síncrona**. Com `await`, você pede o
+resultado; sem `await`, a execução:
+
+```ts
+const texto = await app.run({ input });   // resultado
+
+const exec = app.run({ input });          // execução
+exec.runId;                                // já disponível, antes do 1º turno
+exec.abort(new Error("desisti"));
+exec.onEvent((e) => console.log(e.kind, e.phase));
+const texto2 = await exec.result;
+```
+
+**Cancelamento** — o `signal` e o `abort()` valem os dois; o que disparar
+primeiro vence. O signal chega até o `fetch`, então abortar corta a geração em
+andamento, não só evita a próxima chamada:
+
+```ts
+await app.run({ input, signal: req.signal });                  // cliente sumiu
+await app.run({ input, signal: AbortSignal.timeout(30_000) }); // timeout
+```
+
+O erro é o **nativo**, então dá para distinguir a causa:
+
+| origem | `erro.name` |
+| --- | --- |
+| `AbortSignal.timeout(n)` | `TimeoutError` |
+| `abort()` | `AbortError` |
+| `abort(minhaRazao)` | o que você passou |
+
+> ⚠️ `signal.reason` é uma `DOMException` — que no Node **não** é
+> `instanceof Error`. Cheque por `erro.name`.
+
+Cancelamento **não** passa pelo `onError` do agente: o hook existe para ele se
+recuperar de falha, e "alguém mandou parar" não é falha.
+
+#### Streaming: o texto à medida que sai
+
+`onToken` e `textStream` entregam o texto enquanto o modelo o produz, em vez de
+esperar a resposta inteira:
+
+```ts
+const exec = app.run({ input: { message: "explique X" } });
+
+for await (const pedaco of exec.textStream) {
+  process.stdout.write(pedaco);
+}
+
+const texto = await exec.result;   // o mesmo texto, inteiro
+```
+
+Ou por callback, que é o que costuma casar melhor com um socket:
+
+```ts
+exec.onToken((pedaco) => ws.send(pedaco));
+```
+
+É um canal **separado** do `onEvent`: token não é um passo da execução — não
+tem início, fim nem status. Quem assina atrasado recebe o texto que já saiu.
+
+> Funciona com Ollama e OpenAI. O que **liga** o streaming é haver alguém
+> ouvindo: sem sink, o provider faz a requisição normal. Um provider próprio
+> que ignore o `onToken` continua funcionando — o texto simplesmente chega
+> inteiro no `result`.
+
+#### POST responde na hora, cliente acompanha por SSE
+
+O `runId` síncrono e o buffer de eventos são o que tornam este padrão possível
+— quem assina depois do início recebe o que já passou:
+
+```ts
+const execucoes = new Map<string, RunHandle<string>>();
+
+server.post("/chat", (req, res) => {
+  const exec = app.run({ input: req.body });        // sem await
+  execucoes.set(exec.runId, exec);
+  exec.result.finally(() =>
+    setTimeout(() => execucoes.delete(exec.runId), 60_000),
+  );
+  res.status(202).json({ runId: exec.runId });
+});
+
+server.get("/chat/:id/events", (req, res) => {
+  const exec = execucoes.get(req.params.id);
+  if (!exec) return res.status(404).end();
+
+  res.writeHead(200, { "content-type": "text/event-stream" });
+  const parar = exec.onEvent((e) => res.write(`data: ${JSON.stringify(e)}\n\n`));
+
+  exec.result.finally(() => { parar(); res.end(); });
+  req.on("close", parar);
+});
+
+server.delete("/chat/:id", (req, res) => {
+  execucoes.get(req.params.id)?.abort();
+  res.status(204).end();
+});
+```
+
+E `app.dispose()` drena: aborta o que está em voo e espera soltar antes de
+encerrar os plugins.
+
+```ts
+process.on("SIGTERM", async () => {
+  server.close();
+  await app.dispose();
+});
+```
+
+#### Execuções concorrentes
+
+Cada `run(...)` abre o próprio contexto de execução (`RunContext`): id, config,
+recorder e orçamento são dela. Duas execuções em paralelo — do mesmo `app` ou de
+apps diferentes no mesmo processo — não se contaminam, o que torna o `app`
+utilizável dentro de um servidor:
+
+```ts
+const app = Thena.create(ChatWorkflow, config);
+
+server.post("/chat", async (req, res) => {
+  res.json({ resposta: await app.run({ input: req.body }) });
+});
+```
+
+`report` e `log` podem ser sobrescritos por execução, valendo só para aquela run:
+
+```ts
+await app.run({ input: { message: "…" }, report: false, log: "verbose" });
 ```
 
 > No `parallel`, os agentes rodam sobre a **mesma** entrada e todos escrevem em
@@ -756,23 +929,56 @@ se perde. Já o `budget` **não** atravessa: cada `run` tem o próprio contador,
 teto no pai não soma o consumo dos filhos — se o subworkflow é caro, passe um
 `budget` no `runtime.run` dele também.
 
-#### Quando o loop estoura
+#### Os freios do loop
 
-Parar por `maxIterations` é diferente de convergir, e o framework diz qual dos
-dois aconteceu:
+Como falha de tool vira observação, um agente preso não morre — ele repete, e
+cada volta é uma chamada paga. Por isso **os freios vêm ligados**: um loop sem
+teto gasta o cartão de quem usa o framework, e ilimitado não pode ser o default.
+
+| Freio | Default | Pega |
+| --- | --- | --- |
+| `maxFails` | `5` | agente **preso**, repetindo a mesma falha de tool |
+| `maxIterations` | `10` | loop que **não converge**, mesmo sem erro nenhum |
+| `budget` da run | — | a execução inteira: tempo, chamadas, tokens, custo |
+
+Os dois primeiros são complementares, e nenhum substitui o outro: `maxFails` só
+conta quando há falha; um loop cujo `until` nunca fica verdadeiro e cujas tools
+funcionam só é contido por `maxIterations`.
 
 ```ts
 loop({
   steps: [ExplorerAgent],
   until: untilAnswered,
+
+  maxFails: 3,
+  onFail: (ctx, { consecutive, total, toolName }) =>
+    logger.warn(`${toolName} falhou ${consecutive}x seguidas (${total} no total)`),
+
   maxIterations: 10,
   onExhausted: (ctx, n) => console.warn(`[app] loop estourou em ${n} iterações`),
 })
 ```
 
+**`maxFails` conta falhas consecutivas, não totais.** Uma tool que funciona zera
+a contagem, então um agente que erra, corrige e avança não é punido:
+
+```
+✓ ✗ ✓ ✓ ✗ ✓ ✗ …   40 voltas, 20 falhas espalhadas → agente explorando. Passa.
+✗ ✗ ✗ ✗ ✗          5 falhas seguidas              → agente travado. Corta.
+```
+
+`onFail` dispara a **cada** falha, não só no corte — é o que dá tempo de alertar
+antes. Use `Infinity` em qualquer um dos dois para desligar, se souber por quê.
+
+#### Como saber por que o loop parou
+
+- o nó `loop` do report registra `stoppedBy` (`"until"`, `"exhausted"`,
+  `"fails"` ou `"budget"`), além de `iterations` e `fails`;
 - `ctx.loop` → `{ iterations, exhausted, maxIterations }`;
-- `wasExhausted(ctx)` → helper para ler isso num `until` ou hook;
-- o nó `loop` do report registra `iterations` e `exhausted`.
+- `wasExhausted(ctx)` → helper para ler a exaustão num `until` ou hook.
+
+`stoppedBy` importa porque um loop cortado por `maxFails` tem `exhausted: false`
+— sem ele, "convergiu" e "desistiu" ficariam indistinguíveis no report.
 
 Em loops aninhados `ctx.loop` sofre last-writer-wins — para o dado aninhado,
 leia a árvore do report.
@@ -833,35 +1039,130 @@ class ExplorerAgent implements AgentHooks {
 
 ## Report de execução
 
-O `bootstrapWorkflow` aceita um `config`. Com `report: true`, ao final da run é
-gerado um **report estilo Playwright** (HTML + JSON) em `report/`, com a
+O `Thena.create` aceita um `config`. Com `report: true`, ao final da run é
+gerado um **report estilo Playwright** (HTML + JSON) em `report/<runId>/`, com a
 árvore da execução (`workflow → loop / parallel → agent → chat → tool`), durações,
 status e o conteúdo de cada passo (o que foi enviado ao modelo, a resposta, a
 decisão de tool e o I/O das tools).
+
+Cada execução grava na **própria subpasta** — execuções concorrentes não
+sobrescrevem o report uma da outra — e o `report/index.html` da raiz é o índice
+das runs.
 
 ```ts
 // src/config.ts
 import type { ThenaConfig } from "@thenajs/core";
 
 export const config: ThenaConfig = {
-  log: true,          // logs ao vivo; ou "verbose", ou (event) => logger.info(event)
-  report: true,       // ou { dir: "report", format: "html" | "json" | "both" }
-  toolErrors: "throw" // ou "observe" — erro de tool volta ao modelo (default: "throw")
+  log: true,     // logs ao vivo; ou "verbose", ou (event) => logger.info(event)
+  report: true,  // ou { dir: "report", format: "html" | "json" | "both" }
 };
 
 // src/main.ts
-const app = await bootstrapWorkflow(ExplorerWorkflow, config);
+const app = Thena.create(ExplorerWorkflow, config);
 ```
 
-Rode `npm start` e abra **`report/index.html`** (HTML autocontido, sem
-dependências — colapsável via `<details>`). É **opt-in**: sem `report`, nada é
-gerado e não há overhead. Não há serviço/telemetria externa.
+Rode `npm start` e abra **`report/index.html`** — o índice das execuções, que
+leva ao report de cada uma (HTML autocontido, sem dependências — colapsável via
+`<details>`). É **opt-in**: sem `report`, nada é gerado e não há overhead. Não há
+serviço/telemetria externa.
 
 Para ver **o que está sendo executado em tempo real**, use `log`: `true` (árvore
 indentada no console, com durações), `"verbose"` (inclui o conteúdo) ou uma
 função `(event) => void` (sink customizado — pino/winston, arquivo, JSON lines).
 Log e report reutilizam a mesma camada de interceptação — uma instrumentação,
 dois "outputs".
+
+### Janela de contexto
+
+O `history` cresce sem teto, e **cada turno reenvia tudo** — o custo é
+quadrático: dez turnos custam mais de 30× o primeiro. Quando a janela do modelo
+estoura, a falha chega como um `400` não-retentável, tarde e depois de pago.
+
+```ts
+import { janelaDeContexto } from "@thenajs/core";
+
+await app.use({
+  name: "janela",
+  chat: janelaDeContexto({ maxTurnos: 12, maxCharsPorTool: 2000 }),
+});
+```
+
+O bloco `system` do topo é intocável — é o prompt do agente, e cortá-lo
+quebraria o agente em vez de economizar. O corte deixa um aviso no lugar, para
+o modelo não achar que a conversa começou ali e repetir trabalho já feito.
+
+> **Não vem ligado.** Diferente do `maxIterations` e do `maxFails`, que só
+> impedem desperdício, cortar histórico **muda o comportamento do agente**. Um
+> default trocaria uma falha ruidosa e cara por uma degradação muda. Meça
+> primeiro — o nó `chat` do report traz `promptTokens`.
+
+### Configuração por execução
+
+O `provider` do `@Agent` aceita uma **factory chamada por execução**, dentro do
+escopo da run. Ela lê `context()`, então chave, modelo e endpoint podem sair
+dos dados daquela execução:
+
+```ts
+import { context } from "@thenajs/core";
+
+@Agent({
+  provider: () => new OpenAIProvider({ apiKey: minhaChave(context().data) }),
+  prompt: "./a.agent.md",
+})
+export class MeuAgente {}
+```
+
+```ts
+await app.run({ input, data: { contaId: "acme", regiao: "sa-east-1" } });
+```
+
+`data` é o canal de dados da execução — e a diferença para o `memory` é
+importante:
+
+| | Vai para o modelo? | Vai para o report? |
+| --- | --- | --- |
+| `run({ memory })` | **sim** (vira mensagem `system`) | sim |
+| `run({ data })` | não | não |
+
+Use `memory` para o contexto que o modelo **deve** ler; `data` para o que a
+execução carrega e o modelo não deve ver. Os dois são herdados por
+sub-workflows, e `data` chega no `ctx`, alcançável por `@context()` numa tool.
+
+> **O framework não interpreta o `data`.** Ele transporta, propaga e mantém
+> fora do modelo — nada além disso. Não existe `tenantId`, `userId` nem campo
+> nomeado equivalente, e isso é decisão de projeto: o eixo pelo qual você separa
+> execuções — conta, ambiente, região, usuário — é do seu domínio, não do
+> framework. As três formas do `provider` (instância, classe, factory) são o
+> mecanismo de escopo; o significado é seu.
+
+### O que vai para o disco
+
+O `report.json` guarda **tudo** que foi enviado ao modelo e recebido dele. Por
+isso o mascaramento de segredo vem **ligado**:
+
+```ts
+export const config: ThenaConfig = {
+  report: true,
+  // redact: false,                       // desliga (não recomendado)
+  // redact: (campo, valor) =>            // acrescenta sem perder os de fábrica
+  //   redactSecrets(valor).replace(/CPF \d{11}/g, "CPF [REDACTED]"),
+};
+```
+
+Padrões de fábrica: `Bearer`, `Basic`, connection string com senha, `sk-`,
+`ghp_`, `xoxb-`, `AKIA`, JWT e campos nomeados (`api_key`, `password`, `senha`,
+`token`).
+
+O que ele **não** faz é PII — não existe regex para nome ou endereço. Se a sua
+aplicação trata dado pessoal, desligue a captura de conteúdo:
+
+```ts
+report: { content: false }   // mantém árvore, durações e telemetria
+```
+
+> Trate a pasta `report/` como dado sensível: não commite, não empacote em
+> imagem, não sirva estaticamente. Ver [SECURITY.md](./SECURITY.md).
 
 ### O que dá para medir sem regex
 
@@ -870,7 +1171,7 @@ Além de duração e status, cada nó carrega metadados estruturados em `data`:
 | Nó | Campos |
 | --- | --- |
 | `workflow` | `chatCalls`, `toolCalls`, `tokens`, `costUsd`, `elapsedMs`, `exceeded` |
-| `loop` | `iterations`, `exhausted`, `maxIterations` |
+| `loop` | `iterations`, `exhausted`, `maxIterations`, `stoppedBy`, `fails` |
 | `chat` | `toolCallSource`, `promptTokens`, `completionTokens`, `costUsd` |
 | `tool` | `isError` (e `status: "error"` no nó) |
 
@@ -878,11 +1179,121 @@ Ou seja: `tool_error_rate` é contar nós `kind: "tool"` com `status: "error"`; 
 taxa de resgate é contar `toolCallSource === "rescued"`; e loops que não
 convergiram são `exhausted: true`. Nada disso exige parsear o texto de saída.
 
+## Plugins e middlewares
+
+`app.use(...)` acopla comportamento à execução. Um plugin pode **observar**, com
+`onEvent`, e/ou **interceptar**, com `tool` e `chat`. Vários coexistem, e nenhum
+toma o lugar do outro.
+
+```ts
+await app.use(thenaFlow());   // observa: o grafo ao vivo no navegador
+```
+
+Um middleware envolve cada execução de tool ou cada chamada ao modelo. A
+assinatura é a mesma dos dois lados — sua função recebe a invocação e um
+`next()`:
+
+```ts
+await app.use({
+  name: "cronometro",
+  chat: async (inv, next) => {
+    const inicio = Date.now();
+    const turno = await next();               // chama o modelo de verdade
+    inv.meta({ latenciaMs: Date.now() - inicio });
+    return turno;
+  },
+});
+```
+
+**Chamar `next()` é seguir a cadeia. Não chamar é responder no lugar dela.** É o
+que permite um cache:
+
+```ts
+import type { ChatTurn, Message } from "@thenajs/core";
+
+const cache = new Map<string, ChatTurn>();
+const chave = (messages: Message[]) => JSON.stringify(messages);
+
+await app.use({
+  name: "cache",
+  chat: async (inv, next) => {
+    const k = chave(inv.messages);
+
+    const guardado = cache.get(k);
+    if (guardado) {
+      inv.meta({ cacheHit: true });   // aparece no report e no grafo do Flow
+      return guardado;                 // o modelo não é chamado
+    }
+
+    const turno = await next();
+    cache.set(k, turno);
+    return turno;
+  },
+});
+```
+
+### O que vem na invocação
+
+| Campo | `tool` | `chat` |
+| --- | --- | --- |
+| `name` | nome da tool | — |
+| `args` | argumentos (mutáveis) | — |
+| `messages` / `tools` / `sampling` | — | o que vai para o modelo |
+| `ctx` | contexto da execução | idem |
+| `run` | `runId`, `settings`, `budget`, `recorder` | idem |
+| `meta(dados)` | grava telemetria no nó do report | idem |
+
+### Onde a sua camada entra na cadeia
+
+A posição é contrato, e não é arbitrária:
+
+```
+registrarTool          ← observação do framework
+  hooksDeTool          ← beforeTool/afterTool do agente
+    [ o seu middleware ]
+      contarTool       ← orçamento
+        [execute]
+```
+
+- **Abaixo da observação**, porque um passo que não abre o nó desaparece do
+  `report.json` e do grafo do Flow. Um cache que acerta precisa continuar
+  visível — só com 4ms em vez de 2s.
+- **Acima da contabilidade**, porque quem curto-circuita não gastou nada. Somar
+  o `usage` de um turno cacheado cobraria de novo tokens já pagos e furaria o
+  `maxCostUsd`.
+- **Abaixo dos hooks do agente**, para a sua checagem enxergar os argumentos que
+  de fato vão executar — um `beforeTool` que os reescrevesse depois tornaria uma
+  autorização contornável.
+
+Vários middlewares rodam na ordem de registro: o primeiro `use()` é o mais
+externo.
+
+### Erro num middleware
+
+Diferente de uma tool, um `throw` seu **não** vira observação — ele derruba a
+run. O controle é pelo retorno:
+
+```ts
+tool: async (inv, next) => {
+  if (!podeUsar(inv.ctx.usuario, inv.name)) {
+    // observação: o modelo lê e tenta outra coisa
+    return { content: `Sem permissão para ${inv.name}.`, isError: true };
+  }
+  return next();
+}
+```
+
+> Um middleware **não** pode chamar `next()` duas vezes — a cadeia inteira
+> rodaria de novo, incluindo a chamada paga ao modelo. Retry de chamada HTTP já
+> existe um nível abaixo, no transporte, com backoff e `Retry-After`.
+
 ## Scripts
 
 | Script | O que faz |
 | --- | --- |
 | `npm run build` | Compila todos os pacotes (`tsc -b`) |
+| `npm test` | Roda a suíte (Vitest) contra o código-fonte, sem build |
+| `npm run test:watch` | Idem, em modo watch |
 | `npm start` | Build + executa o bootstrap (`src/main.ts`) |
 | `npm run typecheck` | Build + typecheck do app em `src/` |
 | `npm run thena` | Executa a CLI (`-- g agent <nome>`) |

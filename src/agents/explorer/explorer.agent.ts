@@ -6,6 +6,6 @@ import { ReadFileTool } from "../../tools/read-file.tool.js";
 @Agent({
   provider: LocalOllamaProvider,
   tools: [ShellTool, ReadFileTool],
-  prompt: "./explorer.agent.md"
+  prompt: "./explorer.agent.md",
 })
 export class ExplorerAgent {}

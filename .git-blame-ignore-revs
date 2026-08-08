@@ -1,0 +1,5 @@
+# Commits só de formatação — o `git blame` deve pular.
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: aplica Prettier em todo o código
+92bf6d86ee86ab97d2dad57788cd802212fe7ecf
