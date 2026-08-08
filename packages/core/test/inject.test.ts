@@ -18,8 +18,8 @@ import {
   FakeVectorStore,
   FakeVectorStoreB,
   PROMPT,
-  criarAgente,
-  criarWorkflow,
+  makeAgent,
+  makeWorkflow,
 } from "./harness.js";
 
 /**
@@ -39,7 +39,7 @@ afterEach(() => FakeVectorStore.limpar());
 
 describe("@input, @state e @context no execute da tool", () => {
   it("entrega os três, e a ordem dos parâmetros não importa", async () => {
-    const visto: { args: unknown; temCtx: boolean; estado?: EstadoDeTeste } = {
+    const visto: { args: unknown; temCtx: boolean; workflowState?: EstadoDeTeste } = {
       args: undefined,
       temCtx: false,
     };
@@ -48,14 +48,14 @@ describe("@input, @state e @context no execute da tool", () => {
     class LerTool {
       // de propósito fora da ordem "natural": state, input, context
       async execute(
-        @state() estado: EstadoDeTeste,
+        @state() workflowState: EstadoDeTeste,
         @input() args: { path: string },
         @context() ctx: AgentContext,
       ) {
         visto.args = args;
-        visto.estado = estado;
+        visto.workflowState = workflowState;
         visto.temCtx = typeof ctx?.state?.append === "function";
-        estado.visitados.push(args.path);
+        workflowState.visitados.push(args.path);
         return "ok";
       }
     }
@@ -63,8 +63,8 @@ describe("@input, @state e @context no execute da tool", () => {
     const provider = new FakeProvider([
       { tool: { name: "ler", arguments: { path: "a.ts" } } },
     ]);
-    const Fluxo = criarWorkflow(
-      [criarAgente({ provider, tools: [LerTool] })],
+    const Fluxo = makeWorkflow(
+      [makeAgent({ provider, tools: [LerTool] })],
       EstadoDeTeste,
     );
 
@@ -72,7 +72,7 @@ describe("@input, @state e @context no execute da tool", () => {
 
     expect(visto.args).toEqual({ path: "a.ts" });
     expect(visto.temCtx).toBe(true);
-    expect(visto.estado?.visitados).toEqual(["a.ts"]);
+    expect(visto.workflowState?.visitados).toEqual(["a.ts"]);
   });
 
   it("sem decorator nenhum, o execute recebe só os argumentos", async () => {
@@ -89,7 +89,7 @@ describe("@input, @state e @context no execute da tool", () => {
     const provider = new FakeProvider([
       { tool: { name: "ler", arguments: { path: "b.ts" } } },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider, tools: [LerTool] })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider, tools: [LerTool] })]);
 
     await runWorkflow(Fluxo, "vai");
 
@@ -99,8 +99,8 @@ describe("@input, @state e @context no execute da tool", () => {
   it("o estado injetado na tool é a MESMA instância que o until do loop lê", async () => {
     @Tool({ name: "aprovar", description: "aprova", schema: z.object({}) })
     class AprovarTool {
-      async execute(@state() estado: EstadoDeTeste) {
-        estado.aprovado = true;
+      async execute(@state() workflowState: EstadoDeTeste) {
+        workflowState.aprovado = true;
         return "aprovado";
       }
     }
@@ -108,10 +108,10 @@ describe("@input, @state e @context no execute da tool", () => {
     const provider = new FakeProvider([{ tool: { name: "aprovar", arguments: {} } }]);
 
     let visto: EstadoDeTeste | undefined;
-    const Fluxo = criarWorkflow(
+    const Fluxo = makeWorkflow(
       [
         loop({
-          steps: [criarAgente({ provider, tools: [AprovarTool] })],
+          steps: [makeAgent({ provider, tools: [AprovarTool] })],
           until: (_ctx, s: EstadoDeTeste) => {
             visto = s;
             return s.aprovado;
@@ -140,10 +140,10 @@ describe("@state no construtor do agente", () => {
 
     @Agent({ provider, prompt: PROMPT, tools: [] })
     class Revisor {
-      constructor(@state() private readonly estado: EstadoDeTeste) {}
+      constructor(@state() private readonly workflowState: EstadoDeTeste) {}
       async afterResponse(resposta: string) {
-        this.estado.visitados.push(resposta);
-        this.estado.aprovado = /APROVADO/.test(resposta);
+        this.workflowState.visitados.push(resposta);
+        this.workflowState.aprovado = /APROVADO/.test(resposta);
       }
     }
 
@@ -179,9 +179,9 @@ describe("@state no construtor do agente", () => {
 
       @Agent({ provider, prompt: PROMPT, tools: [] })
       class Revisor {
-        constructor(@state() private readonly estado: EstadoDeTeste) {}
+        constructor(@state() private readonly workflowState: EstadoDeTeste) {}
         async afterResponse(r: string) {
-          this.estado.visitados.push(r);
+          this.workflowState.visitados.push(r);
         }
       }
       return { Revisor };

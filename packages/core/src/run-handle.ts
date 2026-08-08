@@ -83,7 +83,7 @@ export interface RunHandle<T> extends PromiseLike<T> {
  * troca o começo de uma execução muito longa por um limite de memória
  * previsível.
  */
-export const MAX_EVENTOS_NO_BUFFER = 500;
+export const MAX_BUFFERED_EVENTS = 500;
 
 /**
  * Um canal que guarda, reproduz para quem chega atrasado, e distribui.
@@ -91,18 +91,18 @@ export const MAX_EVENTOS_NO_BUFFER = 500;
  * Genérico porque a execução tem dois: os passos (`ExecutionEvent`) e o texto
  * (`string`). Eles não se misturam — token não tem início, fim nem status.
  */
-export class Canal<T> {
-  private readonly passados: T[] = [];
-  private readonly ouvintes = new Set<(item: T) => void>();
-  private encerrado = false;
+export class Channel<T> {
+  private readonly buffered: T[] = [];
+  private readonly listeners = new Set<(item: T) => void>();
+  private closed = false;
 
-  constructor(private readonly max = MAX_EVENTOS_NO_BUFFER) {}
+  constructor(private readonly max = MAX_BUFFERED_EVENTS) {}
 
-  publicar(item: T): void {
-    this.passados.push(item);
-    if (this.passados.length > this.max) this.passados.shift();
+  publish(item: T): void {
+    this.buffered.push(item);
+    if (this.buffered.length > this.max) this.buffered.shift();
 
-    for (const cb of this.ouvintes) {
+    for (const cb of this.listeners) {
       // Isolado: um assinante que lança não afeta a execução nem os outros.
       try {
         cb(item);
@@ -112,9 +112,9 @@ export class Canal<T> {
     }
   }
 
-  assinar(cb: (item: T) => void): () => void {
+  subscribe(cb: (item: T) => void): () => void {
     // O histórico primeiro, e só então os novos.
-    for (const item of this.passados) {
+    for (const item of this.buffered) {
       try {
         cb(item);
       } catch {
@@ -122,65 +122,65 @@ export class Canal<T> {
       }
     }
     // Quem assina depois do fim recebe o histórico e o encerramento na hora.
-    if (this.encerrado) {
+    if (this.closed) {
       (cb as { __fim?: () => void }).__fim?.();
       return () => {};
     }
-    this.ouvintes.add(cb);
-    return () => this.ouvintes.delete(cb);
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
   }
 
   /** Fecha os iteradores abertos, para o `for await` de quem observa terminar. */
-  encerrar(): void {
-    this.encerrado = true;
-    for (const cb of [...this.ouvintes]) {
+  close(): void {
+    this.closed = true;
+    for (const cb of [...this.listeners]) {
       (cb as { __fim?: () => void }).__fim?.();
     }
   }
 
-  async *iterar(): AsyncIterableIterator<T> {
-    const pendentes: T[] = [];
-    let acordar: (() => void) | undefined;
-    let terminou = false;
+  async *iterate(): AsyncIterableIterator<T> {
+    const queued: T[] = [];
+    let wake: (() => void) | undefined;
+    let finished = false;
 
     const cb = (item: T) => {
-      pendentes.push(item);
-      acordar?.();
+      queued.push(item);
+      wake?.();
     };
     (cb as { __fim?: () => void }).__fim = () => {
-      terminou = true;
-      acordar?.();
+      finished = true;
+      wake?.();
     };
 
-    const cancelar = this.assinar(cb);
+    const unsubscribe = this.subscribe(cb);
     try {
       while (true) {
-        while (pendentes.length) yield pendentes.shift()!;
-        if (terminou) return;
-        await new Promise<void>((r) => (acordar = r));
-        acordar = undefined;
+        while (queued.length) yield queued.shift()!;
+        if (finished) return;
+        await new Promise<void>((r) => (wake = r));
+        wake = undefined;
       }
     } finally {
-      cancelar();
+      unsubscribe();
     }
   }
 }
 
 /** @deprecated Use `Canal<ExecutionEvent>`. Mantido para não quebrar imports. */
-export class FilaDeEventos extends Canal<ExecutionEvent> {}
+export class EventQueue extends Channel<ExecutionEvent> {}
 
 /** Monta o handle a partir das peças que o `bootstrap` já tem. */
-export function criarRunHandle<T>(peças: {
+export function createRunHandle<T>(peças: {
   runId: string;
   result: Promise<T>;
   signal: AbortSignal;
   abort: (reason?: unknown) => void;
-  eventos: Canal<ExecutionEvent>;
-  tokens: Canal<string>;
+  events: Channel<ExecutionEvent>;
+  tokens: Channel<string>;
   /** A execução está sendo observada? Ver `run({ observe })`. */
   observando: boolean;
 }): RunHandle<T> {
-  const { runId, result, signal, abort, eventos, tokens, observando } = peças;
+  const { runId, result, signal, abort, events, tokens, observando } = peças;
 
   // Sem isto, o padrão do POST+SSE derruba o processo: ninguém deu `await`
   // ainda quando a execução falha, e o Node dispara `unhandledRejection`. O
@@ -194,7 +194,7 @@ export function criarRunHandle<T>(peças: {
    * olhando um `for await` que nunca rende.
    */
   let avisou = false;
-  const avisarSeMudo = (metodo: string) => {
+  const warnIfNotObserved = (metodo: string) => {
     if (observando || avisou) return;
     avisou = true;
     console.warn(
@@ -210,20 +210,20 @@ export function criarRunHandle<T>(peças: {
     signal,
     abort,
     onEvent: (cb) => {
-      avisarSeMudo("onEvent()");
-      return eventos.assinar(cb);
+      warnIfNotObserved("onEvent()");
+      return events.subscribe(cb);
     },
     get eventStream() {
-      avisarSeMudo("eventStream");
-      return eventos.iterar();
+      warnIfNotObserved("eventStream");
+      return events.iterate();
     },
     onToken: (cb) => {
-      avisarSeMudo("onToken()");
-      return tokens.assinar(cb);
+      warnIfNotObserved("onToken()");
+      return tokens.subscribe(cb);
     },
     get textStream() {
-      avisarSeMudo("textStream");
-      return tokens.iterar();
+      warnIfNotObserved("textStream");
+      return tokens.iterate();
     },
     then: (ok, err) => result.then(ok, err),
     catch: (aoFalhar) => result.catch(aoFalhar),

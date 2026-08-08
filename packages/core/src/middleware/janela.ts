@@ -24,12 +24,12 @@ import type { ChatMiddleware } from "./chat.js";
  * O caminho recomendado é medir primeiro (o nó `chat` do report traz
  * `promptTokens`) e ligar quando o número justificar.
  */
-export interface JanelaOptions {
+export interface ContextWindowOptions {
   /**
    * Quantas mensagens do fim do histórico manter. Um turno com tool ocupa duas
    * (assistant + tool), então `maxTurnos: 12` guarda ~6 idas e voltas.
    */
-  maxTurnos?: number;
+  maxTurns?: number;
   /** Teto de caracteres do histórico. Corta do começo até caber. */
   maxChars?: number;
   /**
@@ -37,7 +37,7 @@ export interface JanelaOptions {
    * que mais infla o histórico, e é o que envelhece mais rápido — o modelo
    * raramente precisa do conteúdo inteiro de um arquivo dez turnos depois.
    */
-  maxCharsPorTool?: number;
+  maxCharsPerTool?: number;
   /**
    * O que dizer no lugar do que foi cortado. Uma nota explícita é melhor que
    * um salto silencioso: sem ela o modelo vê a conversa começar no meio e pode
@@ -45,10 +45,10 @@ export interface JanelaOptions {
    *
    * `false` corta sem avisar.
    */
-  aviso?: string | false;
+  warnIndexFailure?: string | false;
 }
 
-const AVISO_PADRAO = "[…histórico anterior omitido para caber na janela…]";
+const DEFAULT_NOTICE = "[…histórico anterior omitido para caber na janela…]";
 
 /**
  * Middleware que aplica a janela. Preserva **sempre** as mensagens `system`
@@ -58,8 +58,13 @@ const AVISO_PADRAO = "[…histórico anterior omitido para caber na janela…]";
  * Preservar o começo também é o que mantém o prefixo estável para o cache de
  * prompt do provider — cortar do topo zeraria o desconto a cada turno.
  */
-export function janelaDeContexto(options: JanelaOptions = {}): ChatMiddleware {
-  const { maxTurnos, maxChars, maxCharsPorTool, aviso = AVISO_PADRAO } = options;
+export function contextWindow(options: ContextWindowOptions = {}): ChatMiddleware {
+  const {
+    maxTurns,
+    maxChars,
+    maxCharsPerTool,
+    warnIndexFailure = DEFAULT_NOTICE,
+  } = options;
 
   return async (inv, next) => {
     const original = inv.messages;
@@ -71,18 +76,18 @@ export function janelaDeContexto(options: JanelaOptions = {}): ChatMiddleware {
     const fixas = original.slice(0, corte);
     let conversa = original.slice(corte);
 
-    if (maxCharsPorTool !== undefined) {
+    if (maxCharsPerTool !== undefined) {
       conversa = conversa.map((m) =>
-        m.role === "tool" && m.content.length > maxCharsPorTool
-          ? { ...m, content: `${m.content.slice(0, maxCharsPorTool)}\n… [truncado]` }
+        m.role === "tool" && m.content.length > maxCharsPerTool
+          ? { ...m, content: `${m.content.slice(0, maxCharsPerTool)}\n… [truncado]` }
           : m,
       );
     }
 
     let cortou = false;
 
-    if (maxTurnos !== undefined && conversa.length > maxTurnos) {
-      conversa = conversa.slice(-maxTurnos);
+    if (maxTurns !== undefined && conversa.length > maxTurns) {
+      conversa = conversa.slice(-maxTurns);
       cortou = true;
     }
 
@@ -93,8 +98,8 @@ export function janelaDeContexto(options: JanelaOptions = {}): ChatMiddleware {
       }
     }
 
-    if (cortou && aviso !== false) {
-      conversa = [{ role: "system", content: aviso }, ...conversa];
+    if (cortou && warnIndexFailure !== false) {
+      conversa = [{ role: "system", content: warnIndexFailure }, ...conversa];
     }
 
     inv.messages = [...fixas, ...conversa];

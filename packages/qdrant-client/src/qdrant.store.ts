@@ -12,7 +12,7 @@ import type {
 export type QdrantCredentials = VectorStoreCredentials;
 
 /** O shape neutro de distância → o nome que o Qdrant espera. */
-const DISTANCIAS: Record<VectorDistance, string> = {
+const DISTANCES: Record<VectorDistance, string> = {
   cosine: "Cosine",
   euclid: "Euclid",
   dot: "Dot",
@@ -54,11 +54,11 @@ export class QdrantStore extends VectorStore {
     await this.chamar(`/collections/${this.collection}`, "PUT", {
       vectors: {
         size: options.size,
-        distance: DISTANCIAS[options.distance ?? "cosine"],
+        distance: DISTANCES[options.distance ?? "cosine"],
       },
     });
 
-    await this.criarIndiceDePartição();
+    await this.createPartitionIndex();
   }
 
   /**
@@ -70,7 +70,7 @@ export class QdrantStore extends VectorStore {
    * apenas a forma abreviada é aceita, então caímos para ela: o índice sai
    * igual, só sem a otimização de co-locação.
    */
-  private async criarIndiceDePartição(): Promise<void> {
+  private async createPartitionIndex(): Promise<void> {
     const rota = `/collections/${this.collection}/index?wait=true`;
     try {
       await this.chamar(rota, "PUT", {
@@ -116,7 +116,7 @@ export class QdrantStore extends VectorStore {
     }>(`/collections/${this.collection}/points/query`, "POST", {
       query: params.vector,
       limit: params.limit ?? 5,
-      filter: this.montarFiltro(params.where, params.rawFilter),
+      filter: this.buildFilter(params.where, params.rawFilter),
       with_payload: params.withPayload ?? true,
       score_threshold: params.scoreThreshold,
     });
@@ -129,20 +129,20 @@ export class QdrantStore extends VectorStore {
   }
 
   async remove(selector: VectorSelector): Promise<void> {
-    const filter = this.montarFiltro(selector.where);
-    const corpo = selector.ids?.length
+    const filter = this.buildFilter(selector.where);
+    const body = selector.ids?.length
       ? { points: selector.ids }
       : filter
         ? { filter }
         : undefined;
 
     // Sem seletor nenhum, apagar tudo seria destrutivo demais para ser implícito.
-    if (!corpo) return;
+    if (!body) return;
 
     await this.chamar(
       `/collections/${this.collection}/points/delete?wait=true`,
       "POST",
-      corpo,
+      body,
     );
   }
 
@@ -151,7 +151,7 @@ export class QdrantStore extends VectorStore {
    * `rawFilter` vence quando presente — é o escape hatch para o que a
    * igualdade não cobre (ranges, geo, aninhamento).
    */
-  private montarFiltro(where?: Record<string, unknown>, rawFilter?: unknown): unknown {
+  private buildFilter(where?: Record<string, unknown>, rawFilter?: unknown): unknown {
     if (rawFilter !== undefined) return rawFilter;
     if (!where || !Object.keys(where).length) return undefined;
 

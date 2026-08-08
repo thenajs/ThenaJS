@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runWorkflow } from "@thenajs/core";
 import type { ToolType } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /** Como `@Agent({ provider, tools })` vira instância na hora de executar. */
 
@@ -11,7 +11,7 @@ describe("provider", () => {
     const provider = new FakeProvider([{ content: "da instância" }]);
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai"),
     ).resolves.toBe("da instância");
     expect(provider.chamadas).toHaveLength(1);
   });
@@ -24,7 +24,7 @@ describe("provider", () => {
     }
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider: ProviderProprio })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider: ProviderProprio })]), "vai"),
     ).resolves.toBe("da classe");
   });
 
@@ -40,7 +40,7 @@ describe("provider", () => {
     }
 
     const rodar = runWorkflow(
-      criarWorkflow([criarAgente({ provider: ProviderProprio })]),
+      makeWorkflow([makeAgent({ provider: ProviderProprio })]),
       "vai",
     );
 
@@ -54,7 +54,7 @@ describe("provider", () => {
     }
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider: fabricar })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider: fabricar })]), "vai"),
     ).resolves.toBe("da factory");
   });
 
@@ -74,7 +74,7 @@ describe("provider", () => {
     }
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider: fabricar })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider: fabricar })]), "vai"),
     ).rejects.toThrow(/reading 'trim'/);
     expect(chamadas).toBe(1);
   });
@@ -84,8 +84,8 @@ describe("provider", () => {
 
     await expect(
       runWorkflow(
-        criarWorkflow([
-          criarAgente({
+        makeWorkflow([
+          makeAgent({
             provider: () => {
               chamadas++;
               return new FakeProvider([{ content: "da arrow" }]);
@@ -107,7 +107,7 @@ describe("provider", () => {
 
     await expect(
       runWorkflow(
-        criarWorkflow([criarAgente({ provider: ProviderSolto as never })]),
+        makeWorkflow([makeAgent({ provider: ProviderSolto as never })]),
         "vai",
       ),
     ).rejects.toThrow(/ProviderSolto parece uma classe de provider/);
@@ -117,7 +117,7 @@ describe("provider", () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
 
     await runWorkflow(
-      criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]),
+      makeWorkflow([makeAgent({ provider }), makeAgent({ provider })]),
       "vai",
     );
 
@@ -144,13 +144,13 @@ describe("tools", () => {
     ]);
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider, tools: [tool] })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider, tools: [tool] })]), "vai"),
     ).resolves.toBe("eco: oi");
     expect(chamada).toBe(true);
   });
 
   it("aceita uma classe @Tool", async () => {
-    const Ferramenta = criarTool(
+    const Ferramenta = makeTool(
       {
         name: "classe",
         description: "com classe",
@@ -163,16 +163,13 @@ describe("tools", () => {
     ]);
 
     await expect(
-      runWorkflow(
-        criarWorkflow([criarAgente({ provider, tools: [Ferramenta] })]),
-        "vai",
-      ),
+      runWorkflow(makeWorkflow([makeAgent({ provider, tools: [Ferramenta] })]), "vai"),
     ).resolves.toBe("eco: oi");
   });
 
   it("nome, descrição e schema do @Tool chegam ao provider", async () => {
     const provider = new FakeProvider();
-    const Ferramenta = criarTool(
+    const Ferramenta = makeTool(
       {
         name: "com_schema",
         description: "descrição da tool",
@@ -182,7 +179,7 @@ describe("tools", () => {
     );
 
     await runWorkflow(
-      criarWorkflow([criarAgente({ provider, tools: [Ferramenta] })]),
+      makeWorkflow([makeAgent({ provider, tools: [Ferramenta] })]),
       "vai",
     );
 
@@ -196,7 +193,7 @@ describe("tools", () => {
 
   it("um agente sem tools envia lista vazia", async () => {
     const provider = new FakeProvider();
-    await runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai");
+    await runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai");
 
     expect(provider.chamadas[0].tools).toEqual([]);
   });
@@ -209,7 +206,7 @@ describe("sampling", () => {
     });
 
     await runWorkflow(
-      criarWorkflow([criarAgente({ provider, sampling: { temperature: 0 } })]),
+      makeWorkflow([makeAgent({ provider, sampling: { temperature: 0 } })]),
       "vai",
     );
 
@@ -226,7 +223,7 @@ describe("sampling", () => {
       sampling: { temperature: 0.7 },
     });
 
-    await runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai");
+    await runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai");
 
     expect(provider.chamadas[0].sampling).toEqual({ temperature: 0.7 });
   });
@@ -234,7 +231,7 @@ describe("sampling", () => {
   it("sem sampling em lugar nenhum, não envia nada", async () => {
     const provider = new FakeProvider();
 
-    await runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai");
+    await runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai");
 
     expect(provider.chamadas[0].sampling).toEqual({});
   });

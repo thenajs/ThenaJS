@@ -5,9 +5,9 @@ import type { ExecutionNode } from "./recorder.js";
 import type { ReportOptions } from "../config.js";
 
 /** O resumo de uma run — uma linha do ledger, e uma linha do índice. */
-interface ResumoDeRun {
+interface RunSummary {
   runId: string;
-  nome: string;
+  name: string;
   status: string;
   durationMs: number;
   startedAt: number;
@@ -53,9 +53,9 @@ export function writeReport(
 
   // Em qualquer formato: antes o índice só era atualizado no branch de HTML, e
   // uma run em `format: "json"` nunca aparecia nele.
-  agendarIndice(base, {
+  scheduleIndex(base, {
     runId,
-    nome: root.name,
+    name: root.name,
     status: root.status,
     durationMs: root.durationMs ?? 0,
     startedAt: root.startedAt,
@@ -68,10 +68,10 @@ export function writeReport(
 // ---------- índice ----------
 
 /** Um worker de índice por pasta, e os appends que ele ainda não consumiu. */
-const trabalho = new Map<string, Promise<void>>();
-const sujo = new Map<string, Promise<unknown>[]>();
+const indexWorkers = new Map<string, Promise<void>>();
+const pendingAppends = new Map<string, Promise<unknown>[]>();
 /** Pastas já varridas atrás de runs anteriores ao ledger — uma vez cada. */
-const semeadas = new Set<string>();
+const seeded = new Set<string>();
 
 /**
  * Registra a run no ledger e agenda o render do índice.
@@ -93,38 +93,38 @@ const semeadas = new Set<string>();
  * Um processo que morre sem `dispose()` pode perder o último render, mas não o
  * dado: o append já aconteceu, e o próximo render inclui a run.
  */
-function agendarIndice(base: string, resumo: ResumoDeRun): void {
-  const registro = appendFile(join(base, LEDGER), `${JSON.stringify(resumo)}\n`).catch(
-    aviso,
+function scheduleIndex(base: string, resumo: RunSummary): void {
+  const entry = appendFile(join(base, LEDGER), `${JSON.stringify(resumo)}\n`).catch(
+    warnIndexFailure,
   );
 
-  const pendentes = sujo.get(base) ?? [];
-  pendentes.push(registro);
-  sujo.set(base, pendentes);
+  const queued = pendingAppends.get(base) ?? [];
+  queued.push(entry);
+  pendingAppends.set(base, queued);
 
   // Um worker por pasta. Se já há um rodando, ele vai encontrar esta linha na
   // próxima volta — é o que faz uma rajada de runs virar um render só, em vez
   // de um por run.
-  if (trabalho.has(base)) return;
+  if (indexWorkers.has(base)) return;
 
   const worker = (async () => {
-    while (sujo.has(base)) {
-      const appends = sujo.get(base)!;
-      sujo.delete(base);
+    while (pendingAppends.has(base)) {
+      const appends = pendingAppends.get(base)!;
+      pendingAppends.delete(base);
       // O ledger precisa estar completo antes de ser lido.
       await Promise.allSettled(appends);
-      await renderizarIndice(base).catch(aviso);
+      await renderIndex(base).catch(warnIndexFailure);
     }
     // Sem `await` entre a condição do `while` e este delete: nada se intercala,
     // então nenhum append fica órfão sem worker para consumi-lo.
-    trabalho.delete(base);
+    indexWorkers.delete(base);
   })();
 
-  trabalho.set(base, worker);
+  indexWorkers.set(base, worker);
 }
 
 /** Report é observabilidade: um erro de I/O aqui não derruba a run. */
-function aviso(err: unknown): void {
+function warnIndexFailure(err: unknown): void {
   console.error(`[thena] Não foi possível atualizar o índice do report:`, err);
 }
 
@@ -134,17 +134,18 @@ function aviso(err: unknown): void {
  * A escrita é em arquivo temporário + `rename` — atômico no mesmo filesystem.
  * O `writeFileSync` de antes permitia que um leitor pegasse HTML truncado.
  */
-async function renderizarIndice(base: string): Promise<void> {
-  const linhas = await lerLedger(base);
+async function renderIndex(base: string): Promise<void> {
+  const lines = await readLedger(base);
 
   // Dedup por runId: a última linha vence. Cobre uma run que reescreve o
   // próprio report, e a semeadura de uma pasta anterior ao ledger.
-  const porId = new Map<string, ResumoDeRun>();
-  for (const resumo of linhas) porId.set(resumo.runId, resumo);
+  const porId = new Map<string, RunSummary>();
+  for (const resumo of lines) porId.set(resumo.runId, resumo);
 
-  if (!semeadas.has(base)) {
-    semeadas.add(base);
-    for (const antiga of await semear(base, porId)) porId.set(antiga.runId, antiga);
+  if (!seeded.has(base)) {
+    seeded.add(base);
+    for (const previous of await seedFromDisk(base, porId))
+      porId.set(previous.runId, previous);
   }
 
   const runs = [...porId.values()].sort((a, b) => b.startedAt - a.startedAt);
@@ -155,7 +156,7 @@ async function renderizarIndice(base: string): Promise<void> {
 }
 
 /** O ledger, linha a linha. Pasta sem ledger ainda é uma lista vazia. */
-async function lerLedger(base: string): Promise<ResumoDeRun[]> {
+async function readLedger(base: string): Promise<RunSummary[]> {
   let bruto: string;
   try {
     bruto = await readFile(join(base, LEDGER), "utf-8");
@@ -163,7 +164,7 @@ async function lerLedger(base: string): Promise<ResumoDeRun[]> {
     return [];
   }
 
-  const runs: ResumoDeRun[] = [];
+  const runs: RunSummary[] = [];
   for (const linha of bruto.split("\n")) {
     if (!linha) continue;
     try {
@@ -184,11 +185,11 @@ async function lerLedger(base: string): Promise<ResumoDeRun[]> {
  * processo**, e fora do caminho crítico. Numa pasta já convertida, é um
  * `readdir` e nenhuma leitura: tudo que está lá já está no ledger.
  */
-async function semear(
+async function seedFromDisk(
   base: string,
-  conhecidas: Map<string, ResumoDeRun>,
-): Promise<ResumoDeRun[]> {
-  const runs: ResumoDeRun[] = [];
+  known: Map<string, RunSummary>,
+): Promise<RunSummary[]> {
+  const runs: RunSummary[] = [];
 
   let entradas;
   try {
@@ -199,14 +200,14 @@ async function semear(
 
   for (const entrada of entradas) {
     if (!entrada.isDirectory()) continue;
-    if (conhecidas.has(entrada.name)) continue;
+    if (known.has(entrada.name)) continue;
     try {
       const node: ExecutionNode = JSON.parse(
         await readFile(join(base, entrada.name, "report.json"), "utf-8"),
       );
       runs.push({
         runId: entrada.name,
-        nome: node.name,
+        name: node.name,
         status: node.status,
         durationMs: node.durationMs ?? 0,
         startedAt: node.startedAt,
@@ -234,10 +235,10 @@ async function semear(
  * teste — ou um CLI — que lê `index.html` logo depois da run veria o arquivo
  * anterior.
  */
-export async function drenarIndices(): Promise<void> {
+export async function drainIndexWrites(): Promise<void> {
   // Um worker se remove do mapa antes de resolver, então o laço só dá outra
   // volta se trabalho novo chegou durante a espera.
-  while (trabalho.size) await Promise.allSettled([...trabalho.values()]);
+  while (indexWorkers.size) await Promise.allSettled([...indexWorkers.values()]);
 }
 
 // ---------- helpers ----------
@@ -442,13 +443,13 @@ function renderHtml(root: ExecutionNode): string {
 }
 
 /** Índice das runs — o `index.html` da raiz da pasta de report. */
-function renderIndice(runs: ResumoDeRun[]): string {
-  const linhas = runs
+function renderIndice(runs: RunSummary[]): string {
+  const lines = runs
     .map(
       (
         r,
       ) => `<a class="run" href="./${esc(r.runId)}/${r.html ? "index.html" : "report.json"}">
-      <span class="name">${esc(r.nome)}</span>
+      <span class="name">${esc(r.name)}</span>
       <span class="dur">${ms(r.durationMs)}</span>
       ${r.status === "error" ? '<span class="err">erro</span>' : ""}
       <span class="when">${esc(new Date(r.startedAt).toLocaleString())}</span>
@@ -483,7 +484,7 @@ function renderIndice(runs: ResumoDeRun[]): string {
   <div class="wrap">
     <h1>Execuções</h1>
     <div class="sub">ThenaJS · ${runs.length} run${runs.length === 1 ? "" : "s"}</div>
-    ${linhas || '<div class="vazio">Nenhuma execução registrada.</div>'}
+    ${lines || '<div class="vazio">Nenhuma execução registrada.</div>'}
   </div>
 </body>
 </html>`;

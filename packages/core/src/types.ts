@@ -123,7 +123,7 @@ export interface TurnInfo {
  * grava o resumo do último turno em `ctx.turn` (a prop explícita vence o índice,
  * então fica tipada).
  */
-export type AgentContext<D extends DadosDaRun = DadosDaRun> = PipelineContext &
+export type AgentContext<D extends RunData = RunData> = PipelineContext &
   RunControls<D> & {
     turn?: TurnInfo;
     /**
@@ -154,7 +154,7 @@ export type AgentContext<D extends DadosDaRun = DadosDaRun> = PipelineContext &
  * livre desta assinatura, e aí um campo inexistente passa como `unknown` em vez
  * de dar erro de compilação.
  */
-export type DadosDaRun = Record<string, unknown>;
+export type RunData = Record<string, unknown>;
 
 /**
  * O que uma tool ou um hook alcança **da execução**, e não do passo.
@@ -165,7 +165,7 @@ export type DadosDaRun = Record<string, unknown>;
  * `turn` são do passo (e num bloco `parallel` são compartilhados entre os
  * ramos); os campos abaixo valem para a execução inteira.
  */
-export interface RunControls<D extends DadosDaRun = DadosDaRun> {
+export interface RunControls<D extends RunData = RunData> {
   /** Id da execução. O mesmo que aparece em todo `ExecutionEvent`. */
   readonly runId: string;
   /**
@@ -225,10 +225,10 @@ export interface RunControls<D extends DadosDaRun = DadosDaRun> {
  * Nome preferido daqui em diante; `AgentContext` continua válido e é o mesmo
  * tipo.
  */
-export type Context<D extends DadosDaRun = DadosDaRun> = AgentContext<D>;
+export type Context<D extends RunData = RunData> = AgentContext<D>;
 
 /** Alias usado nos `until` de workflow — mesma forma do `AgentContext`. */
-export type WorkflowContext<D extends DadosDaRun = DadosDaRun> = AgentContext<D>;
+export type WorkflowContext<D extends RunData = RunData> = AgentContext<D>;
 
 /** Chamada de tool interceptável por `beforeTool`. */
 export interface ToolCall {
@@ -383,7 +383,7 @@ export interface WorkflowInput {
  * `report` e `log` sobrescrevem o `ThenaConfig` **apenas nesta execução** —
  * possível porque cada run tem o próprio contexto.
  */
-export interface WorkflowRunOptions<D extends DadosDaRun = DadosDaRun> {
+export interface WorkflowRunOptions<D extends RunData = RunData> {
   input: WorkflowInput;
   /**
    * Contexto inicial / memória persistente do workflow. É semeada no `memory`
@@ -447,7 +447,7 @@ export interface WorkflowRunOptions<D extends DadosDaRun = DadosDaRun> {
 }
 
 /** O que `Thena.create(...)` devolve — o "app" do workflow. */
-export interface WorkflowApp<T = string, D extends DadosDaRun = DadosDaRun> {
+export interface WorkflowApp<T = string, D extends RunData = RunData> {
   /**
    * Executa o workflow e devolve a execução, de forma **síncrona**.
    *

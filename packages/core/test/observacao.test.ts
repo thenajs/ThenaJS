@@ -6,7 +6,7 @@ import { Thena } from "@thenajs/core";
 // `currentRun` não é API pública: o teste sonda o recorder, que é interno.
 import { currentRun } from "../src/run-context.js";
 import type { ExecutionEvent } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * Quem observa uma execução — e quanto custa não ser observado.
@@ -22,7 +22,7 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 /** Um workflow de um agente, e o provider por trás dele. */
 function fluxo(resposta = "ok") {
   const provider = new FakeProvider([{ content: resposta }]);
-  return { provider, Fluxo: criarWorkflow([criarAgente({ provider })]) };
+  return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 
 /** Lê `recorder.active` de dentro da execução. */
@@ -30,8 +30,8 @@ function fluxoQueEspia(onde: { ativo?: boolean }) {
   const provider = new FakeProvider([{ content: "ok" }]);
   return {
     provider,
-    Fluxo: criarWorkflow([
-      criarAgente(
+    Fluxo: makeWorkflow([
+      makeAgent(
         { provider },
         { beforePrompt: () => void (onde.ativo = currentRun().recorder.active) },
       ),
@@ -143,14 +143,14 @@ describe("quem liga a observação", () => {
   it("log liga sozinho", async () => {
     const espiado: { ativo?: boolean } = {};
     const { Fluxo } = fluxoQueEspia(espiado);
-    const eventos: ExecutionEvent[] = [];
-    const app = Thena.create(Fluxo, { log: (e) => eventos.push(e) });
+    const events: ExecutionEvent[] = [];
+    const app = Thena.create(Fluxo, { log: (e) => events.push(e) });
 
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
     expect(espiado.ativo).toBe(true);
-    expect(eventos.length).toBeGreaterThan(0);
+    expect(events.length).toBeGreaterThan(0);
   });
 
   it("um plugin com onEvent liga sozinho", async () => {
@@ -225,8 +225,8 @@ describe("runs concorrentes com observação diferente", () => {
 
     const lento = new FakeProvider([{ content: "lento" }], { delayMs: 25 });
     const rapido = new FakeProvider([{ content: "rápido" }], { delayMs: 5 });
-    const appA = Thena.create(criarWorkflow([criarAgente({ provider: lento })]), {});
-    const appB = Thena.create(criarWorkflow([criarAgente({ provider: rapido })]), {});
+    const appA = Thena.create(makeWorkflow([makeAgent({ provider: lento })]), {});
+    const appB = Thena.create(makeWorkflow([makeAgent({ provider: rapido })]), {});
 
     const a = appA.run({ input: { message: "a" }, observe: true });
     const b = appB.run({ input: { message: "b" } });

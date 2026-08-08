@@ -1,4 +1,4 @@
-import { currentRun, peekRun, pedirParada } from "./run-context.js";
+import { currentRun, peekRun, requestStop } from "./run-context.js";
 import type { RunContext } from "./run-context.js";
 import type { Context } from "./types.js";
 
@@ -8,7 +8,7 @@ import type { Context } from "./types.js";
  * Fora dele — numa factory de provider, por exemplo — o pipeline ainda não
  * começou e não há `state` nem `turn` para entregar.
  */
-const DO_PASSO = ["state", "output", "turn", "loop", "logs"] as const;
+const STEP_ONLY_FIELDS = ["state", "output", "turn", "loop", "logs"] as const;
 
 /**
  * O contexto visto de fora de um passo.
@@ -19,7 +19,7 @@ const DO_PASSO = ["state", "output", "turn", "loop", "logs"] as const;
  * alto com uma mensagem que ensina é a mesma escolha que o `currentRun()` já
  * fazia para quem o chamava fora de uma execução.
  */
-function vistaDaRun(run: RunContext): Context {
+function runOnlyView(run: RunContext): Context {
   const erro = (campo: string) =>
     new Error(
       `[thena] \`context().${campo}\` só existe dentro de um passo. Aqui a ` +
@@ -34,12 +34,12 @@ function vistaDaRun(run: RunContext): Context {
     signal: run.signal!,
     usage: () => run.budget.usage(),
     abort: (reason?: unknown) => run.abort(reason),
-    stop: () => pedirParada(run),
-    onDispose: (fn: () => void | Promise<void>) => void run.descartes.push(fn),
+    stop: () => requestStop(run),
+    onDispose: (fn: () => void | Promise<void>) => void run.cleanups.push(fn),
     meta: (dados: Record<string, unknown>) => run.recorder.metaAtual(dados),
   } as unknown as Context;
 
-  for (const campo of DO_PASSO) {
+  for (const campo of STEP_ONLY_FIELDS) {
     Object.defineProperty(vista, campo, {
       get: () => {
         throw erro(campo);
@@ -56,13 +56,13 @@ function vistaDaRun(run: RunContext): Context {
  *
  * Lança fora de qualquer execução — é bug do chamador, não estado válido.
  */
-export function resolverContexto(): Context {
+export function resolveContext(): Context {
   const run = currentRun();
-  return run.passo ?? vistaDaRun(run);
+  return run.step ?? runOnlyView(run);
 }
 
 /** O mesmo, sem lançar — para quem precisa decidir se há execução. */
-export function peekContexto(): Context | undefined {
+export function peekContext(): Context | undefined {
   const run = peekRun();
-  return run ? (run.passo ?? vistaDaRun(run)) : undefined;
+  return run ? (run.step ?? runOnlyView(run)) : undefined;
 }

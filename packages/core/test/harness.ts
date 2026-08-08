@@ -89,7 +89,7 @@ export class FakeProvider extends Providers {
     // O delay respeita o signal, como um `fetch` de verdade: sem isso o fake
     // não simula um provider cancelável, e teste de abort passaria por engano.
     if (this.delayMs) {
-      await esperar(this.delayMs, signal);
+      await wait(this.delayMs, signal);
     }
 
     const turno = this.fila.shift() ?? this.ultimo;
@@ -180,17 +180,17 @@ export class FakeVectorStoreB extends FakeVectorStore {
 // roteiro próprios — impossível com a sintaxe `@`, avaliada uma vez no import.
 // --------------------------------------------------------------------------
 
-export function criarAgente(
+export function makeAgent(
   config: Partial<AgentConfig> & { provider: ProviderInput },
-  corpo: Record<string, unknown> = {},
+  body: Record<string, unknown> = {},
 ): AgentClass {
   const Classe = class {};
-  Object.assign(Classe.prototype, corpo);
+  Object.assign(Classe.prototype, body);
   Agent({ prompt: PROMPT, tools: [], ...config })(Classe);
   return Classe;
 }
 
-export function criarTool(
+export function makeTool(
   config: ToolConfig,
   execute: (...args: any[]) => unknown,
 ): ToolInput {
@@ -203,14 +203,14 @@ export function criarTool(
   return Classe as unknown as ToolInput;
 }
 
-export function criarWorkflow(steps: WorkflowStep[], state?: StateCtor): Function {
+export function makeWorkflow(steps: WorkflowStep[], state?: StateCtor): Function {
   const Classe = class {};
   Workflow({ steps, state })(Classe);
   return Classe;
 }
 
 /** `setTimeout` que rejeita na hora se o signal abortar. */
-function esperar(ms: number, signal?: AbortSignal): Promise<void> {
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason);
     const t = setTimeout(resolve, ms);
@@ -232,7 +232,7 @@ function esperar(ms: number, signal?: AbortSignal): Promise<void> {
  * `DOMException` — e no Node ela **não** é `instanceof Error`, então
  * `rejects.toThrow()` não casa. Aqui o teste inspeciona o valor cru.
  */
-export async function capturarErro(p: PromiseLike<unknown>): Promise<any> {
+export async function captureError(p: PromiseLike<unknown>): Promise<any> {
   try {
     await p;
     throw new Error("esperava uma rejeição, mas resolveu");

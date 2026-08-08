@@ -48,10 +48,10 @@ export class HttpTransport {
     url: string,
     init: RequestInit = {},
   ): Promise<{ response: Response; attempts: number }> {
-    const política = this.retry;
-    let ultimoErro: Error | undefined;
+    const policy = this.retry;
+    let lastError: Error | undefined;
 
-    for (let attempt = 1; attempt <= política.maxAttempts; attempt++) {
+    for (let attempt = 1; attempt <= policy.maxAttempts; attempt++) {
       let response: Response | undefined;
       let error: Error | undefined;
 
@@ -60,7 +60,7 @@ export class HttpTransport {
           ...init,
           // Os dois valem, e o que disparar primeiro vence. Com `??`, um
           // signal vindo de fora descartava o timeout em silêncio.
-          signal: combinarSinais(init.signal, política.timeoutMs),
+          signal: combineSignals(init.signal, policy.timeoutMs),
         });
 
         if (response.ok) {
@@ -78,30 +78,30 @@ export class HttpTransport {
 
       const info: RetryAttempt = {
         attempt,
-        maxAttempts: política.maxAttempts,
+        maxAttempts: policy.maxAttempts,
         status: response?.status,
         error,
         delayMs: 0,
       };
 
       const podeTentar =
-        attempt < política.maxAttempts &&
-        (política.isRetryable ?? isRetryableByDefault)(info);
+        attempt < policy.maxAttempts &&
+        (policy.isRetryable ?? isRetryableByDefault)(info);
 
       if (!podeTentar) {
         // Devolve a resposta com erro para quem chamou montar a mensagem
         // dele (que inclui o corpo); só relança quando nem resposta houve.
         if (response) return { response, attempts: attempt };
-        throw this.erroDeTransporte(error, attempt);
+        throw this.transportError(error, attempt);
       }
 
       info.delayMs = backoffDelay(
         attempt,
-        política,
+        policy,
         parseRetryAfter(response?.headers.get("retry-after") ?? null),
       );
-      política.onRetry?.(info);
-      ultimoErro = error;
+      policy.onRetry?.(info);
+      lastError = error;
 
       // Abortável: sem isto, um cancelamento no meio do backoff esperaria os
       // 8 segundos antes de perceber.
@@ -109,10 +109,10 @@ export class HttpTransport {
     }
 
     // Inalcançável: o laço sempre retorna ou lança antes.
-    throw this.erroDeTransporte(ultimoErro, política.maxAttempts);
+    throw this.transportError(lastError, policy.maxAttempts);
   }
 
-  private erroDeTransporte(error: Error | undefined, attempts: number): Error {
+  private transportError(error: Error | undefined, attempts: number): Error {
     const sufixo = attempts > 1 ? ` (após ${attempts} tentativas)` : "";
     const detalhe = error?.message ?? String(error);
     return new Error(`Falha na chamada HTTP${sufixo}: ${detalhe}`, {
@@ -122,7 +122,7 @@ export class HttpTransport {
 }
 
 /** Combina o signal de quem chamou com o timeout da política. */
-function combinarSinais(
+function combineSignals(
   externo: AbortSignal | null | undefined,
   timeoutMs: number | undefined,
 ): AbortSignal | undefined {

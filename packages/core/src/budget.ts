@@ -93,7 +93,7 @@ export class BudgetTracker {
    */
   constructor(
     private readonly budget: RunBudget = {},
-    private readonly pai?: BudgetTracker,
+    private readonly parent?: BudgetTracker,
   ) {}
 
   /** `false` quando nenhum limite foi configurado — o caminho sem custo. */
@@ -126,33 +126,33 @@ export class BudgetTracker {
    * mesmo workflow) o contador nunca saía de zero na descida, e nenhum teto
    * segurava nada. Contando na ida, `maxChatCalls` vira barreira de verdade.
    */
-  abrirChat(): void {
+  openChat(): void {
     this.chatCalls++;
     // O gasto sobe a cadeia inteira: o que o filho consome, o pai pagou.
-    this.pai?.abrirChat();
+    this.parent?.openChat();
   }
 
   /** Soma tokens e custo — que só existem depois de o modelo responder. */
-  fecharChat(usage?: Usage): void {
+  closeChat(usage?: Usage): void {
     this.tokens += (usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0);
     this.costUsd += usage?.costUsd ?? 0;
-    this.pai?.fecharChat(usage);
+    this.parent?.closeChat(usage);
   }
 
   /** Chamada e consumo de uma vez, para quem contabiliza fora do middleware. */
   addChat(usage?: Usage): void {
-    this.abrirChat();
-    this.fecharChat(usage);
+    this.openChat();
+    this.closeChat(usage);
   }
 
   addTool(): void {
     this.toolCalls++;
-    this.pai?.addTool();
+    this.parent?.addTool();
   }
 
   /** Consulta sem efeito de controle de fluxo — para relatar, não para decidir. */
   exceeded(): boolean {
-    return this.evaluate() !== undefined || this.pai?.exceeded() === true;
+    return this.evaluate() !== undefined || this.parent?.exceeded() === true;
   }
 
   /**
@@ -175,7 +175,7 @@ export class BudgetTracker {
 
     // O teto do pai vale aqui dentro: estar aninhado não é permissão para
     // gastar o que o pai já não tem.
-    return this.pai?.checkpoint() === true;
+    return this.parent?.checkpoint() === true;
   }
 
   /**

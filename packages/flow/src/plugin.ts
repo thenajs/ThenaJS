@@ -1,5 +1,5 @@
 import type { ThenaPlugin } from "@thenajs/core";
-import { ServidorFlow } from "./server/servidor.js";
+import { FlowServer } from "./server/servidor.js";
 import type { FlowOptions } from "./tipos.js";
 
 /**
@@ -15,21 +15,21 @@ import type { FlowOptions } from "./tipos.js";
  * o resultado. Feche com `Ctrl+C` ou `await app.dispose()`.
  */
 export function thenaFlow(options: FlowOptions = {}): ThenaPlugin {
-  const servidor = new ServidorFlow(options);
+  const server = new FlowServer(options);
 
   return {
     name: "thena-flow",
 
     async setup() {
-      await servidor.iniciar();
+      await server.start();
     },
 
     onEvent(evento) {
-      servidor.publicar(evento);
+      server.publish(evento);
     },
 
     async dispose() {
-      await servidor.parar();
+      await server.stop();
     },
   };
 }

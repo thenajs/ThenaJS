@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runWorkflow } from "@thenajs/core";
 import type { AgentContext, ToolCall, ToolResult } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /**
  * Os cinco hooks do agente. Contrato dos transformadores: retornar um valor
@@ -12,14 +12,14 @@ import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.j
 const schema = z.object({ x: z.string() });
 
 const eco = (impl: (...a: any[]) => unknown = ({ x }: any) => x) =>
-  criarTool({ name: "eco", description: "eco", schema }, impl);
+  makeTool({ name: "eco", description: "eco", schema }, impl);
 
 describe("beforePrompt", () => {
   it("substitui o system prompt quando devolve string", async () => {
     const provider = new FakeProvider();
-    const Agente = criarAgente({ provider }, { beforePrompt: () => "PROMPT TROCADO" });
+    const Agente = makeAgent({ provider }, { beforePrompt: () => "PROMPT TROCADO" });
 
-    await runWorkflow(criarWorkflow([Agente]), "vai");
+    await runWorkflow(makeWorkflow([Agente]), "vai");
 
     expect(provider.chamadas[0].messages[0]).toEqual({
       role: "system",
@@ -29,9 +29,9 @@ describe("beforePrompt", () => {
 
   it("mantém o original quando devolve undefined", async () => {
     const provider = new FakeProvider();
-    const Agente = criarAgente({ provider }, { beforePrompt: () => undefined });
+    const Agente = makeAgent({ provider }, { beforePrompt: () => undefined });
 
-    await runWorkflow(criarWorkflow([Agente]), "vai");
+    await runWorkflow(makeWorkflow([Agente]), "vai");
 
     expect(provider.chamadas[0].messages[0].content).toContain("agente de teste");
   });
@@ -39,7 +39,7 @@ describe("beforePrompt", () => {
   it("recebe o prompt e o contexto", async () => {
     const provider = new FakeProvider();
     let recebido: { prompt?: string; temCtx?: boolean } = {};
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       {
         beforePrompt: (prompt: string, ctx: AgentContext) => {
@@ -48,7 +48,7 @@ describe("beforePrompt", () => {
       },
     );
 
-    await runWorkflow(criarWorkflow([Agente]), "vai");
+    await runWorkflow(makeWorkflow([Agente]), "vai");
 
     expect(recebido.prompt).toContain("agente de teste");
     expect(recebido.temCtx).toBe(true);
@@ -61,12 +61,12 @@ describe("beforeTool", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "original" } } },
     ]);
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider, tools: [eco((args: any) => ((recebido = args), args.x))] },
       { beforeTool: (call: ToolCall) => ({ ...call, args: { x: "trocado" } }) },
     );
 
-    const saida = await runWorkflow(criarWorkflow([Agente]), "vai");
+    const saida = await runWorkflow(makeWorkflow([Agente]), "vai");
 
     expect(recebido).toEqual({ x: "trocado" });
     expect(saida).toBe("trocado");
@@ -77,7 +77,7 @@ describe("beforeTool", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "1" } } },
     ]);
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider, tools: [eco(() => ((executou = true), "nunca"))] },
       {
         beforeTool: () => {
@@ -86,7 +86,7 @@ describe("beforeTool", () => {
       },
     );
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).rejects.toThrow(
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).rejects.toThrow(
       "cancelado pela política",
     );
     // O cancelamento do beforeTool é o caminho documentado: **não** vira
@@ -104,14 +104,14 @@ describe("afterTool", () => {
     // preservado é o `ctx.turn.toolError`, lido depois pelo until de um loop.
     let erroNoTurno: boolean | undefined;
 
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider, tools: [eco(() => ({ content: "falhou", isError: true }))] },
       { afterTool: () => "texto novo" },
     );
 
     const { loop } = await import("@thenajs/core");
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
           steps: [Agente],
           until: (ctx) => {
@@ -131,12 +131,12 @@ describe("afterTool", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "1" } } },
     ]);
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider, tools: [eco(() => ({ content: "falhou", isError: true }))] },
       { afterTool: () => ({ content: "na verdade deu certo", isError: false }) },
     );
 
-    const saida = await runWorkflow(criarWorkflow([Agente]), "vai");
+    const saida = await runWorkflow(makeWorkflow([Agente]), "vai");
 
     expect(saida).toBe("na verdade deu certo");
   });
@@ -145,12 +145,12 @@ describe("afterTool", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "intacto" } } },
     ]);
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider, tools: [eco()] },
       { afterTool: () => undefined },
     );
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe("intacto");
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).resolves.toBe("intacto");
   });
 
   it("recebe nome, args, output e isError", async () => {
@@ -158,12 +158,12 @@ describe("afterTool", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "1" } } },
     ]);
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider, tools: [eco(() => ({ content: "ops", isError: true }))] },
       { afterTool: (r: ToolResult) => void (visto = r) },
     );
 
-    await runWorkflow(criarWorkflow([Agente]), "vai");
+    await runWorkflow(makeWorkflow([Agente]), "vai");
 
     expect(visto).toMatchObject({
       name: "eco",
@@ -177,28 +177,25 @@ describe("afterTool", () => {
 describe("afterResponse", () => {
   it("substitui a resposta final do passo", async () => {
     const provider = new FakeProvider([{ content: "original" }]);
-    const Agente = criarAgente(
-      { provider },
-      { afterResponse: (r: string) => `[${r}]` },
-    );
+    const Agente = makeAgent({ provider }, { afterResponse: (r: string) => `[${r}]` });
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe(
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).resolves.toBe(
       "[original]",
     );
   });
 
   it("undefined mantém a resposta", async () => {
     const provider = new FakeProvider([{ content: "original" }]);
-    const Agente = criarAgente({ provider }, { afterResponse: () => undefined });
+    const Agente = makeAgent({ provider }, { afterResponse: () => undefined });
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe("original");
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).resolves.toBe("original");
   });
 });
 
 describe("onError", () => {
   it("o retorno vira a saída do agente e a run continua", async () => {
     const provider = new FakeProvider();
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       {
         beforePrompt: () => {
@@ -208,14 +205,14 @@ describe("onError", () => {
       },
     );
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).resolves.toBe(
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).resolves.toBe(
       "recuperado de: explodiu",
     );
   });
 
   it("sem retorno, o erro continua subindo", async () => {
     const provider = new FakeProvider();
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       {
         beforePrompt: () => {
@@ -225,14 +222,14 @@ describe("onError", () => {
       },
     );
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).rejects.toThrow(
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).rejects.toThrow(
       "explodiu",
     );
   });
 
   it("a saída do onError entra no history como assistant", async () => {
     const provider = new FakeProvider([{ content: "segundo agente" }]);
-    const Quebrado = criarAgente(
+    const Quebrado = makeAgent(
       { provider: new FakeProvider() },
       {
         beforePrompt: () => {
@@ -241,9 +238,9 @@ describe("onError", () => {
         onError: () => "fallback",
       },
     );
-    const Seguinte = criarAgente({ provider });
+    const Seguinte = makeAgent({ provider });
 
-    await runWorkflow(criarWorkflow([Quebrado, Seguinte]), "vai");
+    await runWorkflow(makeWorkflow([Quebrado, Seguinte]), "vai");
 
     const historico = provider.chamadas[0].messages;
     expect(
@@ -257,7 +254,7 @@ describe("escape hatch run(input, ctx)", () => {
     const chamados: string[] = [];
     const provider = new FakeProvider([{ content: "não deveria ser usado" }]);
 
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       {
         run: (entrada: string) => `controlei: ${entrada}`,
@@ -266,7 +263,7 @@ describe("escape hatch run(input, ctx)", () => {
       },
     );
 
-    const saida = await runWorkflow(criarWorkflow([Agente]), "olá");
+    const saida = await runWorkflow(makeWorkflow([Agente]), "olá");
 
     expect(saida).toBe("controlei: olá");
     expect(chamados).toEqual([]);
@@ -278,7 +275,7 @@ describe("escape hatch run(input, ctx)", () => {
     const { loop, untilAnswered } = await import("@thenajs/core");
     let voltas = 0;
 
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider: new FakeProvider() },
       {
         run: () => {
@@ -289,9 +286,7 @@ describe("escape hatch run(input, ctx)", () => {
     );
 
     await runWorkflow(
-      criarWorkflow([
-        loop({ steps: [Agente], until: untilAnswered, maxIterations: 5 }),
-      ]),
+      makeWorkflow([loop({ steps: [Agente], until: untilAnswered, maxIterations: 5 })]),
       "vai",
     );
 

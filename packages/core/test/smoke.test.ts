@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { runWorkflow } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 describe("harness", () => {
   it("executa um workflow de um agente e devolve a resposta", async () => {
     const provider = new FakeProvider([{ content: "olá do fake" }]);
-    const Agente = criarAgente({ provider });
-    const Fluxo = criarWorkflow([Agente]);
+    const Agente = makeAgent({ provider });
+    const Fluxo = makeWorkflow([Agente]);
 
     const saida = await runWorkflow(Fluxo, "oi");
 
@@ -16,7 +16,7 @@ describe("harness", () => {
 
   it("envia o prompt do markdown como mensagem system", async () => {
     const provider = new FakeProvider();
-    const Fluxo = criarWorkflow([criarAgente({ provider })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider })]);
 
     await runWorkflow(Fluxo, "oi");
 

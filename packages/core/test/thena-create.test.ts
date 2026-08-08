@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Thena, bootstrapWorkflow } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * `Thena.create` é o ponto de entrada; `bootstrapWorkflow` é o nome antigo.
@@ -13,7 +13,7 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
 function fluxo(resposta = "ok") {
   const provider = new FakeProvider([{ content: resposta }]);
-  return { provider, Fluxo: criarWorkflow([criarAgente({ provider })]) };
+  return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 
 describe("Thena.create", () => {

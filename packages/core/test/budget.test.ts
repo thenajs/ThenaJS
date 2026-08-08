@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { BudgetExceededError, loop, runWorkflow } from "@thenajs/core";
 import type { BudgetExceeded } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /** Caracterização do `RunBudget`: teto da execução inteira. */
 describe("budget", () => {
@@ -11,10 +11,10 @@ describe("budget", () => {
       { content: "segundo" },
       { content: "terceiro" },
     ]);
-    const Fluxo = criarWorkflow([
-      criarAgente({ provider }),
-      criarAgente({ provider }),
-      criarAgente({ provider }),
+    const Fluxo = makeWorkflow([
+      makeAgent({ provider }),
+      makeAgent({ provider }),
+      makeAgent({ provider }),
     ]);
 
     const saida = await runWorkflow(Fluxo, "vai", undefined, {
@@ -28,7 +28,7 @@ describe("budget", () => {
 
   it('modo "throw" lança BudgetExceededError', async () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
-    const Fluxo = criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider }), makeAgent({ provider })]);
 
     await expect(
       runWorkflow(Fluxo, "vai", undefined, {
@@ -42,9 +42,9 @@ describe("budget", () => {
     const provider = new FakeProvider([{ content: "sempre" }]);
     const onExceeded = vi.fn<(info: BudgetExceeded) => void>();
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider })],
+        steps: [makeAgent({ provider })],
         until: () => false, // nunca converge: quem para é o orçamento
         maxIterations: 10,
       }),
@@ -61,7 +61,7 @@ describe("budget", () => {
 
   it("sem budget configurado, nada é medido nem interrompido", async () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
-    const Fluxo = criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider }), makeAgent({ provider })]);
 
     const saida = await runWorkflow(Fluxo, "vai");
 
@@ -74,7 +74,7 @@ describe("budget", () => {
       { content: "a", usage: { promptTokens: 30, completionTokens: 30 } },
       { content: "b", usage: { promptTokens: 30, completionTokens: 30 } },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider }), criarAgente({ provider })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider }), makeAgent({ provider })]);
 
     const saida = await runWorkflow(Fluxo, "vai", undefined, {
       maxTokens: 60,

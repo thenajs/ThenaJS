@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Tool, Workflow, Thena, context, runWorkflow } from "@thenajs/core";
 import type { BudgetUsage, ExecutionNode, WorkflowRuntime } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * O orçamento atravessa a fronteira da run aninhada.
@@ -39,7 +39,7 @@ function fluxoQueChamaSub(
   tool: unknown,
   provider = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]),
 ) {
-  return criarWorkflow([criarAgente({ provider, tools: [tool as never] })]);
+  return makeWorkflow([makeAgent({ provider, tools: [tool as never] })]);
 }
 
 describe("orçamento em run aninhada", () => {
@@ -47,12 +47,12 @@ describe("orçamento em run aninhada", () => {
     // Cinco agentes lá dentro; o pai só tem crédito para uma chamada, e a
     // gasta no turno que dispara a tool.
     const dentro = new FakeProvider([{ content: "caro" }]);
-    const Sub = criarWorkflow([
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
+    const Sub = makeWorkflow([
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
     ]);
 
     const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub)), {});
@@ -69,7 +69,7 @@ describe("orçamento em run aninhada", () => {
     const dentro = new FakeProvider([
       { content: "f", usage: { promptTokens: 500, completionTokens: 500 } },
     ]);
-    const Sub = criarWorkflow([criarAgente({ provider: dentro })]);
+    const Sub = makeWorkflow([makeAgent({ provider: dentro })]);
 
     // Passo 1 dispara a tool; passo 2 lê o consumo acumulado da run.
     let depois: BudgetUsage | undefined;
@@ -79,9 +79,9 @@ describe("orçamento em run aninhada", () => {
     const leitor = new FakeProvider([{ content: "fim" }]);
 
     const app = Thena.create(
-      criarWorkflow([
-        criarAgente({ provider: disparador, tools: [toolQueRoda(Sub)] }),
-        criarAgente(
+      makeWorkflow([
+        makeAgent({ provider: disparador, tools: [toolQueRoda(Sub)] }),
+        makeAgent(
           { provider: leitor },
           { beforePrompt: () => void (depois = context().usage()) },
         ),
@@ -98,10 +98,10 @@ describe("orçamento em run aninhada", () => {
 
   it("com teto próprio mais APERTADO, quem corta é o do filho", async () => {
     const dentro = new FakeProvider([{ content: "f" }]);
-    const Sub = criarWorkflow([
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
+    const Sub = makeWorkflow([
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
     ]);
 
     const app = Thena.create(
@@ -117,11 +117,11 @@ describe("orçamento em run aninhada", () => {
 
   it("com teto próprio mais LARGO, o do pai continua valendo", async () => {
     const dentro = new FakeProvider([{ content: "f" }]);
-    const Sub = criarWorkflow([
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
+    const Sub = makeWorkflow([
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
     ]);
 
     // O filho pede 999; não é dele a última palavra.
@@ -137,10 +137,10 @@ describe("orçamento em run aninhada", () => {
 
   it('o modo "throw" do pai lança de dentro do filho', async () => {
     const dentro = new FakeProvider([{ content: "f" }]);
-    const Sub = criarWorkflow([
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
+    const Sub = makeWorkflow([
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
     ]);
 
     const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub)), {});
@@ -157,10 +157,10 @@ describe("orçamento em run aninhada", () => {
   it("onExceeded do pai dispara uma vez só, mesmo estourando dentro do filho", async () => {
     const estouros: string[] = [];
     const dentro = new FakeProvider([{ content: "f" }]);
-    const Sub = criarWorkflow([
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
+    const Sub = makeWorkflow([
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
     ]);
 
     const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub)), {});
@@ -180,15 +180,15 @@ describe("orçamento em run aninhada", () => {
     const dentro = new FakeProvider([
       { content: "f", usage: { promptTokens: 7, completionTokens: 0 } },
     ]);
-    const Sub = criarWorkflow([criarAgente({ provider: dentro })]);
-    const pai = new FakeProvider([
+    const Sub = makeWorkflow([makeAgent({ provider: dentro })]);
+    const parent = new FakeProvider([
       {
         tool: { name: "sub", arguments: { x: "1" } },
         usage: { promptTokens: 100, completionTokens: 0 },
       },
     ]);
 
-    const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub), pai), {
+    const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub), parent), {
       report: { dir },
     });
     await app.run({ input: { message: "vai" }, budget: { maxTokens: 9999 } });
@@ -233,7 +233,7 @@ describe("orçamento em run aninhada", () => {
     // O workflow referencia uma tool que roda o próprio workflow — o ciclo só
     // fecha depois que as duas classes existem, então o decorator vai aqui.
     Workflow({
-      steps: [criarAgente({ provider, tools: [RecursivoTool as never] })],
+      steps: [makeAgent({ provider, tools: [RecursivoTool as never] })],
     })(Recursivo);
 
     const app = Thena.create(Recursivo, {});
@@ -259,10 +259,10 @@ describe("orçamento em run aninhada", () => {
       { content: "b3" },
     ]);
     const tres = (p: FakeProvider) =>
-      criarWorkflow([
-        criarAgente({ provider: p }),
-        criarAgente({ provider: p }),
-        criarAgente({ provider: p }),
+      makeWorkflow([
+        makeAgent({ provider: p }),
+        makeAgent({ provider: p }),
+        makeAgent({ provider: p }),
       ]);
 
     const appA = Thena.create(tres(a), {});
@@ -282,10 +282,10 @@ describe("orçamento em run aninhada", () => {
 
   it("sem orçamento nenhum, nada é medido nem cortado — nem no filho", async () => {
     const dentro = new FakeProvider([{ content: "f" }]);
-    const Sub = criarWorkflow([
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
-      criarAgente({ provider: dentro }),
+    const Sub = makeWorkflow([
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
+      makeAgent({ provider: dentro }),
     ]);
 
     await runWorkflow(fluxoQueChamaSub(toolQueRoda(Sub)), "vai");

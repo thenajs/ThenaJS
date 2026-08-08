@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Thena, loop, untilAnswered } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * O caminho do token, de ponta a ponta:
@@ -13,7 +13,7 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
 function fluxo(...respostas: string[]) {
   const provider = new FakeProvider(respostas.map((content) => ({ content })));
-  return { provider, Fluxo: criarWorkflow([criarAgente({ provider })]) };
+  return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 
 describe("onToken", () => {
@@ -52,9 +52,9 @@ describe("onToken", () => {
       { content: "primeiro " },
       { content: "segundo" },
     ]);
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider })],
+        steps: [makeAgent({ provider })],
         until: (ctx) => ctx.turn?.response === "segundo",
         maxIterations: 5,
       }),
@@ -75,12 +75,12 @@ describe("onToken", () => {
     // emite tudo de forma síncrona durante o `run()`, e o que se veria seria o
     // replay do buffer, não a entrega ao vivo.
     const provider = new FakeProvider([{ content: "a b c d e" }], { delayMs: 20 });
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
 
     const exec = app.run({ input: { message: "vai" }, observe: true });
     const pedacos: string[] = [];
-    const parar = exec.onToken((t) => pedacos.push(t));
-    parar();
+    const stop = exec.onToken((t) => pedacos.push(t));
+    stop();
     await exec;
     await app.dispose();
 
@@ -119,16 +119,16 @@ describe("textStream", () => {
     const app = Thena.create(Fluxo, {});
 
     const exec = app.run({ input: { message: "vai" }, observe: true });
-    const eventos: unknown[] = [];
+    const events: unknown[] = [];
     const tokens: string[] = [];
-    exec.onEvent((e) => eventos.push(e));
+    exec.onEvent((e) => events.push(e));
     exec.onToken((t) => tokens.push(t));
     await exec;
     await app.dispose();
 
     // Token não polui a árvore de passos, e passo não polui o texto.
     expect(tokens.join("")).toBe("texto");
-    expect(eventos.every((e) => typeof (e as any).kind === "string")).toBe(true);
+    expect(events.every((e) => typeof (e as any).kind === "string")).toBe(true);
   });
 });
 

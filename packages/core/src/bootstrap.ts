@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { runWorkflow, toInitial } from "./runtime/run-workflow.js";
-import type { DadosDaRun, WorkflowApp } from "./types.js";
+import type { RunData, WorkflowApp } from "./types.js";
 import type { ThenaPlugin } from "./plugin.js";
 import type { ThenaConfig, LogConfig, ReportOptions } from "./config.js";
 import type { ExecutionEvent, ExecutionNode } from "./observability/recorder.js";
 import { ReportRecorder } from "./observability/recorder.js";
-import { drenarIndices, writeReport } from "./observability/report.js";
+import { drainIndexWrites, writeReport } from "./observability/report.js";
 import { consoleLogger } from "./observability/logger.js";
 import { newRunContext, withRun } from "./run-context.js";
-import { Canal, criarRunHandle } from "./run-handle.js";
+import { Channel, createRunHandle } from "./run-handle.js";
 
-function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
+function createApp<T = string, D extends RunData = RunData>(
   WorkflowClass: Function,
   config: ThenaConfig = {},
 ): WorkflowApp<T, D> {
@@ -21,7 +21,7 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
   const plugins: ThenaPlugin[] = [];
 
   /** Resolve o sink de log: função do usuário, ou o logger de console. */
-  function sinkDeLog(
+  function resolveLogSink(
     log: LogConfig | undefined,
   ): ((e: ExecutionEvent) => void) | undefined {
     if (typeof log === "function") return log;
@@ -29,7 +29,10 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
   }
 
   /** Execuções em voo, para o `dispose()` conseguir drená-las. */
-  const emVoo = new Set<{ abort: (r?: unknown) => void; result: Promise<unknown> }>();
+  const inFlight = new Set<{
+    abort: (r?: unknown) => void;
+    result: Promise<unknown>;
+  }>();
 
   /**
    * Monta o recorder desta execução, ligado ao report, ao log e aos plugins.
@@ -40,11 +43,11 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
    * bufferizados, e nada disso tinha leitor. Medido, custava ~2× o tempo de CPU
    * de uma run e ~13 KB retidos por handle vivo.
    */
-  function recorderDaRun(
+  function recorderFor(
     runId: string,
     report: boolean | ReportOptions | undefined,
     log: LogConfig | undefined,
-    eventos?: Canal<ExecutionEvent>,
+    events?: Channel<ExecutionEvent>,
   ): ReportRecorder {
     const reportOptions: ReportOptions = typeof report === "object" ? report : {};
     const onComplete = report
@@ -54,20 +57,20 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
         }
       : undefined;
 
-    const ouvintes: ((e: ExecutionEvent) => void)[] = [];
-    const sink = sinkDeLog(log);
-    if (sink) ouvintes.push(sink);
+    const listeners: ((e: ExecutionEvent) => void)[] = [];
+    const sink = resolveLogSink(log);
+    if (sink) listeners.push(sink);
     for (const plugin of plugins) {
-      if (plugin.onEvent) ouvintes.push((e) => plugin.onEvent!(e));
+      if (plugin.onEvent) listeners.push((e) => plugin.onEvent!(e));
     }
     // O handle é mais um consumidor do mesmo stream — empurrado (plugin) e
     // puxado (`onEvent`/`eventStream`) são duas torneiras no mesmo cano.
-    if (eventos) ouvintes.push((e) => eventos.publicar(e));
+    if (events) listeners.push((e) => events.publish(e));
 
     return new ReportRecorder({
       runId,
       onComplete,
-      onEvent: ouvintes,
+      onEvent: listeners,
       // Só captura conteúdo quando alguém vai usá-lo. Um plugin que observa
       // precisa dele; do contrário receberia eventos sem prompt nem resposta.
       // `report: { content: false }` desliga mesmo com report ligado.
@@ -98,8 +101,8 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
 
     run(options) {
       const runId = randomUUID();
-      const eventos = new Canal<ExecutionEvent>();
-      const tokens = new Canal<string>();
+      const events = new Channel<ExecutionEvent>();
+      const tokens = new Channel<string>();
 
       const report = options.report ?? config.report;
       const log = options.log ?? config.log;
@@ -122,16 +125,16 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
       // orçamento nasce aqui, e não no `runWorkflow`, para a run ter um único
       // tracker: o `childRunContext` reaproveita este quando o passo aninhado
       // não pede teto próprio, e é isso que faz o teto do topo valer lá dentro.
-      const execucao = newRunContext({
+      const runCtx = newRunContext({
         runId,
         settings: { memory },
-        recorder: recorderDaRun(runId, report, log, observando ? eventos : undefined),
+        recorder: recorderFor(runId, report, log, observando ? events : undefined),
         budget: options.budget,
         signal: options.signal,
         // A presença do sink é o que **liga o streaming** no provider. Oferecê-lo
         // sempre — como já foi — fazia toda run pedir resposta em stream, com
         // parsing de SSE e um callback por pedaço, mesmo sem ninguém lendo.
-        onToken: observando ? (t) => tokens.publicar(t) : undefined,
+        onToken: observando ? (t) => tokens.publish(t) : undefined,
         data: options.data,
         // Lido a cada run, e não no bootstrap: um plugin registrado depois
         // vale para as execuções seguintes, igual aos ouvintes do recorder.
@@ -146,26 +149,26 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
       // falha por completo.
       // Sem `budget` aqui: ele já está no contexto acima. Passá-lo de novo
       // criaria um segundo tracker com os mesmos limites, medindo o mesmo gasto.
-      const result = withRun(execucao, () =>
+      const result = withRun(runCtx, () =>
         runWorkflow<T>(WorkflowClass, toInitial(options.input), options.memory),
       );
 
-      const registro = { abort: execucao.abort, result };
-      emVoo.add(registro);
+      const entry = { abort: runCtx.abort, result };
+      inFlight.add(entry);
       result
         .finally(() => {
-          emVoo.delete(registro);
-          eventos.encerrar();
-          tokens.encerrar();
+          inFlight.delete(entry);
+          events.close();
+          tokens.close();
         })
         .catch(() => {});
 
-      return criarRunHandle<T>({
+      return createRunHandle<T>({
         runId,
         result,
-        signal: execucao.signal!,
-        abort: registro.abort,
-        eventos,
+        signal: runCtx.signal!,
+        abort: entry.abort,
+        events,
         tokens,
         observando,
       });
@@ -174,14 +177,14 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
     async dispose() {
       // Drena antes de encerrar os plugins: um plugin que fecha servidor não
       // pode sumir enquanto uma execução ainda escreve nele.
-      for (const { abort } of emVoo) abort(new Error("[thena] app encerrado"));
-      await Promise.allSettled([...emVoo].map((r) => r.result));
-      emVoo.clear();
+      for (const { abort } of inFlight) abort(new Error("[thena] app encerrado"));
+      await Promise.allSettled([...inFlight].map((r) => r.result));
+      inFlight.clear();
 
       // Depois de drenar as runs, porque cada uma que termina agenda um índice.
       // O índice é escrito fora do caminho crítico; sem esta espera, quem lê
       // `index.html` logo após o `dispose()` veria a versão anterior.
-      await drenarIndices();
+      await drainIndexWrites();
 
       for (const plugin of plugins) {
         try {
@@ -220,7 +223,7 @@ function criarApp<T = string, D extends DadosDaRun = DadosDaRun>(
  * contaminam.
  */
 export const Thena = {
-  create: criarApp,
+  create: createApp,
 };
 
 /**
@@ -232,9 +235,9 @@ export const Thena = {
  *
  * Mantido para não quebrar quem veio do 0.6.
  */
-export async function bootstrapWorkflow<T = string, D extends DadosDaRun = DadosDaRun>(
+export async function bootstrapWorkflow<T = string, D extends RunData = RunData>(
   WorkflowClass: Function,
   config: ThenaConfig = {},
 ): Promise<WorkflowApp<T, D>> {
-  return criarApp<T, D>(WorkflowClass, config);
+  return createApp<T, D>(WorkflowClass, config);
 }

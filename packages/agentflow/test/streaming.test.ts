@@ -12,8 +12,8 @@ import type { ToolType } from "../src/tools/index.js";
 
 const enc = new TextEncoder();
 
-function resposta(corpo: string, pedacos = 1): Response {
-  const bytes = enc.encode(corpo);
+function resposta(body: string, pedacos = 1): Response {
+  const bytes = enc.encode(body);
   const tamanho = Math.ceil(bytes.length / pedacos);
   const stream = new ReadableStream({
     start(c) {
@@ -36,13 +36,13 @@ const tool: ToolType = {
 /** Provider com o transporte trocado por um corpo fixo. */
 function comCorpo<P extends OllamaProvider | OpenAIProvider>(
   provider: P,
-  corpo: string,
+  body: string,
   pedacos = 1,
 ): { provider: P; body: () => any } {
   let enviado: any;
   (provider as any).request = async (_url: string, init: RequestInit) => {
     enviado = JSON.parse(String(init.body));
-    return { response: resposta(corpo, pedacos), attempts: 1 };
+    return { response: resposta(body, pedacos), attempts: 1 };
   };
   return { provider, body: () => enviado };
 }
@@ -112,14 +112,14 @@ describe("Ollama", () => {
   });
 
   it("tool call chega inteira numa linha e é executada", async () => {
-    const corpo = [
+    const body = [
       '{"message":{"content":""},"done":false}',
       '{"message":{"tool_calls":[{"function":{"name":"ler","arguments":{"path":"a.ts"}}}]},"done":false}',
       '{"done":true}',
     ].join("\n");
     const { provider } = comCorpo(
       new OllamaProvider({ host: "http://x", model: "m" }),
-      corpo,
+      body,
     );
 
     const turno = await provider.chat({
@@ -136,14 +136,14 @@ describe("Ollama", () => {
   });
 
   it("linha corrompida não derruba a geração", async () => {
-    const corpo = [
+    const body = [
       '{"message":{"content":"a"},"done":false}',
       "{ isto nao e json",
       '{"message":{"content":"b"},"done":true}',
     ].join("\n");
     const { provider } = comCorpo(
       new OllamaProvider({ host: "http://x", model: "m" }),
-      corpo,
+      body,
     );
 
     const turno = await provider.chat({ tools: [], messages: [], onToken: () => {} });
@@ -167,12 +167,12 @@ describe("OpenAI", () => {
   });
 
   it("com onToken, pede stream e usage, e transmite os deltas", async () => {
-    const corpo = sse(
+    const sseBody = sse(
       { choices: [{ delta: { content: "Olá" } }] },
       { choices: [{ delta: { content: " mundo" } }] },
       { choices: [{ delta: {} }], usage: { prompt_tokens: 9, completion_tokens: 2 } },
     );
-    const { provider, body } = comCorpo(new OpenAIProvider({ apiKey: "k" }), corpo);
+    const { provider, body } = comCorpo(new OpenAIProvider({ apiKey: "k" }), sseBody);
 
     const tokens: string[] = [];
     const turno = await provider.chat({
@@ -189,7 +189,7 @@ describe("OpenAI", () => {
   });
 
   it("remonta a tool call fragmentada — nome num chunk, args em vários", async () => {
-    const corpo = sse(
+    const body = sse(
       {
         choices: [
           {
@@ -217,7 +217,7 @@ describe("OpenAI", () => {
         ],
       },
     );
-    const { provider } = comCorpo(new OpenAIProvider({ apiKey: "k" }), corpo);
+    const { provider } = comCorpo(new OpenAIProvider({ apiKey: "k" }), body);
 
     const turno = await provider.chat({
       tools: [tool],
@@ -235,7 +235,7 @@ describe("OpenAI", () => {
 
   it("o `index` é o que amarra os fragmentos, não a ordem de chegada", async () => {
     // Duas tool calls no mesmo turno, com os fragmentos intercalados.
-    const corpo = sse(
+    const body = sse(
       {
         choices: [
           {
@@ -279,7 +279,7 @@ describe("OpenAI", () => {
         ],
       },
     );
-    const { provider } = comCorpo(new OpenAIProvider({ apiKey: "k" }), corpo);
+    const { provider } = comCorpo(new OpenAIProvider({ apiKey: "k" }), body);
 
     // O framework só honra a primeira, mas a remontagem tem que estar certa
     // nas duas — concatenar por ordem de chegada daria "dois.tsum.ts".
@@ -296,12 +296,12 @@ describe("OpenAI", () => {
   });
 
   it("payload corrompido não derruba a geração", async () => {
-    const corpo =
+    const body =
       `data: ${JSON.stringify({ choices: [{ delta: { content: "a" } }] })}\n\n` +
       "data: { isto nao e json\n\n" +
       `data: ${JSON.stringify({ choices: [{ delta: { content: "b" } }] })}\n\n` +
       "data: [DONE]\n\n";
-    const { provider } = comCorpo(new OpenAIProvider({ apiKey: "k" }), corpo);
+    const { provider } = comCorpo(new OpenAIProvider({ apiKey: "k" }), body);
 
     const turno = await provider.chat({ tools: [], messages: [], onToken: () => {} });
     expect(turno.assistant.content).toBe("ab");

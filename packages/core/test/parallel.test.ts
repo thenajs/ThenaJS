@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parallel, runWorkflow } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * `parallel`: os passos rodam concorrentes **sobre o mesmo contexto**.
@@ -18,16 +18,16 @@ describe("parallel", () => {
     const lento = new FakeProvider([{ content: "lento" }], { delayMs: 30 });
     const rapido = new FakeProvider([{ content: "rápido" }], { delayMs: 5 });
 
-    const A = criarAgente(
+    const A = makeAgent(
       { provider: lento },
       { afterResponse: (r: string) => void ordem.push(r) },
     );
-    const B = criarAgente(
+    const B = makeAgent(
       { provider: rapido },
       { afterResponse: (r: string) => void ordem.push(r) },
     );
 
-    await runWorkflow(criarWorkflow([parallel([A, B])]), "vai");
+    await runWorkflow(makeWorkflow([parallel([A, B])]), "vai");
 
     // Em sequência a ordem seria [lento, rápido]; concorrente, o rápido chega antes.
     expect(ordem).toEqual(["rápido", "lento"]);
@@ -38,8 +38,8 @@ describe("parallel", () => {
     const b = new FakeProvider([{ content: "b" }]);
 
     await runWorkflow(
-      criarWorkflow([
-        parallel([criarAgente({ provider: a }), criarAgente({ provider: b })]),
+      makeWorkflow([
+        parallel([makeAgent({ provider: a }), makeAgent({ provider: b })]),
       ]),
       "mesma pergunta",
     );
@@ -57,9 +57,9 @@ describe("parallel", () => {
     const depois = new FakeProvider([{ content: "fim" }]);
 
     await runWorkflow(
-      criarWorkflow([
-        parallel([criarAgente({ provider: a }), criarAgente({ provider: b })]),
-        criarAgente({ provider: depois }),
+      makeWorkflow([
+        parallel([makeAgent({ provider: a }), makeAgent({ provider: b })]),
+        makeAgent({ provider: depois }),
       ]),
       "vai",
     );
@@ -75,8 +75,8 @@ describe("parallel", () => {
     const rapido = new FakeProvider([{ content: "rápido" }], { delayMs: 5 });
 
     const saida = await runWorkflow(
-      criarWorkflow([
-        parallel([criarAgente({ provider: lento }), criarAgente({ provider: rapido })]),
+      makeWorkflow([
+        parallel([makeAgent({ provider: lento }), makeAgent({ provider: rapido })]),
       ]),
       "vai",
     );
@@ -93,10 +93,10 @@ describe("parallel", () => {
     const depois = new FakeProvider([{ content: "depois" }]);
 
     const saida = await runWorkflow(
-      criarWorkflow([
-        criarAgente({ provider: antes }),
-        parallel([criarAgente({ provider: a }), criarAgente({ provider: b })]),
-        criarAgente({ provider: depois }),
+      makeWorkflow([
+        makeAgent({ provider: antes }),
+        parallel([makeAgent({ provider: a }), makeAgent({ provider: b })]),
+        makeAgent({ provider: depois }),
       ]),
       "vai",
     );
@@ -109,7 +109,7 @@ describe("parallel", () => {
 
   it("um erro em qualquer ramo derruba o bloco", async () => {
     const ok = new FakeProvider([{ content: "ok" }], { delayMs: 5 });
-    const Quebrado = criarAgente(
+    const Quebrado = makeAgent(
       { provider: new FakeProvider() },
       {
         beforePrompt: () => {
@@ -120,7 +120,7 @@ describe("parallel", () => {
 
     await expect(
       runWorkflow(
-        criarWorkflow([parallel([criarAgente({ provider: ok }), Quebrado])]),
+        makeWorkflow([parallel([makeAgent({ provider: ok }), Quebrado])]),
         "vai",
       ),
     ).rejects.toThrow("ramo quebrado");

@@ -1,16 +1,16 @@
 import type { ToolType } from "@thenajs/agentflow";
 import { getToolMetadata } from "../decorators/metadata.js";
-import { pontosDe } from "../decorators/inject.js";
-import type { PontoDeInjecao } from "../decorators/inject.js";
+import { pointsOf } from "../decorators/inject.js";
+import type { InjectionPoint } from "../decorators/inject.js";
 import type { ToolClass, ToolInput } from "../types.js";
 
 /** Onde o plano de injeção do `execute` viaja até o ponto que tem o ctx. */
-export const PLANO = Symbol("thena:plano-de-injecao");
+export const PLAN = Symbol("thena:plano-de-injecao");
 
-export interface PlanoDeInjecao {
+export interface InjectionPlan {
   instance: any;
-  pontos: (PontoDeInjecao | undefined)[];
-  nome: string;
+  points: (InjectionPoint | undefined)[];
+  name: string;
 }
 
 /**
@@ -20,7 +20,7 @@ export interface PlanoDeInjecao {
  * esta camada sem nenhuma dependência de `runtime/` — uma tool pode disparar um
  * workflow, e um workflow contém tools, então importar direto criaria ciclo.
  */
-export function resolveTool(input: ToolInput, criarRuntime: () => unknown): ToolType {
+export function resolveTool(input: ToolInput, createRuntime: () => unknown): ToolType {
   if (typeof input !== "function") {
     return input;
   }
@@ -36,7 +36,7 @@ export function resolveTool(input: ToolInput, criarRuntime: () => unknown): Tool
   // Uma instância por tool, e não um singleton de módulo: a classe é sem
   // estado (todo o contexto vem do `RunContext`), então o custo é uma alocação
   // — e o módulo fica sem nenhum estado de escopo global.
-  const instance = new (input as ToolClass)(criarRuntime());
+  const instance = new (input as ToolClass)(createRuntime());
   // Defesa em runtime: o TypeScript já barra isso na declaração (`Tool<T
   // extends ToolClass>`), mas cobre só quem passa pelo `tsc`. Sem isso, a
   // falha apareceria como `TypeError: instance.execute is not a function`
@@ -44,7 +44,7 @@ export function resolveTool(input: ToolInput, criarRuntime: () => unknown): Tool
   if (typeof instance.execute !== "function") {
     throw new Error(`[thena] A classe "${input.name}" não implementa execute(input).`);
   }
-  const pontos = pontosDe(input, "execute");
+  const points = pointsOf(input, "execute");
 
   return {
     name: config.name,
@@ -55,6 +55,6 @@ export function resolveTool(input: ToolInput, criarRuntime: () => unknown): Tool
       Promise.resolve(instance.execute(args)) as Promise<string>,
     // Com decorators, a chamada precisa do ctx — montada no passo de tool, que
     // é quem o tem. Guardado aqui para não duplicar a resolução da tool.
-    ...(pontos ? { [PLANO]: { instance, pontos, nome: input.name } } : {}),
+    ...(points ? { [PLAN]: { instance, points, name: input.name } } : {}),
   } as ToolType;
 }

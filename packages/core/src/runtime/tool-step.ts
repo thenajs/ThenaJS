@@ -1,11 +1,11 @@
 import { toToolOutput } from "@thenajs/agentflow";
 import type { ToolType } from "@thenajs/agentflow";
-import { PLANO } from "../di/tool.js";
-import type { PlanoDeInjecao } from "../di/tool.js";
-import { resolverPonto } from "../di/params.js";
-import type { Disponivel } from "../di/params.js";
+import { PLAN } from "../di/tool.js";
+import type { InjectionPlan } from "../di/tool.js";
+import { resolvePoint } from "../di/params.js";
+import type { Injectable } from "../di/params.js";
 import { compose } from "../middleware/compose.js";
-import { cadeiaDeTool } from "../middleware/tool.js";
+import { toolChain } from "../middleware/tool.js";
 import type { ToolInvocation } from "../middleware/tool.js";
 import { currentRun } from "../run-context.js";
 import type { AgentContext } from "../types.js";
@@ -20,52 +20,52 @@ export function buildToolStep(
   tool: ToolType,
   instance: any,
   ctx: AgentContext,
-  disponivel: Disponivel,
+  available: Injectable,
 ): ToolType {
   // Quando o `execute` tem parâmetros decorados, a chamada é montada aqui —
   // é o primeiro ponto do caminho que conhece o ctx.
-  const plano = (tool as any)[PLANO] as PlanoDeInjecao | undefined;
+  const plano = (tool as any)[PLAN] as InjectionPlan | undefined;
   const executar = plano
     ? (args: unknown) => {
-        const argumentos = plano.pontos.map((ponto, i) =>
+        const ctorArgs = plano.points.map((ponto, i) =>
           ponto
-            ? resolverPonto(
+            ? resolvePoint(
                 ponto,
-                { ...disponivel, ctx, args },
-                `${plano.nome}.execute`,
+                { ...available, ctx, args },
+                `${plano.name}.execute`,
                 i,
               )
             : undefined,
         );
-        return Promise.resolve(plano.instance.execute(...argumentos));
+        return Promise.resolve(plano.instance.execute(...ctorArgs));
       }
     : (args: unknown) => tool.execute(args);
 
   // A cadeia é montada uma vez por tool, e não a cada execução: os
   // middlewares vêm do `RunContext`, que não muda dentro de uma run.
-  const cadeia = compose(cadeiaDeTool(currentRun().middleware.tool));
+  const chain = compose(toolChain(currentRun().middleware.tool));
 
   return {
     ...tool,
     execute: (args: unknown) => {
-      const execucao = currentRun();
+      const runCtx = currentRun();
 
-      const invocacao: ToolInvocation = {
+      const invocation: ToolInvocation = {
         name: tool.name,
         args,
         agent: instance,
         ctx,
-        run: execucao,
+        run: runCtx,
         // O nó só existe depois que o `registrarTool` abre — até lá, no-op.
         meta: (dados) => {
-          if (invocacao.node) execucao.recorder.meta(invocacao.node, dados);
+          if (invocation.node) runCtx.recorder.meta(invocation.node, dados);
         },
       };
 
       // `inv.args` é lido aqui dentro, e não capturado antes: um `beforeTool`
       // pode tê-los trocado no caminho.
-      return cadeia(invocacao, async () =>
-        toToolOutput(await executar(invocacao.args)),
+      return chain(invocation, async () =>
+        toToolOutput(await executar(invocation.args)),
       );
     },
   };

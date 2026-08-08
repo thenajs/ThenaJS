@@ -10,8 +10,8 @@ export {
   calledTool,
   turnOf,
   wasExhausted,
-  MAX_ITERATIONS_PADRAO,
-  MAX_FAILS_PADRAO,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_MAX_FAILS,
 } from "./steps.js";
 export { run, runWorkflow } from "./runtime/run-workflow.js";
 export { buildAgentStep } from "./runtime/agent-step.js";
@@ -26,8 +26,8 @@ export type { RunHandle } from "./run-handle.js";
 export type { Middleware } from "./middleware/compose.js";
 export type { ToolMiddleware, ToolInvocation } from "./middleware/tool.js";
 export type { ChatMiddleware, ChatInvocation } from "./middleware/chat.js";
-export { janelaDeContexto } from "./middleware/janela.js";
-export type { JanelaOptions } from "./middleware/janela.js";
+export { contextWindow } from "./middleware/janela.js";
+export type { ContextWindowOptions } from "./middleware/janela.js";
 export type { RuntimeSettings } from "./settings.js";
 export { BudgetExceededError } from "./budget.js";
 export { FatalToolError } from "./tool-error.js";
@@ -50,7 +50,7 @@ export type {
   AgentContext,
   Context,
   RunControls,
-  DadosDaRun,
+  RunData,
   AgentHooks,
   TurnInfo,
   ToolCall,

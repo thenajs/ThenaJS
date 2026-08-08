@@ -9,7 +9,7 @@ import {
   getWorkflowMetadata,
   runWorkflow,
 } from "@thenajs/core";
-import { FakeProvider, PROMPT, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, PROMPT, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * Os decorators: carga do prompt e registro de metadados.
@@ -72,7 +72,7 @@ describe("@Agent — origem do prompt", () => {
 
   it("o prompt vira a mensagem system enviada ao modelo", async () => {
     const provider = new FakeProvider();
-    await runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai");
+    await runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai");
 
     expect(provider.chamadas[0].messages[0]).toEqual({
       role: "system",
@@ -96,7 +96,7 @@ describe("metadados", () => {
 
   it("@Workflow registra steps e state", () => {
     class MeuEstado {}
-    const Agente = criarAgente({ provider: new FakeProvider() });
+    const Agente = makeAgent({ provider: new FakeProvider() });
 
     @Workflow({ steps: [Agente], state: MeuEstado })
     class Fluxo {}
@@ -124,12 +124,12 @@ describe("metadados", () => {
         return "x";
       }
     }
-    const Agente = criarAgente({
+    const Agente = makeAgent({
       provider: new FakeProvider(),
       tools: [ToolNua as never],
     });
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).rejects.toThrow(
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).rejects.toThrow(
       /"ToolNua" não está decorada com @Tool/,
     );
   });
@@ -138,12 +138,12 @@ describe("metadados", () => {
     const SemExecute = class {};
     Tool({ name: "x", description: "x", schema: z.object({}) })(SemExecute as never);
 
-    const Agente = criarAgente({
+    const Agente = makeAgent({
       provider: new FakeProvider(),
       tools: [SemExecute as never],
     });
 
-    await expect(runWorkflow(criarWorkflow([Agente]), "vai")).rejects.toThrow(
+    await expect(runWorkflow(makeWorkflow([Agente]), "vai")).rejects.toThrow(
       /não implementa execute\(input\)/,
     );
   });

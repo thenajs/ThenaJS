@@ -17,10 +17,10 @@ export function parallel(steps: WorkflowStep[]): ParallelStep {
 }
 
 /** Voltas antes de desistir, quando `maxIterations` não é informado. */
-export const MAX_ITERATIONS_PADRAO = 10;
+export const DEFAULT_MAX_ITERATIONS = 10;
 
 /** Falhas de tool seguidas antes de desistir, quando `maxFails` não é informado. */
-export const MAX_FAILS_PADRAO = 5;
+export const DEFAULT_MAX_FAILS = 5;
 
 /**
  * Bloco de repetição: executa `steps` até `until(ctx)` ser verdadeiro.
@@ -67,11 +67,11 @@ export function loop(options: {
     // Os defaults ficam aqui, e não no `Pipeline.loop` do engine: o `loop()` é
     // a API de quem escreve workflow, enquanto o `Pipeline` é a primitiva crua
     // — mudar o default de lá alteraria o comportamento de quem a usa direto.
-    maxIterations: options.maxIterations ?? MAX_ITERATIONS_PADRAO,
+    maxIterations: options.maxIterations ?? DEFAULT_MAX_ITERATIONS,
     onExhausted: options.onExhausted,
     // `Math.max(1, …)` pelo mesmo motivo do `maxAttempts` do retry: `0` não
     // deve virar nem "ilimitado" nem uma comparação que para sem ter falhado.
-    maxFails: Math.max(1, options.maxFails ?? MAX_FAILS_PADRAO),
+    maxFails: Math.max(1, options.maxFails ?? DEFAULT_MAX_FAILS),
     onFail: options.onFail,
   };
 }

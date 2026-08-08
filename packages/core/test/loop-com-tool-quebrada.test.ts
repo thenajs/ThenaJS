@@ -4,14 +4,14 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
-  MAX_FAILS_PADRAO,
-  MAX_ITERATIONS_PADRAO,
+  DEFAULT_MAX_FAILS,
+  DEFAULT_MAX_ITERATIONS,
   Thena,
   loop,
   untilAnswered,
 } from "@thenajs/core";
 import type { ExecutionNode, LoopFailure } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /**
  * Os freios do loop.
@@ -25,7 +25,7 @@ const schema = z.object({ path: z.string() });
 
 /** Tool que falha sempre, contando quantas vezes foi chamada. */
 function toolQuebrada(tentativas: { n: number }) {
-  return criarTool({ name: "ler", description: "lê", schema }, () => {
+  return makeTool({ name: "ler", description: "lê", schema }, () => {
     tentativas.n++;
     throw new Error("ENOENT: disco cheio");
   });
@@ -38,7 +38,7 @@ function agenteTeimoso(tentativas: { n: number }) {
   ]);
   return {
     provider,
-    Agente: criarAgente({ provider, tools: [toolQuebrada(tentativas)] }),
+    Agente: makeAgent({ provider, tools: [toolQuebrada(tentativas)] }),
   };
 }
 
@@ -58,34 +58,34 @@ describe("freios do loop", () => {
     const { provider, Agente } = agenteTeimoso(tentativas);
 
     // Nenhum teto declarado: os defaults é que seguram.
-    const Fluxo = criarWorkflow([loop({ steps: [Agente], until: untilAnswered })]);
+    const Fluxo = makeWorkflow([loop({ steps: [Agente], until: untilAnswered })]);
 
     const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "leia" } });
     await app.dispose();
 
-    expect(provider.chamadas).toHaveLength(MAX_FAILS_PADRAO);
-    expect(tentativas.n).toBe(MAX_FAILS_PADRAO);
+    expect(provider.chamadas).toHaveLength(DEFAULT_MAX_FAILS);
+    expect(tentativas.n).toBe(DEFAULT_MAX_FAILS);
   });
 
   it("sem configurar nada, maxIterations corta o loop que não converge", async () => {
     // Tools funcionando, mas o `until` nunca fica verdadeiro — `maxFails` não
     // tem o que contar, e quem segura é o teto de voltas.
     const provider = new FakeProvider([{ content: "não terminei" }]);
-    const Fluxo = criarWorkflow([
-      loop({ steps: [criarAgente({ provider })], until: () => false }),
+    const Fluxo = makeWorkflow([
+      loop({ steps: [makeAgent({ provider })], until: () => false }),
     ]);
 
     const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
-    expect(provider.chamadas).toHaveLength(MAX_ITERATIONS_PADRAO);
+    expect(provider.chamadas).toHaveLength(DEFAULT_MAX_ITERATIONS);
   });
 
   it("conta falhas CONSECUTIVAS: quem erra e corrige não é punido", async () => {
     const tentativas: string[] = [];
-    const tool = criarTool(
+    const tool = makeTool(
       { name: "ler", description: "lê", schema },
       ({ path }: any) => {
         tentativas.push(path);
@@ -105,9 +105,9 @@ describe("freios do loop", () => {
       { content: "terminei" },
     ]);
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider, tools: [tool] })],
+        steps: [makeAgent({ provider, tools: [tool] })],
         until: untilAnswered,
         maxFails: 3,
         maxIterations: 20,
@@ -125,7 +125,7 @@ describe("freios do loop", () => {
 
   it("uma tool que funciona zera a sequência", async () => {
     const registradas: LoopFailure[] = [];
-    const tool = criarTool(
+    const tool = makeTool(
       { name: "ler", description: "lê", schema },
       ({ path }: any) => {
         if (path === "bom.ts") return "ok";
@@ -141,9 +141,9 @@ describe("freios do loop", () => {
       { content: "fim" },
     ]);
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider, tools: [tool] })],
+        steps: [makeAgent({ provider, tools: [tool] })],
         until: untilAnswered,
         maxFails: 3,
         maxIterations: 20,
@@ -166,7 +166,7 @@ describe("freios do loop", () => {
     const { Agente } = agenteTeimoso(tentativas);
     const alertas: number[] = [];
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
         steps: [Agente],
         until: untilAnswered,
@@ -189,7 +189,7 @@ describe("freios do loop", () => {
     const tentativas = { n: 0 };
     const { Agente } = agenteTeimoso(tentativas);
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({ steps: [Agente], until: untilAnswered, maxFails: 2 }),
     ]);
 
@@ -210,7 +210,7 @@ describe("freios do loop", () => {
     const tentativas = { n: 0 };
     const { provider, Agente } = agenteTeimoso(tentativas);
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
         steps: [Agente],
         until: untilAnswered,
@@ -232,7 +232,7 @@ describe("freios do loop", () => {
   });
 
   it("loop aninhado zera os contadores a cada volta do de fora", async () => {
-    const tool = criarTool(
+    const tool = makeTool(
       { name: "ler", description: "lê", schema },
       ({ path }: any) => {
         if (path === "bom.ts") return "ok";
@@ -252,11 +252,11 @@ describe("freios do loop", () => {
     ]);
 
     let voltas = 0;
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
         steps: [
           loop({
-            steps: [criarAgente({ provider, tools: [tool] })],
+            steps: [makeAgent({ provider, tools: [tool] })],
             until: untilAnswered,
             maxFails: 2,
             maxIterations: 10,

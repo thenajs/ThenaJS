@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Thena } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * A escala do índice do report.
@@ -33,12 +33,12 @@ function pasta(): string {
 }
 
 /** Escreve `n` linhas de ledger, como se `n` runs já tivessem acontecido. */
-function semear(dir: string, n: number): void {
+function seedFromDisk(dir: string, n: number): void {
   let bruto = "";
   for (let i = 0; i < n; i++) {
     bruto += `${JSON.stringify({
       runId: `antiga-${i}`,
-      nome: "FluxoAntigo",
+      name: "FluxoAntigo",
       status: "ok",
       durationMs: 10,
       startedAt: 1_700_000_000_000 + i,
@@ -51,7 +51,7 @@ function semear(dir: string, n: number): void {
 /** Roda uma vez com report ligado e espera o índice ser renderizado. */
 async function rodarComReport(dir: string, mensagem = "vai"): Promise<void> {
   const app = Thena.create(
-    criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
+    makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
     { report: { dir } },
   );
   await app.run({ input: { message: mensagem } });
@@ -59,7 +59,7 @@ async function rodarComReport(dir: string, mensagem = "vai"): Promise<void> {
   await app.dispose();
 }
 
-const linhas = (dir: string) =>
+const lines = (dir: string) =>
   readFileSync(join(dir, LEDGER), "utf-8").split("\n").filter(Boolean);
 
 afterEach(() => vi.restoreAllMocks());
@@ -72,7 +72,7 @@ describe("o ledger cresce sem teto", () => {
     for (let i = 0; i < 5; i++) await rodarComReport(dir, `run ${i}`);
 
     // Exatamente uma linha por run: sem dedup, sem rotação, sem teto.
-    expect(linhas(dir)).toHaveLength(5);
+    expect(lines(dir)).toHaveLength(5);
   });
 
   it("uma run já registrada continua no ledger depois de outras 5", async () => {
@@ -80,13 +80,13 @@ describe("o ledger cresce sem teto", () => {
     const dir = pasta();
 
     await rodarComReport(dir, "a primeira");
-    const primeira = JSON.parse(linhas(dir)[0]).runId;
+    const primeira = JSON.parse(lines(dir)[0]).runId;
 
     for (let i = 0; i < 5; i++) await rodarComReport(dir, `run ${i}`);
 
     // Nada envelhece e sai. É isso que faz o arquivo crescer para sempre.
-    expect(linhas(dir).map((l) => JSON.parse(l).runId)).toContain(primeira);
-    expect(linhas(dir)).toHaveLength(6);
+    expect(lines(dir).map((l) => JSON.parse(l).runId)).toContain(primeira);
+    expect(lines(dir)).toHaveLength(6);
   });
 });
 
@@ -94,7 +94,7 @@ describe("cada render relê o ledger inteiro", () => {
   it("uma run nova faz o índice listar as 5.000 antigas de novo", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = pasta();
-    semear(dir, 5000);
+    seedFromDisk(dir, 5000);
 
     const antes = statSync(join(dir, LEDGER)).size;
     await rodarComReport(dir);
@@ -105,7 +105,7 @@ describe("cada render relê o ledger inteiro", () => {
     // semeadas, mais a run nova. Nenhuma delas está em memória — só no arquivo.
     expect(indice).toContain("antiga-0");
     expect(indice).toContain("antiga-4999");
-    expect(indice).toContain(JSON.parse(linhas(dir).at(-1)!).runId);
+    expect(indice).toContain(JSON.parse(lines(dir).at(-1)!).runId);
 
     // O que o próximo render vai reler, em bytes. Uma run acrescenta ~150 B, e
     // esse total é relido **por completo** a cada render seguinte.
@@ -123,12 +123,12 @@ describe("cada render relê o ledger inteiro", () => {
   it("o índice fica correto mesmo com o ledger grande — ordenado do mais novo", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = pasta();
-    semear(dir, 2000);
+    seedFromDisk(dir, 2000);
 
     await rodarComReport(dir);
 
     const indice = readFileSync(join(dir, "index.html"), "utf-8");
-    const nova = JSON.parse(linhas(dir).at(-1)!).runId;
+    const nova = JSON.parse(lines(dir).at(-1)!).runId;
 
     // A run nova tem `startedAt` de agora, então vem antes de todas as
     // semeadas, cujo `startedAt` é de 2023.
@@ -138,7 +138,7 @@ describe("cada render relê o ledger inteiro", () => {
   it("linha corrompida no meio não derruba o render", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = pasta();
-    semear(dir, 10);
+    seedFromDisk(dir, 10);
     // Simula uma queda no meio de um append.
     writeFileSync(
       join(dir, LEDGER),

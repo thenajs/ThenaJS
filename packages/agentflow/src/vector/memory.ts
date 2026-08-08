@@ -65,14 +65,14 @@ export class VectorMemory {
   private readonly provider: Providers;
   private readonly defaultDataset: string;
   private readonly distance: VectorDistance;
-  private readonly campoDataset: string;
+  private readonly datasetField: string;
 
   constructor(options: VectorMemoryOptions) {
     this.store = options.store;
     this.provider = options.provider;
     this.defaultDataset = options.defaultDataset ?? DEFAULT_DATASET;
     this.distance = options.distance ?? "cosine";
-    this.campoDataset =
+    this.datasetField =
       (options.store as { datasetField?: string }).datasetField ?? "dataset";
   }
 
@@ -105,7 +105,7 @@ export class VectorMemory {
       payload: {
         ...item.payload,
         text: item.text,
-        [this.campoDataset]: item.dataset ?? this.defaultDataset,
+        [this.datasetField]: item.dataset ?? this.defaultDataset,
       },
     }));
 
@@ -123,7 +123,7 @@ export class VectorMemory {
 
     const where = {
       ...options.where,
-      ...(dataset !== undefined ? { [this.campoDataset]: dataset } : {}),
+      ...(dataset !== undefined ? { [this.datasetField]: dataset } : {}),
     };
 
     const matches = await this.store.search({
@@ -138,7 +138,7 @@ export class VectorMemory {
       id: m.id,
       score: m.score,
       text: String(m.payload?.text ?? ""),
-      dataset: String(m.payload?.[this.campoDataset] ?? this.defaultDataset),
+      dataset: String(m.payload?.[this.datasetField] ?? this.defaultDataset),
       payload: m.payload,
     }));
   }
@@ -148,7 +148,7 @@ export class VectorMemory {
     const where = {
       ...selector.where,
       ...(selector.dataset !== undefined
-        ? { [this.campoDataset]: selector.dataset }
+        ? { [this.datasetField]: selector.dataset }
         : {}),
     };
 

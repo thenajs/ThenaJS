@@ -14,7 +14,7 @@ import type { RetryAttempt } from "../src/providers/retry.js";
  * retentando o que devia).
  */
 
-const tentativa = (over: Partial<RetryAttempt> = {}): RetryAttempt => ({
+const attempt = (over: Partial<RetryAttempt> = {}): RetryAttempt => ({
   attempt: 1,
   maxAttempts: 3,
   delayMs: 0,
@@ -64,39 +64,39 @@ describe("resolveRetry", () => {
 
 describe("isRetryableByDefault", () => {
   it.each([408, 425, 429, 500, 502, 503, 504])("retenta %i", (status) => {
-    expect(isRetryableByDefault(tentativa({ status }))).toBe(true);
+    expect(isRetryableByDefault(attempt({ status }))).toBe(true);
   });
 
   it.each([400, 401, 403, 404, 409, 422])("NÃO retenta %i", (status) => {
     // Erro de contrato não melhora repetindo — só gasta tempo e dinheiro.
-    expect(isRetryableByDefault(tentativa({ status }))).toBe(false);
+    expect(isRetryableByDefault(attempt({ status }))).toBe(false);
   });
 
   it("sem status, um erro de rede é transitório", () => {
-    expect(isRetryableByDefault(tentativa({ error: new Error("ECONNRESET") }))).toBe(
+    expect(isRetryableByDefault(attempt({ error: new Error("ECONNRESET") }))).toBe(
       true,
     );
   });
 
   it("sem status e sem erro, não retenta", () => {
-    expect(isRetryableByDefault(tentativa())).toBe(false);
+    expect(isRetryableByDefault(attempt())).toBe(false);
   });
 });
 
 describe("backoffDelay", () => {
-  const politica = resolveRetry();
+  const policy = resolveRetry();
 
   it("cresce exponencialmente — o teto dobra a cada tentativa", () => {
     vi.spyOn(Math, "random").mockReturnValue(1);
-    expect(backoffDelay(1, politica)).toBe(500);
-    expect(backoffDelay(2, politica)).toBe(1000);
-    expect(backoffDelay(3, politica)).toBe(2000);
+    expect(backoffDelay(1, policy)).toBe(500);
+    expect(backoffDelay(2, policy)).toBe(1000);
+    expect(backoffDelay(3, policy)).toBe(2000);
     vi.restoreAllMocks();
   });
 
   it("respeita o teto de espera", () => {
     vi.spyOn(Math, "random").mockReturnValue(1);
-    expect(backoffDelay(10, politica)).toBe(politica.maxDelayMs);
+    expect(backoffDelay(10, policy)).toBe(policy.maxDelayMs);
     vi.restoreAllMocks();
   });
 
@@ -104,7 +104,7 @@ describe("backoffDelay", () => {
     // Espalha as tentativas de clientes concorrentes em vez de sincronizá-las.
     for (const r of [0, 0.25, 0.5, 0.99]) {
       vi.spyOn(Math, "random").mockReturnValue(r);
-      const d = backoffDelay(3, politica);
+      const d = backoffDelay(3, policy);
       expect(d).toBeGreaterThanOrEqual(0);
       expect(d).toBeLessThanOrEqual(2000);
     }
@@ -112,7 +112,7 @@ describe("backoffDelay", () => {
   });
 
   it("`Retry-After` do servidor vence o cálculo", () => {
-    expect(backoffDelay(1, politica, 7000)).toBe(7000);
+    expect(backoffDelay(1, policy, 7000)).toBe(7000);
   });
 
   it("com `respectRetryAfter: false`, o cálculo vence", () => {

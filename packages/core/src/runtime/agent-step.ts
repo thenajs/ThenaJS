@@ -1,14 +1,14 @@
 import type { Message, PipelineContext, Step } from "@thenajs/agentflow";
 import { getAgentMetadata } from "../decorators/metadata.js";
-import { CONSTRUTOR, pontosDe } from "../decorators/inject.js";
+import { CONSTRUCTOR, pointsOf } from "../decorators/inject.js";
 import { resolveMemory, resolveProvider } from "../di/resolve.js";
 import { resolveTool } from "../di/tool.js";
-import { resolverPonto } from "../di/params.js";
-import type { Disponivel } from "../di/params.js";
+import { resolvePoint } from "../di/params.js";
+import type { Injectable } from "../di/params.js";
 import { compose } from "../middleware/compose.js";
-import { cadeiaDeChat as chatMiddlewares } from "../middleware/chat.js";
+import { chatChain as chatMiddlewares } from "../middleware/chat.js";
 import type { ChatInvocation } from "../middleware/chat.js";
-import { currentRun, pedirParada, throwIfAborted } from "../run-context.js";
+import { currentRun, requestStop, throwIfAborted } from "../run-context.js";
 import type { RunContext } from "../run-context.js";
 import type { AgentContext, RunControls } from "../types.js";
 import { buildToolStep } from "./tool-step.js";
@@ -32,7 +32,7 @@ import { WorkflowRuntime } from "./workflow-runtime.js";
  * Escrito uma vez por passo, e não a cada leitura: `data` e `signal` são a
  * mesma referência da run inteira, e as operações são fechaduras sobre ela.
  */
-function ligarExecucao(ctx: AgentContext, run: RunContext): void {
+function attachRunToStep(ctx: AgentContext, run: RunContext): void {
   // `Object.assign` e não atribuição campo a campo: `runId` e `signal` são
   // `readonly`, e essa promessa é para **quem usa** o ctx — não para o runtime
   // que o monta. Assim o tipo continua honesto lá fora, sem cast aqui dentro.
@@ -42,8 +42,8 @@ function ligarExecucao(ctx: AgentContext, run: RunContext): void {
     data: run.data,
     usage: () => run.budget.usage(),
     abort: (reason?: unknown) => run.abort(reason),
-    stop: () => pedirParada(run),
-    onDispose: (fn: () => void | Promise<void>) => void run.descartes.push(fn),
+    stop: () => requestStop(run),
+    onDispose: (fn: () => void | Promise<void>) => void run.cleanups.push(fn),
     meta: (dados: Record<string, unknown>) => run.recorder.metaAtual(dados),
   };
 
@@ -51,21 +51,21 @@ function ligarExecucao(ctx: AgentContext, run: RunContext): void {
 
   // A partir daqui `context()` — a função — resolve para o ctx deste passo,
   // e não mais para a vista da run.
-  run.passo = ctx;
+  run.step = ctx;
 }
 
 export function buildAgentStep(
   AgentClass: Function,
-  estado?: object,
+  workflowState?: object,
 ): Step<PipelineContext> {
   const meta = getAgentMetadata(AgentClass);
   const provider = resolveProvider(meta.provider);
-  const memorias = resolveMemory(provider);
+  const memories = resolveMemory(provider);
   const baseTools = meta.tools.map((tool) =>
     resolveTool(tool, () => new WorkflowRuntime()),
   );
   const systemPrompt = meta.prompt;
-  const disponivel: Disponivel = { estado, memorias };
+  const available: Injectable = { workflowState, memories };
 
   // Com parâmetros decorados, cada um diz o que quer e a ordem não importa.
   // Sem eles, o contrato histórico: as memórias, na ordem registrada.
@@ -73,19 +73,19 @@ export function buildAgentStep(
   // Não usamos `reflect-metadata`/`design:paramtypes` de propósito — o esbuild
   // (tsx, o modo dev) não os emite, então DI por tipo quebraria em silêncio no
   // dev. Decorator de parâmetro, por outro lado, é emitido nos dois caminhos.
-  const pontos = pontosDe(AgentClass, CONSTRUTOR);
-  const argumentos = pontos
-    ? pontos.map((ponto, i) =>
-        ponto ? resolverPonto(ponto, disponivel, AgentClass.name, i) : undefined,
+  const points = pointsOf(AgentClass, CONSTRUCTOR);
+  const ctorArgs = points
+    ? points.map((ponto, i) =>
+        ponto ? resolvePoint(ponto, available, AgentClass.name, i) : undefined,
       )
-    : memorias;
+    : memories;
 
-  const instance = new (AgentClass as new (...args: any[]) => any)(...argumentos);
+  const instance = new (AgentClass as new (...args: any[]) => any)(...ctorArgs);
   const agentName = AgentClass.name;
 
   return (ctx: PipelineContext) =>
     currentRun().recorder.around("agent", agentName, async () => {
-      const execucao = currentRun();
+      const runCtx = currentRun();
       const agentCtx = ctx as AgentContext;
 
       // A execução é projetada no ctx do passo, para uma tool alcançá-la com
@@ -93,7 +93,7 @@ export function buildAgentStep(
       // e as operações só existiam do lado de fora do `run()`.
       //
       // Aditivo: nada do que o ctx já tinha mudou de lugar.
-      ligarExecucao(agentCtx, execucao);
+      attachRunToStep(agentCtx, runCtx);
 
       // Checagem entre unidades de trabalho: um turno é uma chamada ao modelo
       // mais, no máximo, uma tool.
@@ -101,8 +101,8 @@ export function buildAgentStep(
       // Cancelamento sempre lança — quem pediu para parar não quer meia
       // resposta apresentada como resposta. Orçamento e `ctx.stop()` podem só
       // pular: a run termina com o output que já tinha.
-      throwIfAborted(execucao);
-      if (execucao.parada.pedida || execucao.budget.checkpoint()) return ctx;
+      throwIfAborted(runCtx);
+      if (runCtx.stopRequest.requested || runCtx.budget.checkpoint()) return ctx;
 
       // Texto do último turno — passado ao escape hatch `run`.
       const last = ctx.state.history.at(-1) as Message | string | undefined;
@@ -137,7 +137,7 @@ export function buildAgentStep(
         }
 
         const tools = baseTools.map((tool) =>
-          buildToolStep(tool, instance, agentCtx, disponivel),
+          buildToolStep(tool, instance, agentCtx, available),
         );
 
         // system do agente + projeção do estado (memory/tasks + history).
@@ -146,33 +146,33 @@ export function buildAgentStep(
           ...ctx.state.toMessages(),
         ];
 
-        const invocacao: ChatInvocation = {
+        const invocation: ChatInvocation = {
           messages,
           tools,
           sampling: meta.sampling,
-          signal: execucao.signal,
-          onToken: execucao.onToken,
+          signal: runCtx.signal,
+          onToken: runCtx.onToken,
           agent: instance,
           ctx: agentCtx,
-          run: execucao,
+          run: runCtx,
           // O nó só existe depois que o `registrarChat` abre — até lá, no-op.
           meta: (dados) => {
-            if (invocacao.node) execucao.recorder.meta(invocacao.node, dados);
+            if (invocation.node) runCtx.recorder.meta(invocation.node, dados);
           },
         };
 
-        const cadeiaDeChat = compose(chatMiddlewares(execucao.middleware.chat));
-        const turn = await cadeiaDeChat(invocacao, () =>
+        const chatChain = compose(chatMiddlewares(runCtx.middleware.chat));
+        const turn = await chatChain(invocation, () =>
           provider.chat({
-            tools: invocacao.tools,
-            messages: invocacao.messages,
-            sampling: invocacao.sampling,
-            signal: invocacao.signal,
-            onToken: invocacao.onToken,
+            tools: invocation.tools,
+            messages: invocation.messages,
+            sampling: invocation.sampling,
+            signal: invocation.signal,
+            onToken: invocation.onToken,
           }),
         );
 
-        agentCtx.budget = execucao.budget.usage();
+        agentCtx.budget = runCtx.budget.usage();
 
         ctx.state.append("history", turn.assistant);
         if (turn.tool) ctx.state.append("history", turn.tool);
@@ -198,7 +198,7 @@ export function buildAgentStep(
         // Cancelamento não passa pelo `onError`: o hook existe para o agente
         // se recuperar de falha, e "alguém mandou parar" não é falha. Deixá-lo
         // devolver um fallback transformaria um abort em resposta.
-        throwIfAborted(execucao);
+        throwIfAborted(runCtx);
 
         if (typeof instance.onError === "function") {
           const fallback = await instance.onError(error as Error, agentCtx);

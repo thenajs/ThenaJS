@@ -2,7 +2,7 @@ import { Pipeline, StateManager } from "@thenajs/agentflow";
 import { getWorkflowMetadata } from "../decorators/metadata.js";
 import {
   childRunContext,
-  drenarDescartes,
+  runCleanups,
   newRunContext,
   peekRun,
   throwIfAborted,
@@ -27,9 +27,9 @@ export async function run<T = string>(AgentClass: Function, input: string): Prom
   // Dentro de uma run já em curso, reaproveita o contexto: um agente avulso é
   // mais um turno da mesma execução, e deve contar no orçamento dela. Fora de
   // qualquer run, abre um contexto de topo.
-  const execucao = peekRun() ?? newRunContext();
+  const runCtx = peekRun() ?? newRunContext();
 
-  return withRun(execucao, async () => {
+  return withRun(runCtx, async () => {
     const pipeline = new Pipeline(new StateManager());
     pipeline.new([buildAgentStep(AgentClass)]);
     const ctx = await pipeline.run(input);
@@ -55,12 +55,12 @@ export async function runWorkflow<T = string>(
   // settings do pai. Sem `runBudget`, herda também o teto — um sub-workflow
   // não é uma forma de sair do orçamento da run. Chamado fora de qualquer run,
   // abre um contexto de topo com os defaults.
-  const pai = peekRun();
-  const execucao = pai
-    ? childRunContext(pai, runBudget)
+  const parent = peekRun();
+  const runCtx = parent
+    ? childRunContext(parent, runBudget)
     : newRunContext({ budget: runBudget });
 
-  return withRun(execucao, async () => {
+  return withRun(runCtx, async () => {
     const meta = getWorkflowMetadata(WorkflowClass);
     const state = new StateManager();
     if (memory !== undefined) {
@@ -72,29 +72,29 @@ export async function runWorkflow<T = string>(
     }
     // Uma instância por execução: os valores iniciais são as inicializações de
     // campo da classe, e todos os passos veem o mesmo objeto.
-    const estado = meta.state ? new meta.state() : undefined;
+    const workflowState = meta.state ? new meta.state() : undefined;
 
     const pipeline = new Pipeline(state);
     // A compilação acontece **dentro** do escopo de propósito: `buildAgentStep`
     // instancia provider, tools e agente, e resolve as memórias vetoriais lendo
     // `currentRun().settings`. Compilar fora — como era antes — faria o
     // `memory` do ThenaConfig ser ignorado em silêncio.
-    pipeline.new(meta.steps.map((s) => compileStep(s, pipeline, estado)));
+    pipeline.new(meta.steps.map((s) => compileStep(s, pipeline, workflowState)));
 
-    return execucao.recorder.around("workflow", WorkflowClass.name, async (node) => {
-      const antes = execucao.budget.usage();
+    return runCtx.recorder.around("workflow", WorkflowClass.name, async (node) => {
+      const antes = runCtx.budget.usage();
       try {
         const ctx = await pipeline.run(input);
         // O cancelamento é checado **entre** passos. Sem esta última checagem,
         // um `ctx.abort()` no passo final não teria mais ninguém para notá-lo,
         // e a run resolveria normalmente — cancelamento silenciosamente
         // ignorado é pior do que não ter cancelamento.
-        throwIfAborted(execucao);
+        throwIfAborted(runCtx);
         return ctx.output as T;
       } finally {
         // Antes da telemetria: uma limpeza pode gastar (fechar conexão, gravar
         // algo), e o nó deve refletir o que a execução custou de verdade.
-        await drenarDescartes(execucao);
+        await runCleanups(runCtx);
 
         // O **delta**, e não o acumulado: uma run aninhada compartilha o
         // tracker do pai, então ler o acumulado aqui atribuiria ao
@@ -102,14 +102,14 @@ export async function runWorkflow<T = string>(
         // ponto de partida é zero e o delta é o próprio acumulado.
         //
         // No nó mesmo quando a run falha — o consumo já aconteceu.
-        const agora = execucao.budget.usage();
-        execucao.recorder.meta(node, {
+        const agora = runCtx.budget.usage();
+        runCtx.recorder.meta(node, {
           chatCalls: agora.chatCalls - antes.chatCalls,
           toolCalls: agora.toolCalls - antes.toolCalls,
           tokens: agora.tokens - antes.tokens,
           costUsd: agora.costUsd - antes.costUsd,
           elapsedMs: agora.elapsedMs - antes.elapsedMs,
-          exceeded: execucao.budget.exceeded(),
+          exceeded: runCtx.budget.exceeded(),
         });
       }
     });

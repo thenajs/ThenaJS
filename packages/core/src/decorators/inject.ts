@@ -1,6 +1,6 @@
 import type { VectorStoreCtor } from "@thenajs/agentflow";
-import { resolverContexto } from "../vista-da-run.js";
-import type { Context, DadosDaRun } from "../types.js";
+import { resolveContext } from "../run-view.js";
+import type { Context, RunData } from "../types.js";
 
 /**
  * Injeção por decorator de parâmetro.
@@ -16,30 +16,30 @@ import type { Context, DadosDaRun } from "../types.js";
  */
 
 /** O que um parâmetro decorado pede. */
-export type PontoDeInjecao =
-  | { tipo: "input" }
-  | { tipo: "context" }
-  | { tipo: "state" }
-  | { tipo: "memory"; store?: VectorStoreCtor };
+export type InjectionPoint =
+  | { kind: "input" }
+  | { kind: "context" }
+  | { kind: "state" }
+  | { kind: "memory"; store?: VectorStoreCtor };
 
 /** classe -> método -> índice do parâmetro -> o que ele pede. */
-const registro = new WeakMap<Function, Map<string, (PontoDeInjecao | undefined)[]>>();
+const entry = new WeakMap<Function, Map<string, (InjectionPoint | undefined)[]>>();
 
-const CONSTRUTOR = "constructor";
+const CONSTRUCTOR = "constructor";
 
-function marcar(ponto: PontoDeInjecao): ParameterDecorator {
+function mark(ponto: InjectionPoint): ParameterDecorator {
   return (target, chave, indice) => {
     // Em construtor, `target` é a própria classe e `chave` é undefined.
     // Em método, `target` é o prototype e `chave` é o nome do método.
     const classe = (chave === undefined ? target : target.constructor) as Function;
-    const metodo = chave === undefined ? CONSTRUTOR : String(chave);
+    const metodo = chave === undefined ? CONSTRUCTOR : String(chave);
 
-    const porMetodo = registro.get(classe) ?? new Map();
-    registro.set(classe, porMetodo);
+    const porMetodo = entry.get(classe) ?? new Map();
+    entry.set(classe, porMetodo);
 
-    const pontos = porMetodo.get(metodo) ?? [];
-    pontos[indice] = ponto;
-    porMetodo.set(metodo, pontos);
+    const points = porMetodo.get(metodo) ?? [];
+    points[indice] = ponto;
+    porMetodo.set(metodo, points);
   };
 }
 
@@ -50,7 +50,7 @@ function marcar(ponto: PontoDeInjecao): ParameterDecorator {
  * async execute(@input() args: { caminho: string }) { … }
  * ```
  */
-export const input = (): ParameterDecorator => marcar({ tipo: "input" });
+export const input = (): ParameterDecorator => mark({ kind: "input" });
 
 /**
  * O contexto da execução — **duas portas para o mesmo objeto**.
@@ -78,24 +78,24 @@ export const input = (): ParameterDecorator => marcar({ tipo: "input" });
  * *chamável* (o decorator), e `context()` precisa devolver algo *legível* (o
  * contexto). Um objeto que é as duas coisas é o preço de ter um nome só.
  */
-export const context = <D extends DadosDaRun = DadosDaRun>(): ParameterDecorator &
+export const context = <D extends RunData = RunData>(): ParameterDecorator &
   Context<D> => {
-  const decorator = marcar({ tipo: "context" });
+  const decorator = mark({ kind: "context" });
 
   return new Proxy(decorator, {
     // Aqui `@context()` é aplicado — no load do módulo, fora de qualquer run.
     // Nada do contexto é resolvido neste caminho.
-    apply: (alvo, esteArg, args) =>
-      Reflect.apply(alvo as (...a: unknown[]) => unknown, esteArg, args),
+    apply: (target, esteArg, args) =>
+      Reflect.apply(target as (...a: unknown[]) => unknown, esteArg, args),
 
-    get: (alvo, prop, receiver) => {
+    get: (target, prop, receiver) => {
       // Props da própria função (`name`, `length`) e símbolos de inspeção não
       // podem resolver o contexto: `console.log(context())` sondaria dezenas
       // deles e explodiria fora de uma execução.
-      if (typeof prop === "symbol" || prop in alvo) {
-        return Reflect.get(alvo, prop, receiver);
+      if (typeof prop === "symbol" || prop in target) {
+        return Reflect.get(target, prop, receiver);
       }
-      return (resolverContexto() as Record<string, unknown>)[prop];
+      return (resolveContext() as Record<string, unknown>)[prop];
     },
   }) as ParameterDecorator & Context<D>;
 };
@@ -107,7 +107,7 @@ export const context = <D extends DadosDaRun = DadosDaRun>(): ParameterDecorator
  * constructor(@state() private readonly s: RevisaoState) {}
  * ```
  */
-export const state = (): ParameterDecorator => marcar({ tipo: "state" });
+export const state = (): ParameterDecorator => mark({ kind: "state" });
 
 /**
  * Uma memória vetorial. Sem argumento, a primeira registrada; com a classe do
@@ -118,14 +118,14 @@ export const state = (): ParameterDecorator => marcar({ tipo: "state" });
  * ```
  */
 export const memory = (store?: VectorStoreCtor): ParameterDecorator =>
-  marcar({ tipo: "memory", store });
+  mark({ kind: "memory", store });
 
 /** Os pontos declarados num método (ou no construtor). `undefined` = nenhum. */
-export function pontosDe(
+export function pointsOf(
   classe: Function,
-  metodo: string = CONSTRUTOR,
-): (PontoDeInjecao | undefined)[] | undefined {
-  return registro.get(classe)?.get(metodo);
+  metodo: string = CONSTRUCTOR,
+): (InjectionPoint | undefined)[] | undefined {
+  return entry.get(classe)?.get(metodo);
 }
 
-export { CONSTRUTOR };
+export { CONSTRUCTOR };

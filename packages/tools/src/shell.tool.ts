@@ -9,7 +9,7 @@ const run = promisify(exec);
 const schema = z.object({ command: z.string() });
 
 /** Teto de tempo padrão. Sem ele, um comando pendurado trava a run para sempre. */
-const TIMEOUT_PADRAO = 30_000;
+const DEFAULT_TIMEOUT = 30_000;
 
 /** Teto de saída devolvida ao modelo, para não entupir a janela de contexto. */
 const MAX_CHARS = 8_000;
@@ -55,7 +55,7 @@ export interface ShellToolOptions {
  * container descartável — e nunca a um serviço exposto.
  */
 export function shellTool(options: ShellToolOptions = {}): ToolType {
-  const timeout = options.timeoutMs ?? TIMEOUT_PADRAO;
+  const timeout = options.timeoutMs ?? DEFAULT_TIMEOUT;
   const maxChars = options.maxChars ?? MAX_CHARS;
   const allow = options.allow?.map((c) => c.trim()).filter(Boolean);
 

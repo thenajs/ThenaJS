@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Tool, Thena, loop, runWorkflow, untilAnswered } from "@thenajs/core";
 import type { Context, ExecutionEvent, WorkflowRuntime } from "@thenajs/core";
-import { FakeProvider, capturarErro, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, captureError, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * O que uma tool alcança da **execução**, e não só do passo.
@@ -23,20 +23,20 @@ async function appComTool(Classe: unknown, turnos = [{ tool: { name: "alvo" } }]
     turnos.map((t) => ({ tool: { name: t.tool.name, arguments: { x: "1" } } })),
   );
   const app = Thena.create(
-    criarWorkflow([criarAgente({ provider, tools: [Classe as never] })]),
+    makeWorkflow([makeAgent({ provider, tools: [Classe as never] })]),
     {},
   );
   return { app, provider };
 }
 
 /** Declara uma tool com o `execute` dado. */
-function tool(execute: (...args: any[]) => unknown, nome = "alvo") {
+function tool(execute: (...args: any[]) => unknown, name = "alvo") {
   const Classe = class {
     execute(...args: any[]) {
       return execute(...args);
     }
   };
-  Tool({ name: nome, description: nome, schema })(Classe as never);
+  Tool({ name: name, description: name, schema })(Classe as never);
   return Classe;
 }
 
@@ -112,7 +112,7 @@ describe("ctx.signal", () => {
     const exec = app.run({ input: { message: "vai" } });
     setTimeout(() => exec.abort(new Error("parou")), 20);
 
-    const erro = await capturarErro(exec.result);
+    const erro = await captureError(exec.result);
     await app.dispose();
 
     expect(interrompida).toBe(true);
@@ -129,7 +129,7 @@ describe("ctx.signal", () => {
       { tool: { name: "alvo", arguments: { x: "1" } } },
     ]);
     await runWorkflow(
-      criarWorkflow([criarAgente({ provider, tools: [comContexto(T) as never] })]),
+      makeWorkflow([makeAgent({ provider, tools: [comContexto(T) as never] })]),
       "vai",
     );
 
@@ -145,7 +145,7 @@ describe("ctx.abort()", () => {
     });
     const { app } = await appComTool(comContexto(T));
 
-    const erro = await capturarErro(app.run({ input: { message: "vai" } }).result);
+    const erro = await captureError(app.run({ input: { message: "vai" } }).result);
     await app.dispose();
 
     expect((erro as Error).message).toBe("a tool desistiu");
@@ -164,9 +164,9 @@ describe("ctx.stop()", () => {
       { tool: { name: "alvo", arguments: { x: "1" } } },
     ]);
     const app = Thena.create(
-      criarWorkflow([
-        criarAgente({ provider, tools: [comContexto(T) as never] }),
-        criarAgente({ provider: depois }),
+      makeWorkflow([
+        makeAgent({ provider, tools: [comContexto(T) as never] }),
+        makeAgent({ provider: depois }),
       ]),
       {},
     );
@@ -180,7 +180,7 @@ describe("ctx.stop()", () => {
   });
 
   it("corta um loop, e o report registra stoppedBy: stop", async () => {
-    const eventos: ExecutionEvent[] = [];
+    const events: ExecutionEvent[] = [];
     const T = tool((_a: unknown, ctx: Context) => {
       ctx.stop();
       return "chega";
@@ -190,14 +190,14 @@ describe("ctx.stop()", () => {
       { tool: { name: "alvo", arguments: { x: "1" } } },
     ]);
     const app = Thena.create(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider, tools: [comContexto(T) as never] })],
+          steps: [makeAgent({ provider, tools: [comContexto(T) as never] })],
           until: untilAnswered,
           maxIterations: 50,
         }),
       ]),
-      { log: (e) => eventos.push(e) },
+      { log: (e) => events.push(e) },
     );
 
     await app.run({ input: { message: "vai" } });
@@ -205,7 +205,7 @@ describe("ctx.stop()", () => {
 
     // Sem o `stop`, o loop giraria as 50 voltas: o roteiro do provider repete.
     expect(provider.chamadas.length).toBeLessThanOrEqual(2);
-    const no = eventos.find((e) => e.kind === "loop" && e.phase === "end");
+    const no = events.find((e) => e.kind === "loop" && e.phase === "end");
     expect(no?.data?.stoppedBy).toBe("stop");
   });
 });
@@ -237,7 +237,7 @@ describe("ctx.onDispose()", () => {
       { tool: { name: "alvo", arguments: { x: "1" } } },
     ]);
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider, tools: [comContexto(T) as never] })]),
+      makeWorkflow([makeAgent({ provider, tools: [comContexto(T) as never] })]),
       {},
     );
     await app.run({ input: { message: "vai" } });
@@ -267,8 +267,8 @@ describe("ctx.onDispose()", () => {
       ctx.onDispose(() => void ordem.push("filho"));
       return "sub ok";
     }, "dofilho");
-    const SubFluxo = criarWorkflow([
-      criarAgente({
+    const SubFluxo = makeWorkflow([
+      makeAgent({
         provider: new FakeProvider([
           { tool: { name: "dofilho", arguments: { x: "1" } } },
         ]),
@@ -296,16 +296,16 @@ describe("ctx.onDispose()", () => {
 
 describe("ctx.meta()", () => {
   it("escreve no nó do passo em que a tool está", async () => {
-    const eventos: ExecutionEvent[] = [];
+    const events: ExecutionEvent[] = [];
     const T = tool((_a: unknown, ctx: Context) => {
       ctx.meta({ cacheHit: true, itens: 3 });
       return "ok";
     });
     const { app } = await appComTool(comContexto(T));
-    await app.run({ input: { message: "vai" }, log: (e) => eventos.push(e) });
+    await app.run({ input: { message: "vai" }, log: (e) => events.push(e) });
     await app.dispose();
 
-    const no = eventos.find((e) => e.kind === "tool" && e.phase === "end");
+    const no = events.find((e) => e.kind === "tool" && e.phase === "end");
     expect(no?.data?.cacheHit).toBe(true);
     expect(no?.data?.itens).toBe(3);
   });

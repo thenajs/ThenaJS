@@ -11,16 +11,16 @@ import { buildAgentStep } from "./agent-step.js";
 export function compileStep(
   step: WorkflowStep,
   pipeline: Pipeline<PipelineContext>,
-  estado?: object,
+  workflowState?: object,
 ): Step<PipelineContext> {
   // Classe de agente (construtor) -> passo de agente.
   if (typeof step === "function") {
-    return buildAgentStep(step, estado);
+    return buildAgentStep(step, workflowState);
   }
 
   if (step.kind === "parallel") {
     const parallelStep = pipeline.parallel({
-      steps: step.steps.map((s) => compileStep(s, pipeline, estado)),
+      steps: step.steps.map((s) => compileStep(s, pipeline, workflowState)),
     });
     return (ctx) =>
       currentRun().recorder.around("parallel", "parallel", async () =>
@@ -32,7 +32,7 @@ export function compileStep(
   // Um `until` que declara o 2º parâmetro está pedindo o estado. Sem `state` no
   // @Workflow ele receberia `undefined`, e o erro sairia como um TypeError cru
   // na primeira leitura de campo — sem dizer o que faltou.
-  if (step.until.length >= 2 && !estado) {
+  if (step.until.length >= 2 && !workflowState) {
     throw new Error(
       `[thena] O \`until\` deste loop recebe o estado como 2º parâmetro, mas o ` +
         `workflow não declara \`state\`. Acrescente \`state: MinhaClasse\` no ` +
@@ -43,35 +43,35 @@ export function compileStep(
   // Contadores desta execução do loop. Ficam no closure (e não em `ctx.loop`,
   // que é last-writer-wins entre loops aninhados) e são zerados a cada
   // invocação — um loop de dentro roda de novo a cada volta do de fora.
-  const falhas = { consecutive: 0, total: 0 };
+  const failures = { consecutive: 0, total: 0 };
   let stoppedBy: LoopStopReason = "until";
   const maxFails = step.maxFails ?? Infinity;
 
   const loopStep = pipeline.loop({
-    steps: step.steps.map((s) => compileStep(s, pipeline, estado)),
+    steps: step.steps.map((s) => compileStep(s, pipeline, workflowState)),
     until: async (ctx) => {
       const c = ctx as WorkflowContext;
 
       // A falha é contada antes de qualquer parada: ela aconteceu, mesmo que
       // quem encerre o loop seja outro freio.
       if (c.turn?.toolError === true) {
-        falhas.consecutive++;
-        falhas.total++;
+        failures.consecutive++;
+        failures.total++;
         await step.onFail?.(c, {
-          consecutive: falhas.consecutive,
-          total: falhas.total,
+          consecutive: failures.consecutive,
+          total: failures.total,
           toolName: c.turn.toolName,
           message: c.turn.response,
         });
       } else if (c.turn?.calledTool) {
         // Só uma tool que **funcionou** zera a sequência. Um turno sem tool
         // nenhuma não conta como progresso nem como falha.
-        falhas.consecutive = 0;
+        failures.consecutive = 0;
       }
 
       // Mesmos checkpoints do passo de agente.
       throwIfAborted();
-      if (currentRun().parada.pedida) {
+      if (currentRun().stopRequest.requested) {
         stoppedBy = "stop";
         return true;
       }
@@ -81,13 +81,13 @@ export function compileStep(
       }
 
       // O agente está preso repetindo a mesma falha — insistir só custa.
-      if (falhas.consecutive >= maxFails) {
+      if (failures.consecutive >= maxFails) {
         stoppedBy = "fails";
         return true;
       }
 
       // O estado vai como 2º parâmetro — `until: (ctx, s) => s.aprovado`.
-      if (await step.until(c, estado)) {
+      if (await step.until(c, workflowState)) {
         stoppedBy = "until";
         return true;
       }
@@ -103,8 +103,8 @@ export function compileStep(
 
   return (ctx) =>
     currentRun().recorder.around("loop", "loop", async (node) => {
-      falhas.consecutive = 0;
-      falhas.total = 0;
+      failures.consecutive = 0;
+      failures.total = 0;
       stoppedBy = "until";
 
       const out = await loopStep(ctx);
@@ -117,7 +117,7 @@ export function compileStep(
         exhausted: out.loop?.exhausted,
         maxIterations: step.maxIterations,
         stoppedBy,
-        fails: falhas.total || undefined,
+        fails: failures.total || undefined,
       });
       return out;
     });

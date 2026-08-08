@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Thena } from "@thenajs/core";
 import type { ExecutionEvent, ExecutionNode } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * O objetivo do `RunContext`: execuções concorrentes não se contaminam.
@@ -13,17 +13,17 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 
 /** Workflow de três agentes, para o orçamento ter onde cortar. */
 function fluxoDeTresPassos(provider: FakeProvider) {
-  return criarWorkflow([
-    criarAgente({ provider }),
-    criarAgente({ provider }),
-    criarAgente({ provider }),
+  return makeWorkflow([
+    makeAgent({ provider }),
+    makeAgent({ provider }),
+    makeAgent({ provider }),
   ]);
 }
 
 /** Agente que espera `ms` antes de responder, para forçar a intercalação. */
 function fluxoLento(ms: number, resposta: string) {
   const provider = new FakeProvider([{ content: resposta }], { delayMs: ms });
-  return criarWorkflow([criarAgente({ provider })]);
+  return makeWorkflow([makeAgent({ provider })]);
 }
 
 afterEach(() => {
@@ -111,8 +111,8 @@ describe("isolamento entre execuções", () => {
       const sub = readdirSync(dir, { withFileTypes: true }).find((e) =>
         e.isDirectory(),
       );
-      const alvo = sub ? join(dir, sub.name) : dir;
-      return JSON.parse(readFileSync(join(alvo, "report.json"), "utf-8"));
+      const target = sub ? join(dir, sub.name) : dir;
+      return JSON.parse(readFileSync(join(target, "report.json"), "utf-8"));
     };
 
     // Cada report tem exatamente uma árvore, com um único agente dentro.
@@ -143,16 +143,16 @@ describe("isolamento entre execuções", () => {
   it("cada run recebe o seu próprio runId nos eventos", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const eventos: ExecutionEvent[] = [];
+    const events: ExecutionEvent[] = [];
     const app = Thena.create(fluxoLento(0, "x"), {
-      log: (e) => eventos.push(e),
+      log: (e) => events.push(e),
     });
 
     await app.run({ input: { message: "1" } });
     await app.run({ input: { message: "2" } });
     await app.dispose();
 
-    const ids = new Set(eventos.map((e) => e.runId));
+    const ids = new Set(events.map((e) => e.runId));
     expect(ids.size).toBe(2);
     expect([...ids].every(Boolean)).toBe(true);
   });

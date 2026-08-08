@@ -10,7 +10,7 @@ import {
   runWorkflow,
 } from "@thenajs/core";
 import type { Context } from "@thenajs/core";
-import { FakeProvider, PROMPT, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, PROMPT, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * `context` tem duas portas para o mesmo objeto: decorator e função.
@@ -43,7 +43,7 @@ describe("as duas portas devolvem a mesma coisa", () => {
       { tool: { name: "alvo", arguments: { x: "1" } } },
     ]);
     await runWorkflow(
-      criarWorkflow([criarAgente({ provider, tools: [T as never] })]),
+      makeWorkflow([makeAgent({ provider, tools: [T as never] })]),
       "vai",
     );
 
@@ -114,7 +114,7 @@ describe("as bordas do Proxy", () => {
     const provider = new FakeProvider([{ content: "ok" }]);
     let ok = false;
 
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       {
         beforePrompt: async () => {
@@ -124,18 +124,18 @@ describe("as bordas do Proxy", () => {
       },
     );
 
-    await runWorkflow(criarWorkflow([Agente]), "vai");
+    await runWorkflow(makeWorkflow([Agente]), "vai");
     expect(ok).toBe(true);
   });
 
   it("cada chamada lê o contexto do momento, não um congelado", async () => {
     const vistos: string[] = [];
     const provider = new FakeProvider([{ content: "ok" }]);
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       { beforePrompt: () => void vistos.push(String(context().data.conta)) },
     );
-    const Fluxo = criarWorkflow([Agente]);
+    const Fluxo = makeWorkflow([Agente]);
 
     const app = Thena.create(Fluxo, {});
     await app.run({ input: { message: "1" }, data: { conta: "a" } });
@@ -148,7 +148,7 @@ describe("as bordas do Proxy", () => {
   it("em runs concorrentes, cada uma lê a sua", async () => {
     const provider = new FakeProvider([{ content: "ok" }], { delayMs: 5 });
     const vistos: string[] = [];
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       {
         beforePrompt: async () => {
@@ -159,7 +159,7 @@ describe("as bordas do Proxy", () => {
       },
     );
 
-    const app = Thena.create(criarWorkflow([Agente]), {});
+    const app = Thena.create(makeWorkflow([Agente]), {});
     await Promise.all([
       app.run({ input: { message: "x" }, data: { conta: "a" } }),
       app.run({ input: { message: "x" }, data: { conta: "b" } }),

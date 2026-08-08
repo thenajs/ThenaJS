@@ -91,8 +91,8 @@ export function resolveRetry(input?: RetryPolicy | boolean): ResolvedRetry {
  * retentado: quem cancelou não quer que o framework tente de novo.
  */
 export function isAbortError(error: unknown): boolean {
-  const nome = (error as Error)?.name;
-  return nome === "AbortError" || nome === "TimeoutError";
+  const name = (error as Error)?.name;
+  return name === "AbortError" || name === "TimeoutError";
 }
 
 /** Decisão padrão: transitório se tentar de novo pode dar outro resultado. */
@@ -152,16 +152,16 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) return reject(signal.reason);
 
     const t = setTimeout(() => {
-      signal?.removeEventListener("abort", cancelar);
+      signal?.removeEventListener("abort", unsubscribe);
       resolve();
     }, ms);
 
-    function cancelar() {
+    function unsubscribe() {
       clearTimeout(t);
       reject(signal!.reason);
     }
 
-    signal?.addEventListener("abort", cancelar, { once: true });
+    signal?.addEventListener("abort", unsubscribe, { once: true });
   });
 }
 

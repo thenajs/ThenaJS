@@ -37,7 +37,7 @@ export type ToolMiddleware = Middleware<ToolInvocation, ToolOutput>;
  * **depois** do `next()`, então registra os argumentos já trocados por um
  * `beforeTool`, não os originais.
  */
-export const registrarTool: ToolMiddleware = (inv, next) =>
+export const recordTool: ToolMiddleware = (inv, next) =>
   inv.run.recorder.around("tool", inv.name, async (node) => {
     // A partir daqui o `inv.meta(...)` das camadas de dentro tem onde escrever.
     inv.node = node;
@@ -61,7 +61,7 @@ export const registrarTool: ToolMiddleware = (inv, next) =>
  * Um `throw` no `beforeTool` **cancela** a execução: `next()` nunca é chamado,
  * então nem o contador nem a tool rodam. É o cancelamento documentado.
  */
-export const hooksDeTool: ToolMiddleware = async (inv, next) => {
+export const toolHooks: ToolMiddleware = async (inv, next) => {
   const { agent, ctx } = inv;
 
   if (typeof agent.beforeTool === "function") {
@@ -96,7 +96,7 @@ export const hooksDeTool: ToolMiddleware = async (inv, next) => {
 };
 
 /** Conta a execução no orçamento da run. */
-export const contarTool: ToolMiddleware = (inv, next) => {
+export const countTool: ToolMiddleware = (inv, next) => {
   inv.run.budget.addTool();
   return next();
 };
@@ -120,7 +120,7 @@ export const contarTool: ToolMiddleware = (inv, next) => {
  *
  * Envolve só o centro da cadeia — um `throw` vindo de um hook continua subindo.
  */
-export const politicaDeErroDaTool: ToolMiddleware = async (inv, next) => {
+export const toolErrorPolicy: ToolMiddleware = async (inv, next) => {
   try {
     return await next();
   } catch (err) {
@@ -156,6 +156,6 @@ export const politicaDeErroDaTool: ToolMiddleware = async (inv, next) => {
  * argumentos que realmente vão executar — um `beforeTool` que os reescreve
  * depois de uma autorização a tornaria contornável.
  */
-export function cadeiaDeTool(usuario: ToolMiddleware[] = []): ToolMiddleware[] {
-  return [registrarTool, hooksDeTool, ...usuario, contarTool, politicaDeErroDaTool];
+export function toolChain(usuario: ToolMiddleware[] = []): ToolMiddleware[] {
+  return [recordTool, toolHooks, ...usuario, countTool, toolErrorPolicy];
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Thena } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * O que cada opção de `app.run(...)` realmente faz com o dado — em especial o
@@ -9,7 +9,7 @@ import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
 describe("opções de run", () => {
   it("memory entra no system prompt enviado ao modelo", async () => {
     const provider = new FakeProvider([{ content: "ok" }]);
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
 
     await app.run({
       input: { message: "Olá" },
@@ -29,7 +29,7 @@ describe("opções de run", () => {
 
   it("não há canal para dado de execução que não vá para o prompt", async () => {
     const provider = new FakeProvider([{ content: "ok" }]);
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
 
     await app.run({ input: { message: "Olá" } });
     await app.dispose();

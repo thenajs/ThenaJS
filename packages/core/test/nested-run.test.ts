@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Tool, Thena, runWorkflow } from "@thenajs/core";
 import type { ExecutionNode, WorkflowRuntime } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * Caracterização da run aninhada: uma tool que dispara outro workflow pelo
@@ -36,13 +36,13 @@ afterEach(() => {
 describe("run aninhada", () => {
   it("o sub-workflow herda o teto do pai — aninhar não é escapatória", async () => {
     const providerFilho = new FakeProvider([{ content: "resposta do filho" }]);
-    const SubFluxo = criarWorkflow([criarAgente({ provider: providerFilho })]);
+    const SubFluxo = makeWorkflow([makeAgent({ provider: providerFilho })]);
 
     const providerPai = new FakeProvider([
       { tool: { name: "sub", arguments: { x: "1" } } },
     ]);
-    const Fluxo = criarWorkflow([
-      criarAgente({
+    const Fluxo = makeWorkflow([
+      makeAgent({
         provider: providerPai,
         tools: [criarToolQueRodaWorkflow(SubFluxo)],
       }),
@@ -64,14 +64,14 @@ describe("run aninhada", () => {
     const dir = mkdtempSync(join(tmpdir(), "thena-nested-"));
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const SubFluxo = criarWorkflow([
-      criarAgente({ provider: new FakeProvider([{ content: "filho" }]) }),
+    const SubFluxo = makeWorkflow([
+      makeAgent({ provider: new FakeProvider([{ content: "filho" }]) }),
     ]);
     const providerPai = new FakeProvider([
       { tool: { name: "sub", arguments: { x: "1" } } },
     ]);
-    const Fluxo = criarWorkflow([
-      criarAgente({
+    const Fluxo = makeWorkflow([
+      makeAgent({
         provider: providerPai,
         tools: [criarToolQueRodaWorkflow(SubFluxo)],
       }),

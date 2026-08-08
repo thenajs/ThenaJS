@@ -26,11 +26,11 @@ export async function* lerLinhas(
 
       resto += decoder.decode(value, { stream: true });
 
-      const linhas = resto.split("\n");
+      const lines = resto.split("\n");
       // A última pode estar incompleta — volta para o buffer.
-      resto = linhas.pop() ?? "";
+      resto = lines.pop() ?? "";
 
-      for (const linha of linhas) {
+      for (const linha of lines) {
         const limpa = linha.trim();
         if (limpa) yield limpa;
       }

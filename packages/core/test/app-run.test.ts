@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Thena } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /** O contrato do `app.run()`: devolve, propaga, e não escreve no stdout. */
 
 function fluxoOk(resposta: string) {
-  return criarWorkflow([
-    criarAgente({ provider: new FakeProvider([{ content: resposta }]) }),
+  return makeWorkflow([
+    makeAgent({ provider: new FakeProvider([{ content: resposta }]) }),
   ]);
 }
 
 /** Falha fora da tool: o hook do agente lança. */
 function fluxoQueLanca(mensagem: string) {
-  return criarWorkflow([
-    criarAgente(
+  return makeWorkflow([
+    makeAgent(
       { provider: new FakeProvider([{ content: "x" }]) },
       {
         beforePrompt() {

@@ -77,7 +77,7 @@ export class ReportRecorder {
    * Vários ouvintes: o `log` do config é um, e cada plugin registrado por
    * `app.use()` é outro. Um plugin nunca toma o lugar do seu logger.
    */
-  private ouvintes: OnEvent[] = [];
+  private listeners: OnEvent[] = [];
   private captureContent: boolean;
   private maxLen: number;
   /** Mascara segredo antes de gravar. Ligado por padrão. */
@@ -99,7 +99,7 @@ export class ReportRecorder {
     this.runId = opts.runId ?? "";
     this.onComplete = opts.onComplete;
     if (opts.onEvent) {
-      this.ouvintes.push(
+      this.listeners.push(
         ...(Array.isArray(opts.onEvent) ? opts.onEvent : [opts.onEvent]),
       );
     }
@@ -109,15 +109,15 @@ export class ReportRecorder {
   }
 
   get active(): boolean {
-    return this.onComplete != null || this.ouvintes.length > 0;
+    return this.onComplete != null || this.listeners.length > 0;
   }
 
   /** Acrescenta um ouvinte do stream ao vivo. Devolve como removê-lo. */
   ouvir(ouvinte: OnEvent): () => void {
-    this.ouvintes.push(ouvinte);
+    this.listeners.push(ouvinte);
     return () => {
-      const i = this.ouvintes.indexOf(ouvinte);
-      if (i >= 0) this.ouvintes.splice(i, 1);
+      const i = this.listeners.indexOf(ouvinte);
+      if (i >= 0) this.listeners.splice(i, 1);
     };
   }
 
@@ -223,7 +223,7 @@ export class ReportRecorder {
     depth: number,
     parentId?: string,
   ): void {
-    if (!this.ouvintes.length) return;
+    if (!this.listeners.length) return;
 
     const evento: ExecutionEvent = {
       phase,
@@ -241,7 +241,7 @@ export class ReportRecorder {
 
     // Best-effort e isolado: um ouvinte que lança não afeta a execução nem os
     // outros ouvintes.
-    for (const ouvinte of this.ouvintes) {
+    for (const ouvinte of this.listeners) {
       try {
         ouvinte(evento);
       } catch {

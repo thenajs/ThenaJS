@@ -14,20 +14,20 @@ export interface FlowEvent extends ExecutionEvent {
 /** Resumo de uma execução, para a lista lateral. */
 export interface FlowRun {
   id: string;
-  nome: string;
+  name: string;
   inicioEm: number;
   fimEm?: number;
   duracaoMs?: number;
   status: "rodando" | "ok" | "error";
   /** Quantidade de passos concluídos. */
-  passos: number;
+  steps: number;
 }
 
 /** O que o navegador recebe ao conectar. */
 export interface FlowSnapshot {
   runs: FlowRun[];
   runAtual?: string;
-  eventos: FlowEvent[];
+  events: FlowEvent[];
 }
 
 /** Opções do `thenaFlow(...)`. */

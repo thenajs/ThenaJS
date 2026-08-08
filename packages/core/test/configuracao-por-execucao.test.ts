@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { Agent, Tool, Workflow, Thena, context, runWorkflow } from "@thenajs/core";
 import type { AgentContext } from "@thenajs/core";
-import { FakeProvider, PROMPT, criarAgente, criarWorkflow } from "./harness.js";
+import { FakeProvider, PROMPT, makeAgent, makeWorkflow } from "./harness.js";
 
 /**
  * Configuração resolvida dentro do escopo da execução.
@@ -55,7 +55,7 @@ describe("run({ data })", () => {
       { tool: { name: "quem", arguments: { x: "1" } } },
     ]);
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider, tools: [QuemTool] })]),
+      makeWorkflow([makeAgent({ provider, tools: [QuemTool] })]),
       {},
     );
     await app.run({ input: { message: "oi" }, data: { conta: "acme" } });
@@ -66,7 +66,7 @@ describe("run({ data })", () => {
 
   it("NÃO vai para o modelo — a diferença para o `memory`", async () => {
     const provider = new FakeProvider();
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.run({
       input: { message: "oi" },
       data: { chaveInterna: "segredo-nunca-visto" },
@@ -104,9 +104,7 @@ describe("run({ data })", () => {
       { tool: { name: "sub", arguments: { x: "1" } } },
     ]);
     const app = Thena.create(
-      criarWorkflow([
-        criarAgente({ provider: providerPai, tools: [SubTool as never] }),
-      ]),
+      makeWorkflow([makeAgent({ provider: providerPai, tools: [SubTool as never] })]),
       {},
     );
     await app.run({ input: { message: "pai" }, data: { conta: "acme" } });
@@ -118,12 +116,12 @@ describe("run({ data })", () => {
   it("sem data, é um objeto vazio — nunca undefined", async () => {
     let visto: unknown = "não rodou";
     const provider = new FakeProvider();
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       { beforePrompt: () => void (visto = context().data) },
     );
 
-    await runWorkflow(criarWorkflow([Agente]), "oi");
+    await runWorkflow(makeWorkflow([Agente]), "oi");
     expect(visto).toEqual({});
   });
 });
@@ -188,14 +186,14 @@ describe("provider como factory", () => {
     }
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider: ProviderProprio })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider: ProviderProprio })]), "vai"),
     ).resolves.toBe("da classe");
   });
 
   it("uma instância continua sendo usada direto", async () => {
     const provider = new FakeProvider([{ content: "da instância" }]);
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai"),
     ).resolves.toBe("da instância");
   });
 
@@ -205,7 +203,7 @@ describe("provider como factory", () => {
     };
 
     await expect(
-      runWorkflow(criarWorkflow([criarAgente({ provider: fabrica })]), "vai"),
+      runWorkflow(makeWorkflow([makeAgent({ provider: fabrica })]), "vai"),
     ).resolves.toBe("de function");
   });
 });

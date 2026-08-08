@@ -10,13 +10,13 @@ import {
   wasExhausted,
 } from "@thenajs/core";
 import type { TurnInfo, WorkflowContext } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /** Os helpers que leem o último turno, e a entrada da run. */
 
 const schema = z.object({ x: z.string() });
 const eco = () =>
-  criarTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
+  makeTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
 
 /** Roda um passo e devolve o que os helpers enxergam no `until`. */
 async function inspecionar(provider: FakeProvider, tools: unknown[] = []) {
@@ -27,9 +27,9 @@ async function inspecionar(provider: FakeProvider, tools: unknown[] = []) {
   } = {};
 
   await runWorkflow(
-    criarWorkflow([
+    makeWorkflow([
       loop({
-        steps: [criarAgente({ provider, tools: tools as never })],
+        steps: [makeAgent({ provider, tools: tools as never })],
         until: (ctx: WorkflowContext) => {
           visto = {
             turn: turnOf(ctx),
@@ -72,7 +72,7 @@ describe("turnOf e calledTool", () => {
   });
 
   it("marca toolError quando a tool falhou", async () => {
-    const falha = criarTool({ name: "eco", description: "eco", schema }, () => {
+    const falha = makeTool({ name: "eco", description: "eco", schema }, () => {
       throw new Error("ops");
     });
     const provider = new FakeProvider([
@@ -98,7 +98,7 @@ describe("turnOf e calledTool", () => {
     let visto: TurnInfo | undefined = { calledTool: true, response: "sujeira" };
 
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
           steps: [],
           until: (ctx: WorkflowContext) => {
@@ -123,9 +123,9 @@ describe("untilAnswered", () => {
     ]);
 
     const saida = await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider, tools: [eco()] })],
+          steps: [makeAgent({ provider, tools: [eco()] })],
           until: untilAnswered,
           maxIterations: 10,
         }),
@@ -141,9 +141,9 @@ describe("untilAnswered", () => {
     const provider = new FakeProvider([{ content: "" }]);
 
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider })],
+          steps: [makeAgent({ provider })],
           until: untilAnswered,
           maxIterations: 10,
         }),
@@ -167,14 +167,14 @@ describe("wasExhausted", () => {
     let exausto: boolean | undefined;
 
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider })],
+          steps: [makeAgent({ provider })],
           until: () => false,
           maxIterations: 2,
         }),
         // um segundo passo, para ler o `ctx.loop` deixado pelo loop anterior
-        criarAgente({
+        makeAgent({
           provider: new FakeProvider([{ content: "depois" }]),
         }),
         loop({
@@ -196,9 +196,9 @@ describe("wasExhausted", () => {
     let voltas: number | undefined;
 
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider })],
+          steps: [makeAgent({ provider })],
           until: () => false,
           maxIterations: 3,
           onExhausted: (_ctx, n) => void (voltas = n),
@@ -214,7 +214,7 @@ describe("wasExhausted", () => {
 describe("entrada da run", () => {
   it("input.message vira a primeira mensagem user", async () => {
     const provider = new FakeProvider();
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.run({ input: { message: "olá mundo" } });
     await app.dispose();
 
@@ -224,7 +224,7 @@ describe("entrada da run", () => {
 
   it("sem message, o objeto inteiro é serializado", async () => {
     const provider = new FakeProvider();
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.run({ input: { userId: 7, acao: "revisar" } });
     await app.dispose();
 
@@ -234,7 +234,7 @@ describe("entrada da run", () => {
 
   it("memory da run é semeada no state e projetada como system", async () => {
     const provider = new FakeProvider();
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {});
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.run({
       input: { message: "oi" },
       memory: { sessionId: "abc" },

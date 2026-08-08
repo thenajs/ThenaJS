@@ -23,7 +23,7 @@ function respostaCom(...pedacos: (string | Uint8Array)[]): Response {
   return new Response(stream);
 }
 
-async function coletar<T>(it: AsyncIterable<T>): Promise<T[]> {
+async function collect<T>(it: AsyncIterable<T>): Promise<T[]> {
   const out: T[] = [];
   for await (const x of it) out.push(x);
   return out;
@@ -31,56 +31,56 @@ async function coletar<T>(it: AsyncIterable<T>): Promise<T[]> {
 
 describe("lerLinhas", () => {
   it("separa linhas de um chunk único", async () => {
-    expect(await coletar(lerLinhas(respostaCom("a\nb\nc\n")))).toEqual(["a", "b", "c"]);
+    expect(await collect(lerLinhas(respostaCom("a\nb\nc\n")))).toEqual(["a", "b", "c"]);
   });
 
   it("junta linha partida entre chunks", async () => {
     // O caso comum: o JSON chega pela metade.
     expect(
-      await coletar(lerLinhas(respostaCom('{"content":"o', 'la"}\n{"done":true}\n'))),
+      await collect(lerLinhas(respostaCom('{"content":"o', 'la"}\n{"done":true}\n'))),
     ).toEqual(['{"content":"ola"}', '{"done":true}']);
   });
 
   it("entrega a última linha mesmo sem \\n no fim", async () => {
-    expect(await coletar(lerLinhas(respostaCom("a\nb")))).toEqual(["a", "b"]);
+    expect(await collect(lerLinhas(respostaCom("a\nb")))).toEqual(["a", "b"]);
   });
 
   it("não parte caractere multibyte entre chunks", async () => {
     // "é" em UTF-8 são dois bytes; aqui eles chegam em leituras diferentes.
     const bytes = new TextEncoder().encode("café\n");
     const meio = bytes.length - 2;
-    const linhas = await coletar(
+    const lines = await collect(
       lerLinhas(respostaCom(bytes.slice(0, meio), bytes.slice(meio))),
     );
-    expect(linhas).toEqual(["café"]);
+    expect(lines).toEqual(["café"]);
   });
 
   it("ignora linhas vazias", async () => {
-    expect(await coletar(lerLinhas(respostaCom("a\n\n\nb\n")))).toEqual(["a", "b"]);
+    expect(await collect(lerLinhas(respostaCom("a\n\n\nb\n")))).toEqual(["a", "b"]);
   });
 
   it("corpo vazio não emite nada", async () => {
-    expect(await coletar(lerLinhas(respostaCom("")))).toEqual([]);
+    expect(await collect(lerLinhas(respostaCom("")))).toEqual([]);
   });
 });
 
 describe("lerSse", () => {
   it("descasca o prefixo `data:`", async () => {
     const r = respostaCom('data: {"a":1}\n\ndata: {"a":2}\n\n');
-    expect(await coletar(lerSse(r))).toEqual(['{"a":1}', '{"a":2}']);
+    expect(await collect(lerSse(r))).toEqual(['{"a":1}', '{"a":2}']);
   });
 
   it("para no [DONE]", async () => {
     const r = respostaCom('data: {"a":1}\n\ndata: [DONE]\n\ndata: {"a":2}\n\n');
-    expect(await coletar(lerSse(r))).toEqual(['{"a":1}']);
+    expect(await collect(lerSse(r))).toEqual(['{"a":1}']);
   });
 
   it("ignora linhas que não são `data:` (comentário, event, id)", async () => {
     const r = respostaCom(': keep-alive\nevent: ping\ndata: {"a":1}\n\n');
-    expect(await coletar(lerSse(r))).toEqual(['{"a":1}']);
+    expect(await collect(lerSse(r))).toEqual(['{"a":1}']);
   });
 
   it("tolera `data:` sem espaço depois dos dois-pontos", async () => {
-    expect(await coletar(lerSse(respostaCom('data:{"a":1}\n\n')))).toEqual(['{"a":1}']);
+    expect(await collect(lerSse(respostaCom('data:{"a":1}\n\n')))).toEqual(['{"a":1}']);
   });
 });

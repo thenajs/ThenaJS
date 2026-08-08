@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Thena, redactSecrets } from "@thenajs/core";
 import type { ExecutionNode } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /**
  * O report grava a conversa inteira em disco. Mensagem de erro é o lugar
@@ -73,7 +73,7 @@ describe("no report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-"));
 
-    const tool = criarTool({ name: "db", description: "consulta", schema }, () => {
+    const tool = makeTool({ name: "db", description: "consulta", schema }, () => {
       throw new Error(
         "conexão falhou: postgres://admin:s3nh4Secreta@10.0.0.5:5432/app",
       );
@@ -81,7 +81,7 @@ describe("no report", () => {
     const provider = new FakeProvider([
       { tool: { name: "db", arguments: { x: "1" } } },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider, tools: [tool] })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider, tools: [tool] })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "consulte" } });
@@ -104,7 +104,7 @@ describe("no report", () => {
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-prompt-"));
 
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
+      makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
       { report: { dir } },
     );
     await app.run({ input: { message: "meu token é ghp_abcdefghijklmnop1234" } });
@@ -120,7 +120,7 @@ describe("no report", () => {
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-off-"));
 
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
+      makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
       { report: { dir }, redact: false },
     );
     await app.run({ input: { message: "token ghp_abcdefghijklmnop1234" } });
@@ -136,7 +136,7 @@ describe("no report", () => {
     const dir = mkdtempSync(join(tmpdir(), "thena-redact-fn-"));
 
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: new FakeProvider() })]),
+      makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
       {
         report: { dir },
         redact: (_campo, valor) =>
@@ -158,7 +158,7 @@ describe("no report", () => {
     const dir = mkdtempSync(join(tmpdir(), "thena-sem-content-"));
 
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: new FakeProvider([{ content: "oi" }]) })]),
+      makeWorkflow([makeAgent({ provider: new FakeProvider([{ content: "oi" }]) })]),
       { report: { dir, content: false } },
     );
     await app.run({ input: { message: "segredo" } });

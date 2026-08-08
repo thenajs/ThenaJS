@@ -33,7 +33,7 @@ export type ChatMiddleware = Middleware<ChatInvocation, ChatTurn>;
  *
  * `attempts` só aparece quando houve retry — no caminho normal não polui.
  */
-export const registrarChat: ChatMiddleware = (inv, next) =>
+export const recordChat: ChatMiddleware = (inv, next) =>
   inv.run.recorder.around("chat", "chat", async (node) => {
     // A partir daqui o `inv.meta(...)` das camadas de dentro tem onde escrever.
     inv.node = node;
@@ -70,10 +70,10 @@ export const registrarChat: ChatMiddleware = (inv, next) =>
  * Um `throw` no meio deixa a chamada contada e o consumo não: erra para mais,
  * que é o lado certo de errar num orçamento.
  */
-export const contarChat: ChatMiddleware = async (inv, next) => {
-  inv.run.budget.abrirChat();
+export const countChat: ChatMiddleware = async (inv, next) => {
+  inv.run.budget.openChat();
   const turno = await next();
-  inv.run.budget.fecharChat(turno.usage);
+  inv.run.budget.closeChat(turno.usage);
   return turno;
 };
 
@@ -90,6 +90,6 @@ export const contarChat: ChatMiddleware = async (inv, next) => {
  * Um cache que acerta precisa aparecer no grafo (por isso abaixo do registrar)
  * e **não** pode somar tokens já pagos no orçamento (por isso acima do contar).
  */
-export function cadeiaDeChat(usuario: ChatMiddleware[] = []): ChatMiddleware[] {
-  return [registrarChat, ...usuario, contarChat];
+export function chatChain(usuario: ChatMiddleware[] = []): ChatMiddleware[] {
+  return [recordChat, ...usuario, countChat];
 }

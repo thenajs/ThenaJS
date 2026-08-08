@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Thena, loop } from "@thenajs/core";
 import type { ExecutionNode } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /** Caracterização do report: árvore de execução, arquivos e conteúdo. */
 
@@ -21,8 +21,8 @@ function pastaTemp(): string {
 
 /** A árvore achatada em caminhos "kind > kind > kind", para asserção legível. */
 function caminhos(node: ExecutionNode, prefixo = ""): string[] {
-  const atual = prefixo ? `${prefixo} > ${node.kind}` : node.kind;
-  return [atual, ...node.children.flatMap((f) => caminhos(f, atual))];
+  const current = prefixo ? `${prefixo} > ${node.kind}` : node.kind;
+  return [current, ...node.children.flatMap((f) => caminhos(f, current))];
 }
 
 /** Cada run grava numa subpasta própria — aqui só há uma. */
@@ -43,7 +43,7 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -63,7 +63,7 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "1" } });
     await app.run({ input: { message: "2" } });
@@ -84,24 +84,24 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "1" } });
     await app.run({ input: { message: "2" } });
     await app.dispose();
 
-    const linhas = readFileSync(join(dir, "runs.jsonl"), "utf-8")
+    const lines = readFileSync(join(dir, "runs.jsonl"), "utf-8")
       .split("\n")
       .filter(Boolean)
       .map((l) => JSON.parse(l));
 
-    expect(linhas).toHaveLength(2);
+    expect(lines).toHaveLength(2);
     // Só os escalares. Se a árvore voltar para cá, a linha cresce e o índice
     // volta a custar o histórico inteiro.
-    expect(Object.keys(linhas[0]).sort()).toEqual([
+    expect(Object.keys(lines[0]).sort()).toEqual([
       "durationMs",
       "html",
-      "nome",
+      "name",
       "runId",
       "startedAt",
       "status",
@@ -113,7 +113,7 @@ describe("report", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
 
     // Primeira run: cria o ledger.
@@ -155,7 +155,7 @@ describe("report", () => {
       }),
     );
 
-    const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "nova" } });
     await app.dispose();
@@ -169,7 +169,7 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([criarAgente({ provider: new FakeProvider() })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir, format: "json" } });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
@@ -187,8 +187,8 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([
-      criarAgente({ provider: new FakeProvider([{ content: "ok" }], { delayMs: 5 }) }),
+    const Fluxo = makeWorkflow([
+      makeAgent({ provider: new FakeProvider([{ content: "ok" }], { delayMs: 5 }) }),
     ]);
     const app = Thena.create(Fluxo, { report: { dir } });
 
@@ -215,7 +215,7 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Ferramenta = criarTool(
+    const Ferramenta = makeTool(
       {
         name: "eco",
         description: "devolve o que recebe",
@@ -226,7 +226,7 @@ describe("report", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "oi" } } },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider, tools: [Ferramenta] })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider, tools: [Ferramenta] })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
@@ -248,9 +248,9 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider: new FakeProvider() })],
+        steps: [makeAgent({ provider: new FakeProvider() })],
         until: () => false,
         maxIterations: 3,
       }),
@@ -274,7 +274,7 @@ describe("report", () => {
     const provider = new FakeProvider([
       { content: "a", usage: { promptTokens: 10, completionTokens: 5 } },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });
@@ -290,14 +290,14 @@ describe("report", () => {
     const dir = pastaTemp();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    const Ferramenta = criarTool(
+    const Ferramenta = makeTool(
       { name: "falha", description: "falha", schema: z.object({ x: z.string() }) },
       () => ({ content: "deu ruim", isError: true }),
     );
     const provider = new FakeProvider([
       { tool: { name: "falha", arguments: { x: "1" } } },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider, tools: [Ferramenta] })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider, tools: [Ferramenta] })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.run({ input: { message: "vai" } });

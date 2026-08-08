@@ -4,10 +4,10 @@ import { Thena, loop, untilAnswered } from "@thenajs/core";
 import type { ExecutionEvent, RunHandle } from "@thenajs/core";
 import {
   FakeProvider,
-  capturarErro,
-  criarAgente,
-  criarTool,
-  criarWorkflow,
+  captureError,
+  makeAgent,
+  makeTool,
+  makeWorkflow,
 } from "./harness.js";
 
 /**
@@ -22,7 +22,7 @@ const schema = z.object({ x: z.string() });
 
 function fluxo(resposta = "ok", delayMs = 0) {
   const provider = new FakeProvider([{ content: resposta }], { delayMs });
-  return { provider, Fluxo: criarWorkflow([criarAgente({ provider })]) };
+  return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -47,8 +47,8 @@ describe("o handle é thenable", () => {
   });
 
   it("`.catch()` e `.finally()` funcionam", async () => {
-    const Quebrado = criarWorkflow([
-      criarAgente(
+    const Quebrado = makeWorkflow([
+      makeAgent(
         { provider: new FakeProvider() },
         {
           beforePrompt: () => {
@@ -113,13 +113,13 @@ describe("runId síncrono", () => {
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
 
-    const eventos: ExecutionEvent[] = [];
+    const events: ExecutionEvent[] = [];
     const exec = app.run({ input: { message: "vai" }, observe: true });
-    exec.onEvent((e) => eventos.push(e));
+    exec.onEvent((e) => events.push(e));
     await exec;
     await app.dispose();
 
-    expect(new Set(eventos.map((e) => e.runId))).toEqual(new Set([exec.runId]));
+    expect(new Set(events.map((e) => e.runId))).toEqual(new Set([exec.runId]));
   });
 });
 
@@ -132,7 +132,7 @@ describe("abort", () => {
     const exec = app.run({ input: { message: "vai" } });
     exec.abort();
 
-    const erro = await capturarErro(exec);
+    const erro = await captureError(exec);
     expect(erro.name).toBe("AbortError");
     // A chamada chegou a sair, mas o provider foi cancelado no meio: o teste
     // não espera os 500ms. É o `signal` chegando até o `fetch`.
@@ -145,7 +145,7 @@ describe("abort", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "1" } } },
     ]);
-    const eco = criarTool(
+    const eco = makeTool(
       { name: "eco", description: "eco", schema },
       ({ x }: any) => x,
     );
@@ -153,9 +153,9 @@ describe("abort", () => {
     // O `until` precisa do handle, que só existe depois do `run()` — a caixa
     // resolve o ovo-e-galinha sem `let` reatribuído.
     const caixa: { exec?: RunHandle<string> } = {};
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider, tools: [eco] })],
+        steps: [makeAgent({ provider, tools: [eco] })],
         until: () => {
           // aborta ao fim da segunda volta
           if (provider.chamadas.length >= 2) caixa.exec!.abort();
@@ -169,7 +169,7 @@ describe("abort", () => {
     const app = Thena.create(Fluxo, {});
     const exec = (caixa.exec = app.run({ input: { message: "vai" } }));
 
-    expect((await capturarErro(exec)).name).toBe("AbortError");
+    expect((await captureError(exec)).name).toBe("AbortError");
     expect(provider.chamadas).toHaveLength(2);
     await app.dispose();
   });
@@ -182,7 +182,7 @@ describe("abort", () => {
     const exec = app.run({ input: { message: "vai" } });
     exec.abort(minhaRazao);
 
-    expect(await capturarErro(exec)).toBe(minhaRazao);
+    expect(await captureError(exec)).toBe(minhaRazao);
     await app.dispose();
   });
 
@@ -193,22 +193,22 @@ describe("abort", () => {
     const exec = app.run({ input: { message: "vai" } });
     exec.abort();
 
-    expect((await capturarErro(exec)).name).toBe("AbortError");
+    expect((await captureError(exec)).name).toBe("AbortError");
     await app.dispose();
   });
 
   it("o onError do agente NÃO transforma cancelamento em resposta", async () => {
     const provider = new FakeProvider([{ content: "x" }], { delayMs: 30 });
-    const Agente = criarAgente(
+    const Agente = makeAgent(
       { provider },
       { onError: () => "recuperei" }, // tentaria engolir o abort
     );
-    const app = Thena.create(criarWorkflow([Agente]), {});
+    const app = Thena.create(makeWorkflow([Agente]), {});
 
     const exec = app.run({ input: { message: "vai" } });
     exec.abort();
 
-    expect((await capturarErro(exec)).name).toBe("AbortError");
+    expect((await captureError(exec)).name).toBe("AbortError");
     await app.dispose();
   });
 });
@@ -221,7 +221,7 @@ describe("signal vindo de fora", () => {
     const controller = new AbortController();
     controller.abort();
 
-    const erro = await capturarErro(
+    const erro = await captureError(
       app.run({ input: { message: "vai" }, signal: controller.signal }),
     );
     expect(erro.name).toBe("AbortError");
@@ -233,7 +233,7 @@ describe("signal vindo de fora", () => {
     const { Fluxo } = fluxo("x", 200);
     const app = Thena.create(Fluxo, {});
 
-    const erro = await capturarErro(
+    const erro = await captureError(
       app.run({ input: { message: "vai" }, signal: AbortSignal.timeout(20) }),
     );
     expect(erro.name).toBe("TimeoutError");
@@ -249,13 +249,13 @@ describe("signal vindo de fora", () => {
     const exec = app.run({ input: { message: "vai" }, signal: controller.signal });
     exec.abort(new Error("pelo handle"));
 
-    expect((await capturarErro(exec)).message).toBe("pelo handle");
+    expect((await captureError(exec)).message).toBe("pelo handle");
     await app.dispose();
   });
 
   it("uma run aninhada herda o signal do pai", async () => {
     const providerFilho = new FakeProvider([{ content: "filho" }]);
-    const SubFluxo = criarWorkflow([criarAgente({ provider: providerFilho })]);
+    const SubFluxo = makeWorkflow([makeAgent({ provider: providerFilho })]);
 
     const { Tool } = await import("@thenajs/core");
     const SubTool = class {
@@ -271,16 +271,14 @@ describe("signal vindo de fora", () => {
       { delayMs: 20 },
     );
     const app = Thena.create(
-      criarWorkflow([
-        criarAgente({ provider: providerPai, tools: [SubTool as never] }),
-      ]),
+      makeWorkflow([makeAgent({ provider: providerPai, tools: [SubTool as never] })]),
       {},
     );
 
     const exec = app.run({ input: { message: "pai" } });
     exec.abort();
 
-    expect((await capturarErro(exec)).name).toBe("AbortError");
+    expect((await captureError(exec)).name).toBe("AbortError");
     // O filho nem chegou a rodar.
     expect(providerFilho.chamadas).toHaveLength(0);
     await app.dispose();
@@ -311,9 +309,9 @@ describe("onEvent e eventStream", () => {
 
     const vistos: ExecutionEvent[] = [];
     const exec = app.run({ input: { message: "vai" }, observe: true });
-    const parar = exec.onEvent((e) => vistos.push(e));
+    const stop = exec.onEvent((e) => vistos.push(e));
     const quantosAoParar = vistos.length;
-    parar();
+    stop();
 
     await exec;
     expect(vistos).toHaveLength(quantosAoParar);
@@ -353,7 +351,7 @@ describe("dispose drena as execuções em voo", () => {
     const app = Thena.create(Fluxo, {});
 
     const exec = app.run({ input: { message: "vai" } });
-    const capturado = capturarErro(exec);
+    const capturado = captureError(exec);
 
     const inicio = Date.now();
     await app.dispose();

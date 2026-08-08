@@ -25,7 +25,7 @@ const MARCA = "[REDACTED]";
  * ganancioso mascararia texto legítimo e tornaria o report inútil, que é o
  * modo mais fácil de fazer as pessoas desligarem a proteção.
  */
-const PADROES: { re: RegExp; substituir: (m: string, ...g: string[]) => string }[] = [
+const PATTERNS: { re: RegExp; substituir: (m: string, ...g: string[]) => string }[] = [
   // Authorization: Bearer <token>
   {
     re: /\b(Bearer\s+)[A-Za-z0-9\-._~+/]{8,}=*/gi,
@@ -75,7 +75,7 @@ const PADROES: { re: RegExp; substituir: (m: string, ...g: string[]) => string }
  */
 export function redactSecrets(valor: string): string {
   let saida = valor;
-  for (const { re, substituir } of PADROES) {
+  for (const { re, substituir } of PATTERNS) {
     // `re` tem flag `g` e é reutilizada entre chamadas — zerar o lastIndex
     // evita que uma chamada comece do meio da anterior.
     re.lastIndex = 0;

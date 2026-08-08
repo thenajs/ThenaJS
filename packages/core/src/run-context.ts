@@ -77,7 +77,7 @@ export interface RunContext {
    *
    * @internal
    */
-  parada: { pedida: boolean };
+  stopRequest: { requested: boolean };
   /**
    * O ctx do passo em execução, quando há um.
    *
@@ -88,7 +88,7 @@ export interface RunContext {
    *
    * @internal
    */
-  passo?: AgentContext;
+  step?: AgentContext;
   /**
    * Limpezas registradas por `ctx.onDispose(...)`, drenadas ao fim desta
    * execução — em sucesso, erro ou abort.
@@ -98,7 +98,7 @@ export interface RunContext {
    *
    * @internal
    */
-  descartes: (() => void | Promise<void>)[];
+  cleanups: (() => void | Promise<void>)[];
   /**
    * Recebe cada pedaço de texto que o modelo produz, quando alguém está
    * ouvindo. Herdado pelas runs aninhadas.
@@ -130,7 +130,7 @@ export interface RunMiddleware {
   chat: ChatMiddleware[];
 }
 
-const SEM_MIDDLEWARE: RunMiddleware = { tool: [], chat: [] };
+const NO_MIDDLEWARE: RunMiddleware = { tool: [], chat: [] };
 
 const als = new AsyncLocalStorage<RunContext>();
 
@@ -194,13 +194,13 @@ export function newRunContext(options: RunContextOptions = {}): RunContext {
     settings: { ...DEFAULTS, ...prune(options.settings ?? {}) },
     recorder: options.recorder ?? new ReportRecorder({ runId }),
     budget: new BudgetTracker(options.budget),
-    middleware: options.middleware ?? SEM_MIDDLEWARE,
+    middleware: options.middleware ?? NO_MIDDLEWARE,
     signal: options.signal
       ? AbortSignal.any([options.signal, controller.signal])
       : controller.signal,
     abort: (reason?: unknown) => controller.abort(reason),
-    parada: { pedida: false },
-    descartes: [],
+    stopRequest: { requested: false },
+    cleanups: [],
     onToken: options.onToken,
     data: options.data ?? {},
   };
@@ -227,18 +227,18 @@ export function childRunContext(parent: RunContext, budget?: RunBudget): RunCont
     // um sub-workflow encerra tudo, do mesmo jeito que abortar o pai encerra o
     // filho. É o mesmo objeto, de propósito.
     abort: parent.abort,
-    parada: parent.parada,
+    stopRequest: parent.stopRequest,
     // Já as limpezas são desta run: o fim de um sub-workflow não pode soltar
     // recurso que ainda pertence a quem o chamou.
-    descartes: [],
+    cleanups: [],
     onToken: parent.onToken,
     data: parent.data,
   };
 }
 
 /** Pede a parada graciosa da execução. Checada nos mesmos pontos do orçamento. */
-export function pedirParada(ctx: RunContext = currentRun()): void {
-  ctx.parada.pedida = true;
+export function requestStop(ctx: RunContext = currentRun()): void {
+  ctx.stopRequest.requested = true;
 }
 
 /**
@@ -248,9 +248,9 @@ export function pedirParada(ctx: RunContext = currentRun()): void {
  * Nenhuma falha aqui derruba a execução: a run já terminou, e um `finally` que
  * lança esconderia o erro de verdade. Elas são reportadas e seguem.
  */
-export async function drenarDescartes(ctx: RunContext): Promise<void> {
-  const pendentes = ctx.descartes.splice(0).reverse();
-  for (const limpar of pendentes) {
+export async function runCleanups(ctx: RunContext): Promise<void> {
+  const queued = ctx.cleanups.splice(0).reverse();
+  for (const limpar of queued) {
     try {
       await limpar();
     } catch (err) {

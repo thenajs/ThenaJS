@@ -154,7 +154,7 @@ function safeParse(value: unknown): unknown {
 
 // ---------- leitura da resposta ----------
 
-interface OpenAIToolCallBruta {
+interface RawOpenAIToolCall {
   index?: number;
   id?: string;
   function?: { name?: string; arguments?: string };
@@ -162,8 +162,8 @@ interface OpenAIToolCallBruta {
 
 interface OpenAIChatResponse {
   choices?: {
-    message?: { content?: string | null; tool_calls?: OpenAIToolCallBruta[] };
-    delta?: { content?: string | null; tool_calls?: OpenAIToolCallBruta[] };
+    message?: { content?: string | null; tool_calls?: RawOpenAIToolCall[] };
+    delta?: { content?: string | null; tool_calls?: RawOpenAIToolCall[] };
   }[];
   usage?: {
     prompt_tokens?: number;
@@ -201,7 +201,7 @@ function lerUsage(u: OpenAIChatResponse["usage"]): Assistente["usage"] {
   };
 }
 
-function normalizarToolCalls(brutas: OpenAIToolCallBruta[]): ProviderToolCall[] {
+function normalizarToolCalls(brutas: RawOpenAIToolCall[]): ProviderToolCall[] {
   return brutas
     .filter((tc) => typeof tc.function?.name === "string")
     .map((tc) => ({
@@ -226,7 +226,7 @@ async function lerStreamOpenAI(
 ): Promise<Assistente> {
   let content = "";
   let usage: Assistente["usage"] = {};
-  const porIndice = new Map<number, OpenAIToolCallBruta>();
+  const porIndice = new Map<number, RawOpenAIToolCall>();
 
   for await (const payload of lerSse(response)) {
     let pedaco: OpenAIChatResponse;

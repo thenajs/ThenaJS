@@ -4,10 +4,10 @@ import { BudgetExceededError, FatalToolError, Tool, Thena } from "@thenajs/core"
 import type { WorkflowRuntime } from "@thenajs/core";
 import {
   FakeProvider,
-  capturarErro,
-  criarAgente,
-  criarTool,
-  criarWorkflow,
+  captureError,
+  makeAgent,
+  makeTool,
+  makeWorkflow,
 } from "./harness.js";
 
 /**
@@ -18,19 +18,19 @@ import {
 const schema = z.object({ x: z.string() });
 
 function montar(
-  tool: ReturnType<typeof criarTool>,
+  tool: ReturnType<typeof makeTool>,
   chamada: { name: string; arguments?: unknown },
 ) {
   const provider = new FakeProvider([{ tool: chamada }]);
-  return criarWorkflow([criarAgente({ provider, tools: [tool] })]);
+  return makeWorkflow([makeAgent({ provider, tools: [tool] })]);
 }
 
 const eco = () =>
-  criarTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
+  makeTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
 
 describe("falhas de tool", () => {
   it("execute que lança vira observação", async () => {
-    const tool = criarTool({ name: "eco", description: "eco", schema }, () => {
+    const tool = makeTool({ name: "eco", description: "eco", schema }, () => {
       throw new Error("boom");
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
@@ -40,7 +40,7 @@ describe("falhas de tool", () => {
   });
 
   it("execute que devolve isError vira observação", async () => {
-    const tool = criarTool({ name: "eco", description: "eco", schema }, () => ({
+    const tool = makeTool({ name: "eco", description: "eco", schema }, () => ({
       content: "não deu",
       isError: true,
     }));
@@ -82,7 +82,7 @@ describe("falhas de tool", () => {
     const provider = new FakeProvider([
       { content: '{"name":"eco","arguments":{"y":1}}' },
     ]);
-    const Fluxo = criarWorkflow([criarAgente({ provider, tools: [eco()] })]);
+    const Fluxo = makeWorkflow([makeAgent({ provider, tools: [eco()] })]);
     const app = Thena.create(Fluxo, {});
 
     await expect(app.run({ input: { message: "vai" } })).resolves.toContain(
@@ -92,7 +92,7 @@ describe("falhas de tool", () => {
   });
 
   it("FatalToolError atravessa o agente e encerra a run", async () => {
-    const tool = criarTool({ name: "eco", description: "eco", schema }, () => {
+    const tool = makeTool({ name: "eco", description: "eco", schema }, () => {
       throw new FatalToolError("banco indisponível");
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
@@ -105,7 +105,7 @@ describe("falhas de tool", () => {
 
   it("FatalToolError preserva o erro original em `cause`", async () => {
     const original = new Error("ECONNREFUSED 10.0.0.1:5432");
-    const tool = criarTool({ name: "eco", description: "eco", schema }, () => {
+    const tool = makeTool({ name: "eco", description: "eco", schema }, () => {
       throw new FatalToolError("banco indisponível", { cause: original });
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
@@ -121,7 +121,7 @@ describe("falhas de tool", () => {
 
   it("um loop deixa o agente corrigir depois de uma falha", async () => {
     const tentativas: string[] = [];
-    const tool = criarTool(
+    const tool = makeTool(
       {
         name: "ler",
         description: "lê um arquivo",
@@ -141,9 +141,9 @@ describe("falhas de tool", () => {
       { content: "achei o arquivo" },
     ]);
     const { loop, untilAnswered } = await import("@thenajs/core");
-    const Fluxo = criarWorkflow([
+    const Fluxo = makeWorkflow([
       loop({
-        steps: [criarAgente({ provider, tools: [tool] })],
+        steps: [makeAgent({ provider, tools: [tool] })],
         until: untilAnswered,
         maxIterations: 5,
       }),
@@ -184,11 +184,11 @@ describe("erros de controle de fluxo não viram observação", () => {
 
   it("BudgetExceededError sobe em vez de voltar como texto para o modelo", async () => {
     const dentro = new FakeProvider([{ content: "nunca" }]);
-    const Sub = criarWorkflow([criarAgente({ provider: dentro })]);
-    const pai = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
+    const Sub = makeWorkflow([makeAgent({ provider: dentro })]);
+    const parent = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
 
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: pai, tools: [runtimeQueRoda(Sub)] })]),
+      makeWorkflow([makeAgent({ provider: parent, tools: [runtimeQueRoda(Sub)] })]),
       {},
     );
 
@@ -205,18 +205,18 @@ describe("erros de controle de fluxo não viram observação", () => {
 
   it("cancelamento sobe em vez de voltar como texto para o modelo", async () => {
     const dentro = new FakeProvider([{ content: "nunca" }], { delayMs: 50 });
-    const Sub = criarWorkflow([criarAgente({ provider: dentro })]);
-    const pai = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
+    const Sub = makeWorkflow([makeAgent({ provider: dentro })]);
+    const parent = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
 
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: pai, tools: [runtimeQueRoda(Sub)] })]),
+      makeWorkflow([makeAgent({ provider: parent, tools: [runtimeQueRoda(Sub)] })]),
       {},
     );
 
-    const execucao = app.run({ input: { message: "vai" } });
-    setTimeout(() => execucao.abort(new Error("chega")), 10);
+    const runCtx = app.run({ input: { message: "vai" } });
+    setTimeout(() => runCtx.abort(new Error("chega")), 10);
 
-    const erro = await capturarErro(execucao.result);
+    const erro = await captureError(runCtx.result);
     // Sem a correção, o abort virava `{ content: "chega", isError: true }` e a
     // run seguia em frente com "a tool falhou" no histórico.
     expect((erro as Error).message).toBe("chega");
@@ -232,9 +232,9 @@ describe("erros de controle de fluxo não viram observação", () => {
     };
     Tool({ name: "sub", description: "sub", schema })(Quebrada as never);
 
-    const pai = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
+    const parent = new FakeProvider([{ tool: { name: "sub", arguments: { x: "1" } } }]);
     const app = Thena.create(
-      criarWorkflow([criarAgente({ provider: pai, tools: [Quebrada as never] })]),
+      makeWorkflow([makeAgent({ provider: parent, tools: [Quebrada as never] })]),
       {},
     );
 

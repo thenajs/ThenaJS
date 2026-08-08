@@ -9,12 +9,12 @@ import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionEvent } from "@thenajs/core";
 import type { FlowOptions } from "../tipos.js";
-import { MemoriaDeRuns } from "./memoria.js";
+import { RunHistory } from "./memoria.js";
 
 /** Onde o Vite deixa a interface, ao lado do JS compilado do servidor. */
 const UI_DIR = fileURLToPath(new URL("../ui/", import.meta.url));
 
-const TIPOS: Record<string, string> = {
+const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -30,11 +30,11 @@ const TIPOS: Record<string, string> = {
  * Sai de graça em cima do `node:http`, reconecta sozinho no browser e não
  * acrescenta uma dependência de runtime ao pacote.
  */
-export class ServidorFlow {
-  private servidor?: Server;
-  private clientes = new Set<ServerResponse>();
-  private memoria: MemoriaDeRuns;
-  private pulso?: NodeJS.Timeout;
+export class FlowServer {
+  private server?: Server;
+  private clients = new Set<ServerResponse>();
+  private history: RunHistory;
+  private heartbeat?: NodeJS.Timeout;
 
   readonly port: number;
   readonly host: string;
@@ -42,16 +42,16 @@ export class ServidorFlow {
   constructor(private opts: FlowOptions = {}) {
     this.port = opts.port ?? 4100;
     this.host = opts.host ?? "127.0.0.1";
-    this.memoria = new MemoriaDeRuns(opts.maxRuns ?? 20);
+    this.history = new RunHistory(opts.maxRuns ?? 20);
   }
 
   get url(): string {
     return `http://${this.host}:${this.port}`;
   }
 
-  async iniciar(): Promise<void> {
-    const servidor = createServer((req, res) => {
-      this.rotear(req, res).catch((err) => {
+  async start(): Promise<void> {
+    const server = createServer((req, res) => {
+      this.route(req, res).catch((err) => {
         res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
         res.end(String((err as Error)?.message ?? err));
       });
@@ -59,7 +59,7 @@ export class ServidorFlow {
 
     await new Promise<void>((resolve, reject) => {
       const falhou = (err: NodeJS.ErrnoException) => {
-        servidor.removeListener("listening", subiu);
+        server.removeListener("listening", subiu);
         reject(
           err.code === "EADDRINUSE"
             ? new Error(
@@ -71,22 +71,22 @@ export class ServidorFlow {
         );
       };
       const subiu = () => {
-        servidor.removeListener("error", falhou);
+        server.removeListener("error", falhou);
         resolve();
       };
-      servidor.once("error", falhou);
-      servidor.once("listening", subiu);
-      servidor.listen(this.port, this.host);
+      server.once("error", falhou);
+      server.once("listening", subiu);
+      server.listen(this.port, this.host);
     });
 
-    this.servidor = servidor;
+    this.server = server;
 
     // Comentário periódico: mantém a conexão viva através de proxies que cortam
     // streams ociosos.
-    this.pulso = setInterval(() => {
-      for (const cliente of this.clientes) cliente.write(": pulso\n\n");
+    this.heartbeat = setInterval(() => {
+      for (const client of this.clients) client.write(": pulso\n\n");
     }, 15_000);
-    this.pulso.unref();
+    this.heartbeat.unref();
 
     if (this.opts.log !== false) {
       console.log(`[thena-flow] Execução ao vivo em ${this.url}`);
@@ -94,42 +94,42 @@ export class ServidorFlow {
   }
 
   /** Recebe um evento do recorder e o repassa a quem estiver olhando. */
-  publicar(evento: ExecutionEvent): void {
-    const { evento: carimbado, run } = this.memoria.registrar(evento);
-    if (run) this.enviar("run", run);
-    this.enviar("evento", carimbado);
+  publish(evento: ExecutionEvent): void {
+    const { evento: stamped, run } = this.history.record(evento);
+    if (run) this.send("run", run);
+    this.send("evento", stamped);
   }
 
-  async parar(): Promise<void> {
-    if (this.pulso) clearInterval(this.pulso);
-    for (const cliente of this.clientes) cliente.end();
-    this.clientes.clear();
+  async stop(): Promise<void> {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    for (const client of this.clients) client.end();
+    this.clients.clear();
 
-    const servidor = this.servidor;
-    if (!servidor) return;
-    this.servidor = undefined;
-    await new Promise<void>((resolve) => servidor.close(() => resolve()));
+    const server = this.server;
+    if (!server) return;
+    this.server = undefined;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
-  private async rotear(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const caminho = new URL(req.url ?? "/", this.url).pathname;
 
-    if (caminho === "/api/eventos") return this.abrirStream(res);
+    if (caminho === "/api/eventos") return this.openStream(res);
 
     if (caminho.startsWith("/api/runs/")) {
-      const eventos = this.memoria.eventosDe(caminho.slice("/api/runs/".length));
+      const events = this.history.eventsOf(caminho.slice("/api/runs/".length));
       return this.json(
         res,
-        eventos ? { eventos } : { erro: "run não encontrada" },
-        eventos ? 200 : 404,
+        events ? { events } : { erro: "run não encontrada" },
+        events ? 200 : 404,
       );
     }
 
-    return this.servirArquivo(caminho, res);
+    return this.serveFile(caminho, res);
   }
 
   /** Conexão SSE: manda o estado atual e depois vai emendando os eventos. */
-  private abrirStream(res: ServerResponse): void {
+  private openStream(res: ServerResponse): void {
     res.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
@@ -137,32 +137,32 @@ export class ServidorFlow {
       // Sem isto, um proxy com buffer segura o stream inteiro até o fim da run.
       "x-accel-buffering": "no",
     });
-    res.write(`event: snapshot\ndata: ${JSON.stringify(this.memoria.snapshot())}\n\n`);
+    res.write(`event: snapshot\ndata: ${JSON.stringify(this.history.snapshot())}\n\n`);
 
-    this.clientes.add(res);
-    res.on("close", () => this.clientes.delete(res));
+    this.clients.add(res);
+    res.on("close", () => this.clients.delete(res));
   }
 
-  private enviar(tipo: string, payload: unknown): void {
-    if (!this.clientes.size) return;
-    const quadro = `event: ${tipo}\ndata: ${JSON.stringify(payload)}\n\n`;
-    for (const cliente of this.clientes) {
+  private send(kind: string, payload: unknown): void {
+    if (!this.clients.size) return;
+    const frame = `event: ${kind}\ndata: ${JSON.stringify(payload)}\n\n`;
+    for (const client of this.clients) {
       // Best-effort: um cliente que caiu no meio da escrita não pode derrubar a
       // execução que está sendo observada.
       try {
-        cliente.write(quadro);
+        client.write(frame);
       } catch {
-        this.clientes.delete(cliente);
+        this.clients.delete(client);
       }
     }
   }
 
-  private json(res: ServerResponse, corpo: unknown, status = 200): void {
+  private json(res: ServerResponse, body: unknown, status = 200): void {
     res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify(corpo));
+    res.end(JSON.stringify(body));
   }
 
-  private async servirArquivo(caminho: string, res: ServerResponse): Promise<void> {
+  private async serveFile(caminho: string, res: ServerResponse): Promise<void> {
     const relativo = normalize(caminho === "/" ? "index.html" : caminho.slice(1));
 
     // Nunca sair do diretório da interface, mesmo com `..` na URL.
@@ -175,7 +175,7 @@ export class ServidorFlow {
     try {
       const conteudo = await readFile(arquivo);
       res.writeHead(200, {
-        "content-type": TIPOS[extname(arquivo)] ?? "application/octet-stream",
+        "content-type": MIME_TYPES[extname(arquivo)] ?? "application/octet-stream",
       });
       res.end(conteudo);
     } catch {

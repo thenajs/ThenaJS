@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { Thena, loop, runWorkflow, untilAnswered } from "@thenajs/core";
-import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.js";
+import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /**
  * A régua.
@@ -17,7 +17,7 @@ import { FakeProvider, criarAgente, criarTool, criarWorkflow } from "./harness.j
 
 const schema = z.object({ x: z.string() });
 const eco = () =>
-  criarTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
+  makeTool({ name: "eco", description: "eco", schema }, ({ x }: any) => x);
 
 /** Soma o tamanho de tudo que foi enviado ao modelo, em todas as chamadas. */
 function totalEnviado(provider: FakeProvider): number {
@@ -30,7 +30,7 @@ function totalEnviado(provider: FakeProvider): number {
 describe("round-trips ao modelo", () => {
   it("um turno sem tool = uma chamada", async () => {
     const provider = new FakeProvider([{ content: "pronto" }]);
-    await runWorkflow(criarWorkflow([criarAgente({ provider })]), "vai");
+    await runWorkflow(makeWorkflow([makeAgent({ provider })]), "vai");
 
     expect(provider.chamadas).toHaveLength(1);
   });
@@ -39,10 +39,7 @@ describe("round-trips ao modelo", () => {
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "1" } } },
     ]);
-    await runWorkflow(
-      criarWorkflow([criarAgente({ provider, tools: [eco()] })]),
-      "vai",
-    );
+    await runWorkflow(makeWorkflow([makeAgent({ provider, tools: [eco()] })]), "vai");
 
     expect(provider.chamadas).toHaveLength(1);
   });
@@ -58,9 +55,9 @@ describe("round-trips ao modelo", () => {
       { content: "terminei" },
     ]);
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider, tools: [eco()] })],
+          steps: [makeAgent({ provider, tools: [eco()] })],
           until: untilAnswered,
           maxIterations: 10,
         }),
@@ -79,9 +76,9 @@ describe("tokens enviados", () => {
     // entrar: o número tem que cair, e a queda tem que ser visível.
     const provider = new FakeProvider([{ content: "x".repeat(200) }]);
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider })],
+          steps: [makeAgent({ provider })],
           until: () => false,
           maxIterations: 10,
         }),
@@ -109,9 +106,9 @@ describe("tokens enviados", () => {
     // inteiro — sem quebrar nada, só encarecendo.
     const provider = new FakeProvider([{ content: "resposta" }]);
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider })],
+          steps: [makeAgent({ provider })],
           until: () => false,
           maxIterations: 4,
         }),
@@ -142,15 +139,15 @@ describe("trabalho repetido por chamada", () => {
     // não pode mudar é o `schema` que ela carrega.
     const schema = z.object({ x: z.string() });
     const provider = new FakeProvider([{ content: "x" }]);
-    const Ferramenta = criarTool(
+    const Ferramenta = makeTool(
       { name: "eco", description: "eco", schema },
       () => "ok",
     );
 
     await runWorkflow(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider, tools: [Ferramenta] })],
+          steps: [makeAgent({ provider, tools: [Ferramenta] })],
           until: () => false,
           maxIterations: 5,
         }),
@@ -172,9 +169,9 @@ describe("trabalho repetido por chamada", () => {
 
     const montagens: number[] = [];
     const app = Thena.create(
-      criarWorkflow([
+      makeWorkflow([
         loop({
-          steps: [criarAgente({ provider, tools: [eco()] })],
+          steps: [makeAgent({ provider, tools: [eco()] })],
           until: untilAnswered,
           maxIterations: 10,
         }),
@@ -202,14 +199,14 @@ describe("memória do report", () => {
     const gigante = "x".repeat(60_000);
     const provider = new FakeProvider([{ content: gigante }]);
 
-    const eventos: number[] = [];
-    const app = Thena.create(criarWorkflow([criarAgente({ provider })]), {
-      log: (e) => e.data?.response && eventos.push(String(e.data.response).length),
+    const events: number[] = [];
+    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {
+      log: (e) => e.data?.response && events.push(String(e.data.response).length),
     });
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
     // O teto de 20 KB por campo é o que impede uma run longa de estourar heap.
-    expect(Math.max(...eventos)).toBeLessThanOrEqual(20_001);
+    expect(Math.max(...events)).toBeLessThanOrEqual(20_001);
   });
 });

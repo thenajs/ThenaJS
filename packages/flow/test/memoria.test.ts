@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExecutionEvent } from "@thenajs/core";
-import { MemoriaDeRuns } from "../src/server/memoria.js";
+import { RunHistory } from "../src/server/memoria.js";
 
 /**
  * A atribuição por `runId`. Com o cursor único que existia antes, os eventos
@@ -20,14 +20,14 @@ function evento(over: Partial<ExecutionEvent> & { runId: string }): ExecutionEve
 
 describe("MemoriaDeRuns", () => {
   it("separa eventos intercalados de duas execuções", () => {
-    const memoria = new MemoriaDeRuns(20);
+    const history = new RunHistory(20);
 
     // A e B começam, trocam de vez, e terminam fora de ordem.
-    memoria.registrar(evento({ runId: "A", name: "FluxoA" }));
-    memoria.registrar(evento({ runId: "B", name: "FluxoB" }));
-    memoria.registrar(evento({ runId: "A", depth: 1, kind: "agent", name: "AgenteA" }));
-    memoria.registrar(evento({ runId: "B", depth: 1, kind: "agent", name: "AgenteB" }));
-    memoria.registrar(
+    history.record(evento({ runId: "A", name: "FluxoA" }));
+    history.record(evento({ runId: "B", name: "FluxoB" }));
+    history.record(evento({ runId: "A", depth: 1, kind: "agent", name: "AgenteA" }));
+    history.record(evento({ runId: "B", depth: 1, kind: "agent", name: "AgenteB" }));
+    history.record(
       evento({
         runId: "B",
         depth: 1,
@@ -37,7 +37,7 @@ describe("MemoriaDeRuns", () => {
         status: "ok",
       }),
     );
-    memoria.registrar(
+    history.record(
       evento({
         runId: "A",
         depth: 1,
@@ -48,34 +48,32 @@ describe("MemoriaDeRuns", () => {
       }),
     );
 
-    expect(memoria.eventosDe("A")).toHaveLength(3);
-    expect(memoria.eventosDe("B")).toHaveLength(3);
-    expect(memoria.eventosDe("A")!.every((e) => e.runId === "A")).toBe(true);
-    expect(memoria.eventosDe("B")!.every((e) => e.runId === "B")).toBe(true);
+    expect(history.eventsOf("A")).toHaveLength(3);
+    expect(history.eventsOf("B")).toHaveLength(3);
+    expect(history.eventsOf("A")!.every((e) => e.runId === "A")).toBe(true);
+    expect(history.eventsOf("B")!.every((e) => e.runId === "B")).toBe(true);
   });
 
   it("numera a sequência por run, não globalmente", () => {
-    const memoria = new MemoriaDeRuns(20);
+    const history = new RunHistory(20);
 
-    memoria.registrar(evento({ runId: "A" }));
-    memoria.registrar(evento({ runId: "B" }));
-    memoria.registrar(evento({ runId: "A", depth: 1 }));
+    history.record(evento({ runId: "A" }));
+    history.record(evento({ runId: "B" }));
+    history.record(evento({ runId: "A", depth: 1 }));
 
-    expect(memoria.eventosDe("A")!.map((e) => e.seq)).toEqual([0, 1]);
-    expect(memoria.eventosDe("B")!.map((e) => e.seq)).toEqual([0]);
+    expect(history.eventsOf("A")!.map((e) => e.seq)).toEqual([0, 1]);
+    expect(history.eventsOf("B")!.map((e) => e.seq)).toEqual([0]);
   });
 
   it("fecha cada run no seu próprio evento raiz de fim", () => {
-    const memoria = new MemoriaDeRuns(20);
+    const history = new RunHistory(20);
 
-    memoria.registrar(evento({ runId: "A", name: "FluxoA" }));
-    memoria.registrar(evento({ runId: "B", name: "FluxoB" }));
+    history.record(evento({ runId: "A", name: "FluxoA" }));
+    history.record(evento({ runId: "B", name: "FluxoB" }));
     // Só B termina.
-    memoria.registrar(
-      evento({ runId: "B", phase: "end", status: "ok", durationMs: 42 }),
-    );
+    history.record(evento({ runId: "B", phase: "end", status: "ok", durationMs: 42 }));
 
-    const { runs } = memoria.snapshot();
+    const { runs } = history.snapshot();
     const a = runs.find((r) => r.id === "A")!;
     const b = runs.find((r) => r.id === "B")!;
 
@@ -85,34 +83,34 @@ describe("MemoriaDeRuns", () => {
   });
 
   it("um erro no fundo já deixa a run vermelha antes do fim", () => {
-    const memoria = new MemoriaDeRuns(20);
+    const history = new RunHistory(20);
 
-    memoria.registrar(evento({ runId: "A" }));
-    memoria.registrar(
+    history.record(evento({ runId: "A" }));
+    history.record(
       evento({ runId: "A", depth: 2, kind: "tool", phase: "end", status: "error" }),
     );
 
-    expect(memoria.snapshot().runs[0].status).toBe("error");
+    expect(history.snapshot().runs[0].status).toBe("error");
   });
 
   it("o snapshot aponta para a run em andamento mais recente", () => {
-    const memoria = new MemoriaDeRuns(20);
+    const history = new RunHistory(20);
 
-    memoria.registrar(evento({ runId: "A" }));
-    memoria.registrar(evento({ runId: "A", phase: "end", status: "ok" }));
-    memoria.registrar(evento({ runId: "B" }));
+    history.record(evento({ runId: "A" }));
+    history.record(evento({ runId: "A", phase: "end", status: "ok" }));
+    history.record(evento({ runId: "B" }));
 
-    expect(memoria.snapshot().runAtual).toBe("B");
+    expect(history.snapshot().runAtual).toBe("B");
   });
 
   it("descarta as runs mais antigas ao passar do teto", () => {
-    const memoria = new MemoriaDeRuns(2);
+    const history = new RunHistory(2);
 
-    memoria.registrar(evento({ runId: "A" }));
-    memoria.registrar(evento({ runId: "B" }));
-    memoria.registrar(evento({ runId: "C" }));
+    history.record(evento({ runId: "A" }));
+    history.record(evento({ runId: "B" }));
+    history.record(evento({ runId: "C" }));
 
-    expect(memoria.snapshot().runs.map((r) => r.id)).toEqual(["C", "B"]);
-    expect(memoria.eventosDe("A")).toBeUndefined();
+    expect(history.snapshot().runs.map((r) => r.id)).toEqual(["C", "B"]);
+    expect(history.eventsOf("A")).toBeUndefined();
   });
 });
