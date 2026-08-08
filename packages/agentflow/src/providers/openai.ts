@@ -106,7 +106,7 @@ export class OpenAIProvider extends Providers {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`OpenAI chat falhou (${response.status}): ${detail}`);
+      throw new Error(`OpenAI chat failed (${response.status}): ${detail}`);
     }
 
     const bruto = onToken
@@ -133,7 +133,7 @@ export class OpenAIProvider extends Providers {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`OpenAI embed falhou (${response.status}): ${detail}`);
+      throw new Error(`OpenAI embed failed (${response.status}): ${detail}`);
     }
 
     const data = (await response.json()) as any;

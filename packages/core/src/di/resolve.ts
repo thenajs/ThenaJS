@@ -30,8 +30,8 @@ export function resolveProvider(input: ProviderInput): Providers {
   // de factory e morreria com a mesma mensagem enganosa de antes.
   if (/^class[\s{]/.test(Function.prototype.toString.call(fn))) {
     throw new Error(
-      `[thena] ${fn.name || "O provider"} parece uma classe de provider mas não ` +
-        `estende Providers. Estenda a classe base, ou passe uma instância.`,
+      `[thena] ${fn.name || "The provider"} looks like a provider class but does ` +
+        `not extend Providers. Extend the base class, or pass an instance.`,
     );
   }
 

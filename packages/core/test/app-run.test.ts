@@ -4,9 +4,9 @@ import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
 
 /** O contrato do `app.run()`: devolve, propaga, e não escreve no stdout. */
 
-function fluxoOk(resposta: string) {
+function fluxoOk(response: string) {
   return makeWorkflow([
-    makeAgent({ provider: new FakeProvider([{ content: resposta }]) }),
+    makeAgent({ provider: new FakeProvider([{ content: response }]) }),
   ]);
 }
 
@@ -42,13 +42,13 @@ describe("app.run", () => {
   });
 
   it("rejeita com o erro original, sem tocar no process.exitCode", async () => {
-    const erro = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fail = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const app = Thena.create(fluxoQueLanca("falhou feio"), {});
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toThrow("falhou feio");
     expect(process.exitCode).toBeUndefined();
-    expect(erro).not.toHaveBeenCalled();
+    expect(fail).not.toHaveBeenCalled();
 
     await app.dispose();
   });

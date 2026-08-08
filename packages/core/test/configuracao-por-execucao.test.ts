@@ -210,7 +210,7 @@ describe("provider como factory", () => {
 
 describe("context() fora de uma execução", () => {
   it("falha alto ao ler, em vez de devolver defaults em silêncio", () => {
-    expect(() => context().data).toThrow(/Nenhuma execução em curso/);
+    expect(() => context().data).toThrow(/No run in progress/);
   });
 
   it("mas `context()` sozinho NÃO lança — a resolução é preguiçosa", () => {

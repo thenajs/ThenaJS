@@ -113,9 +113,9 @@ export class HttpTransport {
   }
 
   private transportError(error: Error | undefined, attempts: number): Error {
-    const sufixo = attempts > 1 ? ` (após ${attempts} tentativas)` : "";
-    const detalhe = error?.message ?? String(error);
-    return new Error(`Falha na chamada HTTP${sufixo}: ${detalhe}`, {
+    const suffix = attempts > 1 ? ` (after ${attempts} attempts)` : "";
+    const detail = error?.message ?? String(error);
+    return new Error(`HTTP request failed${suffix}: ${detail}`, {
       cause: error,
     });
   }

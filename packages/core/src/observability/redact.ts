@@ -65,7 +65,7 @@ const PATTERNS: { re: RegExp; substituir: (m: string, ...g: string[]) => string 
   // também — perder qual era o esquema não protege nada e atrapalha quem lê.
   {
     re: /\b(api[_-]?key|apikey|secret|password|passwd|senha|token|authorization)(["']?\s*[:=]\s*["']?)(?!\[REDACTED\]|Bearer\b|Basic\b)([^"',\s}]{4,})/gi,
-    substituir: (_m, chave, meio) => `${chave}${meio}${MARCA}`,
+    substituir: (_m, key, meio) => `${key}${meio}${MARCA}`,
   },
 ];
 
@@ -73,8 +73,8 @@ const PATTERNS: { re: RegExp; substituir: (m: string, ...g: string[]) => string 
  * Mascara os padrões conhecidos. Idempotente: rodar duas vezes dá o mesmo
  * resultado, porque `[REDACTED]` não casa com nenhum dos padrões.
  */
-export function redactSecrets(valor: string): string {
-  let saida = valor;
+export function redactSecrets(value: string): string {
+  let saida = value;
   for (const { re, substituir } of PATTERNS) {
     // `re` tem flag `g` e é reutilizada entre chamadas — zerar o lastIndex
     // evita que uma chamada comece do meio da anterior.
@@ -98,13 +98,13 @@ export function redactSecrets(valor: string): string {
  *   redactSecrets(valor).replace(/CPF \d{11}/g, "CPF [REDACTED]"),
  * ```
  */
-export type RedactConfig = false | ((campo: string, valor: string) => string);
+export type RedactConfig = false | ((field: string, value: string) => string);
 
 /** Resolve a config num redator sempre chamável. */
 export function resolveRedact(
   config: RedactConfig | undefined,
-): (campo: string, valor: string) => string {
-  if (config === false) return (_campo, valor) => valor;
+): (field: string, value: string) => string {
+  if (config === false) return (_campo, value) => value;
   if (typeof config === "function") return config;
-  return (_campo, valor) => redactSecrets(valor);
+  return (_campo, value) => redactSecrets(value);
 }

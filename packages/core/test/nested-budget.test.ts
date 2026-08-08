@@ -150,7 +150,7 @@ describe("orçamento em run aninhada", () => {
         input: { message: "vai" },
         budget: { maxChatCalls: 1, mode: "throw" },
       }),
-    ).rejects.toThrow(/Orçamento da execução esgotado/);
+    ).rejects.toThrow(/Run budget exhausted/);
     await app.dispose();
   });
 

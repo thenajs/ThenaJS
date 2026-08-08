@@ -12,7 +12,7 @@ import type { ToolType } from "../src/tools/index.js";
 
 const enc = new TextEncoder();
 
-function resposta(body: string, pedacos = 1): Response {
+function response(body: string, pedacos = 1): Response {
   const bytes = enc.encode(body);
   const tamanho = Math.ceil(bytes.length / pedacos);
   const stream = new ReadableStream({
@@ -42,7 +42,7 @@ function comCorpo<P extends OllamaProvider | OpenAIProvider>(
   let enviado: any;
   (provider as any).request = async (_url: string, init: RequestInit) => {
     enviado = JSON.parse(String(init.body));
-    return { response: resposta(body, pedacos), attempts: 1 };
+    return { response: response(body, pedacos), attempts: 1 };
   };
   return { provider, body: () => enviado };
 }

@@ -194,13 +194,13 @@ export function createRunHandle<T>(peças: {
    * olhando um `for await` que nunca rende.
    */
   let avisou = false;
-  const warnIfNotObserved = (metodo: string) => {
+  const warnIfNotObserved = (method: string) => {
     if (observando || avisou) return;
     avisou = true;
     console.warn(
-      `[thena] ${metodo} não vai receber nada: esta execução não está sendo ` +
-        `observada. Use \`run({ observe: true })\`, ou ligue \`report\`, \`log\` ` +
-        `ou um plugin com \`onEvent\`.`,
+      `[thena] ${method} will receive nothing: this run is not being observed. ` +
+        `Use \`run({ observe: true })\`, or turn on \`report\`, \`log\` or a ` +
+        `plugin with \`onEvent\`.`,
     );
   };
 

@@ -20,15 +20,15 @@ const STEP_ONLY_FIELDS = ["state", "output", "turn", "loop", "logs"] as const;
  * fazia para quem o chamava fora de uma execução.
  */
 function runOnlyView(run: RunContext): Context {
-  const erro = (campo: string) =>
+  const fail = (field: string) =>
     new Error(
-      `[thena] \`context().${campo}\` só existe dentro de um passo. Aqui a ` +
-        `execução já começou, mas o pipeline ainda não — é o caso de uma ` +
-        `factory de provider. Use \`data\`, \`runId\`, \`signal\` ou ` +
-        `\`usage()\`, que valem desde o \`run()\`.`,
+      `[thena] \`context().${field}\` only exists inside a step. Here the run ` +
+        `has started but the pipeline has not — this is what happens in a ` +
+        `provider factory. Use \`data\`, \`runId\`, \`signal\` or \`usage()\`, ` +
+        `which are available from \`run()\` onwards.`,
     );
 
-  const vista = {
+  const view = {
     runId: run.runId,
     data: run.data,
     signal: run.signal!,
@@ -39,16 +39,16 @@ function runOnlyView(run: RunContext): Context {
     meta: (dados: Record<string, unknown>) => run.recorder.metaAtual(dados),
   } as unknown as Context;
 
-  for (const campo of STEP_ONLY_FIELDS) {
-    Object.defineProperty(vista, campo, {
+  for (const field of STEP_ONLY_FIELDS) {
+    Object.defineProperty(view, field, {
       get: () => {
-        throw erro(campo);
+        throw fail(field);
       },
       configurable: true,
     });
   }
 
-  return vista;
+  return view;
 }
 
 /**

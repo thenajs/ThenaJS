@@ -81,7 +81,7 @@ export class ReportRecorder {
   private captureContent: boolean;
   private maxLen: number;
   /** Mascara segredo antes de gravar. Ligado por padrão. */
-  private readonly redact: (campo: string, valor: string) => string;
+  private readonly redact: (field: string, value: string) => string;
 
   /** Carimbado em todo evento, para o consumidor separar runs concorrentes. */
   readonly runId: string;

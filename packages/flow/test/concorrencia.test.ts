@@ -10,8 +10,8 @@ import { RunHistory } from "../src/server/memoria.js";
  */
 
 /** Agente que demora `ms` para responder, forçando a intercalação. */
-function fluxoLento(ms: number, resposta: string) {
-  const provider = new FakeProvider([{ content: resposta }], { delayMs: ms });
+function fluxoLento(ms: number, response: string) {
+  const provider = new FakeProvider([{ content: response }], { delayMs: ms });
   return makeWorkflow([makeAgent({ provider })]);
 }
 

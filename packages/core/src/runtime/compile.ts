@@ -34,9 +34,9 @@ export function compileStep(
   // na primeira leitura de campo — sem dizer o que faltou.
   if (step.until.length >= 2 && !workflowState) {
     throw new Error(
-      `[thena] O \`until\` deste loop recebe o estado como 2º parâmetro, mas o ` +
-        `workflow não declara \`state\`. Acrescente \`state: MinhaClasse\` no ` +
-        `@Workflow, ou use um \`until\` que só leia o ctx.`,
+      `[thena] This loop's \`until\` takes the state as its 2nd parameter, ` +
+        `but the workflow declares no \`state\`. Add \`state: MyClass\` to the ` +
+        `@Workflow, or use an \`until\` that only reads ctx.`,
     );
   }
 

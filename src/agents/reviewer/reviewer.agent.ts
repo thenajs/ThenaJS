@@ -17,14 +17,14 @@ export class ReviewerAgent {
   // `@state()` entrega a mesma instância que o `until` do loop vai ler.
   constructor(@state() private readonly workflowState: ExplorerState) {}
 
-  async afterResponse(resposta: string) {
+  async afterResponse(response: string) {
     this.workflowState.rodadas++;
 
     // O prompt pede para a resposta terminar com APROVADO ou AJUSTAR.
-    this.workflowState.aprovado = /\bAPROVADO\b/i.test(resposta);
+    this.workflowState.aprovado = /\bAPROVADO\b/i.test(response);
 
     if (!this.workflowState.aprovado) {
-      this.workflowState.apontamentos.push(resposta.trim());
+      this.workflowState.apontamentos.push(response.trim());
     }
   }
 }

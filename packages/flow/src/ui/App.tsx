@@ -112,8 +112,8 @@ export function App() {
     foco.current = run.id;
     setRunVisivel(run.id);
     setSelecionado(undefined);
-    const resposta = await fetch(`/api/runs/${run.id}`);
-    const { events: carregados } = await resposta.json();
+    const response = await fetch(`/api/runs/${run.id}`);
+    const { events: carregados } = await response.json();
     // Uma corrida com o SSE aqui só aconteceria se o usuário trocasse de run
     // durante o fetch; o guard devolve o controle a quem chegou por último.
     if (foco.current === run.id) setEventos(carregados ?? []);
@@ -124,7 +124,7 @@ export function App() {
     return { ...posicionar(arvore), mapa: arvore };
   }, [events]);
 
-  const detalhe = selecionado ? mapa.get(selecionado)?.dados : undefined;
+  const detail = selecionado ? mapa.get(selecionado)?.dados : undefined;
   const run = runs.find((r) => r.id === runVisivel);
 
   return (
@@ -185,37 +185,37 @@ export function App() {
         )}
       </main>
 
-      {detalhe && (
+      {detail && (
         <aside className="detalhe">
           <header>
-            <h2>{detalhe.rotulo}</h2>
+            <h2>{detail.rotulo}</h2>
             <button onClick={() => setSelecionado(undefined)} aria-label="fechar">
               ✕
             </button>
           </header>
           <dl>
             <dt>tipo</dt>
-            <dd>{detalhe.kind}</dd>
+            <dd>{detail.kind}</dd>
             <dt>estado</dt>
-            <dd className={`estado estado--${detalhe.workflowState}`}>
-              {detalhe.workflowState}
+            <dd className={`estado estado--${detail.workflowState}`}>
+              {detail.workflowState}
             </dd>
-            {detalhe.duracaoMs != null && (
+            {detail.duracaoMs != null && (
               <>
                 <dt>duração</dt>
-                <dd>{formatDuration(detalhe.duracaoMs)}</dd>
+                <dd>{formatDuration(detail.duracaoMs)}</dd>
               </>
             )}
           </dl>
 
-          {detalhe.erro && <pre className="erro">{detalhe.erro}</pre>}
+          {detail.fail && <pre className="erro">{detail.fail}</pre>}
 
-          {detalhe.payload &&
-            Object.entries(detalhe.payload).map(([chave, valor]) => (
-              <section key={chave}>
-                <h3>{chave}</h3>
+          {detail.payload &&
+            Object.entries(detail.payload).map(([key, value]) => (
+              <section key={key}>
+                <h3>{key}</h3>
                 <pre>
-                  {typeof valor === "string" ? valor : JSON.stringify(valor, null, 2)}
+                  {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
                 </pre>
               </section>
             ))}

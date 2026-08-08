@@ -28,18 +28,18 @@ const entry = new WeakMap<Function, Map<string, (InjectionPoint | undefined)[]>>
 const CONSTRUCTOR = "constructor";
 
 function mark(ponto: InjectionPoint): ParameterDecorator {
-  return (target, chave, indice) => {
+  return (target, key, indice) => {
     // Em construtor, `target` é a própria classe e `chave` é undefined.
     // Em método, `target` é o prototype e `chave` é o nome do método.
-    const classe = (chave === undefined ? target : target.constructor) as Function;
-    const metodo = chave === undefined ? CONSTRUCTOR : String(chave);
+    const cls = (key === undefined ? target : target.constructor) as Function;
+    const method = key === undefined ? CONSTRUCTOR : String(key);
 
-    const porMetodo = entry.get(classe) ?? new Map();
-    entry.set(classe, porMetodo);
+    const byMethod = entry.get(cls) ?? new Map();
+    entry.set(cls, byMethod);
 
-    const points = porMetodo.get(metodo) ?? [];
+    const points = byMethod.get(method) ?? [];
     points[indice] = ponto;
-    porMetodo.set(metodo, points);
+    byMethod.set(method, points);
   };
 }
 
@@ -122,10 +122,10 @@ export const memory = (store?: VectorStoreCtor): ParameterDecorator =>
 
 /** Os pontos declarados num método (ou no construtor). `undefined` = nenhum. */
 export function pointsOf(
-  classe: Function,
-  metodo: string = CONSTRUCTOR,
+  cls: Function,
+  method: string = CONSTRUCTOR,
 ): (InjectionPoint | undefined)[] | undefined {
-  return entry.get(classe)?.get(metodo);
+  return entry.get(cls)?.get(method);
 }
 
 export { CONSTRUCTOR };

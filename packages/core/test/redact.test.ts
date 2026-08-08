@@ -50,8 +50,8 @@ describe("redactSecrets", () => {
 
   it.each(["api_key", "apiKey", "secret", "password", "senha", "token"])(
     "mascara o campo nomeado `%s`",
-    (campo) => {
-      const saida = redactSecrets(`{"${campo}": "valorSecreto123"}`);
+    (field) => {
+      const saida = redactSecrets(`{"${field}": "valorSecreto123"}`);
       expect(saida).not.toContain("valorSecreto123");
       expect(saida).toContain("[REDACTED]");
     },
@@ -139,8 +139,8 @@ describe("no report", () => {
       makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
       {
         report: { dir },
-        redact: (_campo, valor) =>
-          redactSecrets(valor).replace(/CPF \d{11}/g, "CPF [REDACTED]"),
+        redact: (_campo, value) =>
+          redactSecrets(value).replace(/CPF \d{11}/g, "CPF [REDACTED]"),
       },
     );
     await app.run({

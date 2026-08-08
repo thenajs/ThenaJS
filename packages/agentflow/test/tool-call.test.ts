@@ -14,9 +14,9 @@ describe("normalizeToolCallEnvelope", () => {
   describe("chave do nome", () => {
     it.each(["name", "tool", "tool_name", "toolName", "function_name"])(
       "reconhece `%s`",
-      (chave) => {
+      (key) => {
         expect(
-          normalizeToolCallEnvelope({ [chave]: "ler", arguments: { a: 1 } }),
+          normalizeToolCallEnvelope({ [key]: "ler", arguments: { a: 1 } }),
         ).toEqual({ name: "ler", arguments: { a: 1 } });
       },
     );
@@ -40,8 +40,8 @@ describe("normalizeToolCallEnvelope", () => {
   describe("chave dos argumentos", () => {
     it.each(["arguments", "parameters", "args", "input", "params"])(
       "reconhece `%s`",
-      (chave) => {
-        expect(normalizeToolCallEnvelope({ name: "ler", [chave]: { p: 1 } })).toEqual({
+      (key) => {
+        expect(normalizeToolCallEnvelope({ name: "ler", [key]: { p: 1 } })).toEqual({
           name: "ler",
           arguments: { p: 1 },
         });
@@ -81,9 +81,9 @@ describe("normalizeToolCallEnvelope", () => {
   describe("envelopes que embrulham", () => {
     it.each(["function", "tool_call", "toolCall", "tool_use"])(
       "desembrulha `%s`",
-      (chave) => {
+      (key) => {
         expect(
-          normalizeToolCallEnvelope({ [chave]: { name: "ler", arguments: { a: 1 } } }),
+          normalizeToolCallEnvelope({ [key]: { name: "ler", arguments: { a: 1 } } }),
         ).toEqual({ name: "ler", arguments: { a: 1 } });
       },
     );

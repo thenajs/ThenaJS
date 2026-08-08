@@ -20,8 +20,8 @@ import {
 
 const schema = z.object({ x: z.string() });
 
-function fluxo(resposta = "ok", delayMs = 0) {
-  const provider = new FakeProvider([{ content: resposta }], { delayMs });
+function fluxo(response = "ok", delayMs = 0) {
+  const provider = new FakeProvider([{ content: response }], { delayMs });
   return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 
@@ -132,8 +132,8 @@ describe("abort", () => {
     const exec = app.run({ input: { message: "vai" } });
     exec.abort();
 
-    const erro = await captureError(exec);
-    expect(erro.name).toBe("AbortError");
+    const fail = await captureError(exec);
+    expect(fail.name).toBe("AbortError");
     // A chamada chegou a sair, mas o provider foi cancelado no meio: o teste
     // não espera os 500ms. É o `signal` chegando até o `fetch`.
     expect(provider.chamadas).toHaveLength(1);
@@ -221,10 +221,10 @@ describe("signal vindo de fora", () => {
     const controller = new AbortController();
     controller.abort();
 
-    const erro = await captureError(
+    const fail = await captureError(
       app.run({ input: { message: "vai" }, signal: controller.signal }),
     );
-    expect(erro.name).toBe("AbortError");
+    expect(fail.name).toBe("AbortError");
     expect(provider.chamadas).toHaveLength(0);
     await app.dispose();
   });
@@ -233,10 +233,10 @@ describe("signal vindo de fora", () => {
     const { Fluxo } = fluxo("x", 200);
     const app = Thena.create(Fluxo, {});
 
-    const erro = await captureError(
+    const fail = await captureError(
       app.run({ input: { message: "vai" }, signal: AbortSignal.timeout(20) }),
     );
-    expect(erro.name).toBe("TimeoutError");
+    expect(fail.name).toBe("TimeoutError");
     await app.dispose();
   });
 
@@ -358,6 +358,6 @@ describe("dispose drena as execuções em voo", () => {
 
     // Não esperou os 500ms do provider: abortou e seguiu.
     expect(Date.now() - inicio).toBeLessThan(300);
-    expect((await capturado).message).toContain("app encerrado");
+    expect((await capturado).message).toContain("app disposed");
   });
 });

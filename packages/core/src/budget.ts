@@ -66,7 +66,7 @@ export interface BudgetExceeded {
 export class BudgetExceededError extends Error {
   constructor(public readonly info: BudgetExceeded) {
     super(
-      `[thena] Orçamento da execução esgotado (${info.reason}: ${info.value} de ${info.limit}).`,
+      `[thena] Run budget exhausted (${info.reason}: ${info.value} of ${info.limit}).`,
     );
     this.name = "BudgetExceededError";
   }

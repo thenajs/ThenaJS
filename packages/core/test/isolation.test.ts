@@ -21,8 +21,8 @@ function fluxoDeTresPassos(provider: FakeProvider) {
 }
 
 /** Agente que espera `ms` antes de responder, para forçar a intercalação. */
-function fluxoLento(ms: number, resposta: string) {
-  const provider = new FakeProvider([{ content: resposta }], { delayMs: ms });
+function fluxoLento(ms: number, response: string) {
+  const provider = new FakeProvider([{ content: response }], { delayMs: ms });
   return makeWorkflow([makeAgent({ provider })]);
 }
 

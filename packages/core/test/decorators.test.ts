@@ -57,7 +57,7 @@ describe("@Agent — origem do prompt", () => {
       @Agent({ provider, prompt: "./fixtures/nao-existe.md" })
       class Fantasma {}
       void Fantasma;
-    }).toThrow(/Prompt markdown não encontrado.*nao-existe\.md/s);
+    }).toThrow(/Prompt markdown not found.*nao-existe\.md/s);
   });
 
   it("erro claro quando `prompt` não é informado", () => {
@@ -67,7 +67,7 @@ describe("@Agent — origem do prompt", () => {
       @Agent({ provider } as never)
       class SemPrompt {}
       void SemPrompt;
-    }).toThrow(/'prompt' é obrigatório/);
+    }).toThrow(/'prompt' field is required/);
   });
 
   it("o prompt vira a mensagem system enviada ao modelo", async () => {
@@ -108,13 +108,13 @@ describe("metadados", () => {
 
   it("classe sem @Agent falha nomeando a classe", () => {
     class Nu {}
-    expect(() => getAgentMetadata(Nu)).toThrow(/"Nu" não está decorada com @Agent/);
+    expect(() => getAgentMetadata(Nu)).toThrow(/"Nu" is not decorated with @Agent/);
   });
 
   it("classe sem @Workflow falha nomeando a classe", () => {
     class Nu {}
     expect(() => getWorkflowMetadata(Nu)).toThrow(
-      /"Nu" não está decorada com @Workflow/,
+      /"Nu" is not decorated with @Workflow/,
     );
   });
 
@@ -130,7 +130,7 @@ describe("metadados", () => {
     });
 
     await expect(runWorkflow(makeWorkflow([Agente]), "vai")).rejects.toThrow(
-      /"ToolNua" não está decorada com @Tool/,
+      /"ToolNua" is not decorated with @Tool/,
     );
   });
 
@@ -144,7 +144,7 @@ describe("metadados", () => {
     });
 
     await expect(runWorkflow(makeWorkflow([Agente]), "vai")).rejects.toThrow(
-      /não implementa execute\(input\)/,
+      /does not implement execute\(input\)/,
     );
   });
 });

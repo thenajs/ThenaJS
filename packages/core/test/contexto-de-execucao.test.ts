@@ -112,11 +112,11 @@ describe("ctx.signal", () => {
     const exec = app.run({ input: { message: "vai" } });
     setTimeout(() => exec.abort(new Error("parou")), 20);
 
-    const erro = await captureError(exec.result);
+    const fail = await captureError(exec.result);
     await app.dispose();
 
     expect(interrompida).toBe(true);
-    expect((erro as Error).message).toBe("parou");
+    expect((fail as Error).message).toBe("parou");
   });
 
   it("existe mesmo sem app — `runWorkflow` direto também tem controller", async () => {
@@ -145,10 +145,10 @@ describe("ctx.abort()", () => {
     });
     const { app } = await appComTool(comContexto(T));
 
-    const erro = await captureError(app.run({ input: { message: "vai" } }).result);
+    const fail = await captureError(app.run({ input: { message: "vai" } }).result);
     await app.dispose();
 
-    expect((erro as Error).message).toBe("a tool desistiu");
+    expect((fail as Error).message).toBe("a tool desistiu");
   });
 });
 

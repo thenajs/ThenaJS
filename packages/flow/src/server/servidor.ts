@@ -89,7 +89,7 @@ export class FlowServer {
     this.heartbeat.unref();
 
     if (this.opts.log !== false) {
-      console.log(`[thena-flow] Execução ao vivo em ${this.url}`);
+      console.log(`[thena-flow] Live run at ${this.url}`);
     }
   }
 
@@ -112,20 +112,20 @@ export class FlowServer {
   }
 
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const caminho = new URL(req.url ?? "/", this.url).pathname;
+    const path = new URL(req.url ?? "/", this.url).pathname;
 
-    if (caminho === "/api/eventos") return this.openStream(res);
+    if (path === "/api/eventos") return this.openStream(res);
 
-    if (caminho.startsWith("/api/runs/")) {
-      const events = this.history.eventsOf(caminho.slice("/api/runs/".length));
+    if (path.startsWith("/api/runs/")) {
+      const events = this.history.eventsOf(path.slice("/api/runs/".length));
       return this.json(
         res,
-        events ? { events } : { erro: "run não encontrada" },
+        events ? { events } : { fail: "run não encontrada" },
         events ? 200 : 404,
       );
     }
 
-    return this.serveFile(caminho, res);
+    return this.serveFile(path, res);
   }
 
   /** Conexão SSE: manda o estado atual e depois vai emendando os eventos. */
@@ -162,8 +162,8 @@ export class FlowServer {
     res.end(JSON.stringify(body));
   }
 
-  private async serveFile(caminho: string, res: ServerResponse): Promise<void> {
-    const relativo = normalize(caminho === "/" ? "index.html" : caminho.slice(1));
+  private async serveFile(path: string, res: ServerResponse): Promise<void> {
+    const relativo = normalize(path === "/" ? "index.html" : path.slice(1));
 
     // Nunca sair do diretório da interface, mesmo com `..` na URL.
     if (relativo.startsWith("..") || relativo.startsWith(sep)) {

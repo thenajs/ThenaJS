@@ -243,7 +243,7 @@ describe("inv.meta — o middleware escreve no report", () => {
     const dir = mkdtempSync(join(tmpdir(), "thena-mw-"));
 
     const cache: ChatMiddleware = async (inv) => {
-      inv.meta({ cacheHit: true, chave: "abc" });
+      inv.meta({ cacheHit: true, key: "abc" });
       return { assistant: { role: "assistant", content: "do cache" } };
     };
 
@@ -260,7 +260,7 @@ describe("inv.meta — o middleware escreve no report", () => {
     const chat = lerArvore(dir).children[0].children[0];
     expect(chat.kind).toBe("chat");
     expect(chat.data.cacheHit).toBe(true);
-    expect(chat.data.chave).toBe("abc");
+    expect(chat.data.key).toBe("abc");
   });
 
   it("o passo continua no report mesmo quando a tool não executa", async () => {

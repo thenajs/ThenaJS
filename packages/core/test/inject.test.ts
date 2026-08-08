@@ -141,9 +141,9 @@ describe("@state no construtor do agente", () => {
     @Agent({ provider, prompt: PROMPT, tools: [] })
     class Revisor {
       constructor(@state() private readonly workflowState: EstadoDeTeste) {}
-      async afterResponse(resposta: string) {
-        this.workflowState.visitados.push(resposta);
-        this.workflowState.aprovado = /APROVADO/.test(resposta);
+      async afterResponse(response: string) {
+        this.workflowState.visitados.push(response);
+        this.workflowState.aprovado = /APROVADO/.test(response);
       }
     }
 
@@ -227,7 +227,7 @@ describe("mensagens de erro da injeção", () => {
     class Fluxo {}
 
     await expect(runWorkflow(Fluxo, "vai")).rejects.toThrow(
-      /@context\(\).*ainda\s+não existe quando a classe é construída/s,
+      /@context\(\).*does not exist yet when the class is constructed/s,
     );
   });
 
@@ -243,7 +243,7 @@ describe("mensagens de erro da injeção", () => {
     class Fluxo {}
 
     await expect(runWorkflow(Fluxo, "vai")).rejects.toThrow(
-      /nenhum estado.*state: MinhaClasse/s,
+      /no state declared.*state: MyClass/s,
     );
   });
 
@@ -261,7 +261,7 @@ describe("mensagens de erro da injeção", () => {
     const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
-      /@memory\(FakeVectorStoreB\).*não está.*registrado/s,
+      /@memory\(FakeVectorStoreB\).*not registered/s,
     );
     await app.dispose();
   });

@@ -6,7 +6,7 @@ export interface NodeData extends Record<string, unknown> {
   kind: FlowEvent["kind"];
   workflowState: "rodando" | "ok" | "error";
   duracaoMs?: number;
-  erro?: string;
+  fail?: string;
   payload?: Record<string, unknown>;
 }
 
@@ -51,7 +51,7 @@ export function buildTree(events: FlowEvent[]): Map<string, Bruto> {
       ...no.dados,
       workflowState: evento.status === "error" ? "error" : "ok",
       duracaoMs: evento.durationMs,
-      erro: evento.error,
+      fail: evento.error,
       payload: evento.data,
     };
   }

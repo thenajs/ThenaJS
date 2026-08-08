@@ -87,7 +87,7 @@ export class OllamaProvider extends Providers {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Ollama chat falhou (${response.status}): ${detail}`);
+      throw new Error(`Ollama chat failed (${response.status}): ${detail}`);
     }
 
     const data = onToken
@@ -127,7 +127,7 @@ export class OllamaProvider extends Providers {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Ollama embed falhou (${response.status}): ${detail}`);
+      throw new Error(`Ollama embed failed (${response.status}): ${detail}`);
     }
 
     const data = (await response.json()) as any;

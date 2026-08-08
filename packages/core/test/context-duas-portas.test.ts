@@ -79,8 +79,8 @@ describe("as duas portas devolvem a mesma coisa", () => {
     // O que vale desde o `run()` funciona…
     expect(daFuncao).toBe("acme");
     // …e o que é do passo ensina por que ainda não existe.
-    expect(erroDoState).toMatch(/só existe dentro de um passo/);
-    expect(erroDoState).toMatch(/factory de provider/);
+    expect(erroDoState).toMatch(/only exists inside a step/);
+    expect(erroDoState).toMatch(/provider factory/);
   });
 });
 

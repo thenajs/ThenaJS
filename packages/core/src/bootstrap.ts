@@ -53,7 +53,7 @@ function createApp<T = string, D extends RunData = RunData>(
     const onComplete = report
       ? (root: ExecutionNode) => {
           const path = writeReport(root, { ...reportOptions, runId });
-          console.log(`[thena] Report gerado: ${path}`);
+          console.log(`[thena] Report written: ${path}`);
         }
       : undefined;
 
@@ -89,7 +89,7 @@ function createApp<T = string, D extends RunData = RunData>(
         await plugin.setup?.();
       } catch (err) {
         throw new Error(
-          `[thena] O plugin "${plugin.name}" falhou ao iniciar: ` +
+          `[thena] Plugin "${plugin.name}" failed to start: ` +
             ((err as Error)?.message ?? String(err)),
           { cause: err },
         );
@@ -177,7 +177,7 @@ function createApp<T = string, D extends RunData = RunData>(
     async dispose() {
       // Drena antes de encerrar os plugins: um plugin que fecha servidor não
       // pode sumir enquanto uma execução ainda escreve nele.
-      for (const { abort } of inFlight) abort(new Error("[thena] app encerrado"));
+      for (const { abort } of inFlight) abort(new Error("[thena] app disposed"));
       await Promise.allSettled([...inFlight].map((r) => r.result));
       inFlight.clear();
 
@@ -190,7 +190,7 @@ function createApp<T = string, D extends RunData = RunData>(
         try {
           await plugin.dispose?.();
         } catch (err) {
-          console.error(`[thena] O plugin "${plugin.name}" falhou ao encerrar:`, err);
+          console.error(`[thena] Plugin "${plugin.name}" failed to dispose:`, err);
         }
       }
       plugins.length = 0;

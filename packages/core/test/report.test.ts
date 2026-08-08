@@ -20,9 +20,9 @@ function pastaTemp(): string {
 }
 
 /** A árvore achatada em caminhos "kind > kind > kind", para asserção legível. */
-function caminhos(node: ExecutionNode, prefixo = ""): string[] {
+function paths(node: ExecutionNode, prefixo = ""): string[] {
   const current = prefixo ? `${prefixo} > ${node.kind}` : node.kind;
-  return [current, ...node.children.flatMap((f) => caminhos(f, current))];
+  return [current, ...node.children.flatMap((f) => paths(f, current))];
 }
 
 /** Cada run grava numa subpasta própria — aqui só há uma. */
@@ -236,7 +236,7 @@ describe("report", () => {
     expect(raiz.kind).toBe("workflow");
     // A tool é executada de dentro do `provider.chat`, então o nó `tool`
     // pendura no `chat` — não no `agent`.
-    expect(caminhos(raiz)).toEqual([
+    expect(paths(raiz)).toEqual([
       "workflow",
       "workflow > agent",
       "workflow > agent > chat",

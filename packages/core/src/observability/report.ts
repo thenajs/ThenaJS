@@ -125,7 +125,7 @@ function scheduleIndex(base: string, resumo: RunSummary): void {
 
 /** Report é observabilidade: um erro de I/O aqui não derruba a run. */
 function warnIndexFailure(err: unknown): void {
-  console.error(`[thena] Não foi possível atualizar o índice do report:`, err);
+  console.error(`[thena] Could not update the report index:`, err);
 }
 
 /**

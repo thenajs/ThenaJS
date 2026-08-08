@@ -13,7 +13,7 @@ import type { AgentConfig } from "../types.js";
  */
 function resolveMarkdownPath(source: AgentConfig["prompt"]): string {
   if (source === undefined || source === null) {
-    throw new Error("[@Agent] O campo 'prompt' é obrigatório.");
+    throw new Error("[@Agent] The 'prompt' field is required.");
   }
   if (source instanceof URL) {
     return fileURLToPath(source);
@@ -39,7 +39,7 @@ export function Agent(config: AgentConfig): ClassDecorator {
   try {
     prompt = readFileSync(mdPath, "utf-8");
   } catch {
-    throw new Error(`[@Agent] Prompt markdown não encontrado: ${mdPath}`);
+    throw new Error(`[@Agent] Prompt markdown not found: ${mdPath}`);
   }
 
   return (target) => {

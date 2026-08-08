@@ -110,7 +110,7 @@ describe("provider", () => {
         makeWorkflow([makeAgent({ provider: ProviderSolto as never })]),
         "vai",
       ),
-    ).rejects.toThrow(/ProviderSolto parece uma classe de provider/);
+    ).rejects.toThrow(/ProviderSolto looks like a provider class/);
   });
 
   it("a instância é compartilhada entre os passos que a declaram", async () => {
@@ -173,7 +173,7 @@ describe("tools", () => {
       {
         name: "com_schema",
         description: "descrição da tool",
-        schema: z.object({ caminho: z.string() }),
+        schema: z.object({ path: z.string() }),
       },
       () => "ok",
     );
@@ -187,7 +187,7 @@ describe("tools", () => {
     expect(tool.name).toBe("com_schema");
     expect(tool.description).toBe("descrição da tool");
     // O schema é o mesmo objeto zod — é dele que sai o JSON Schema no provider real.
-    expect(tool.schema.safeParse({ caminho: "a.ts" }).success).toBe(true);
+    expect(tool.schema.safeParse({ path: "a.ts" }).success).toBe(true);
     expect(tool.schema.safeParse({ outro: 1 }).success).toBe(false);
   });
 

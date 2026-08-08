@@ -89,7 +89,7 @@ describe("compose", () => {
         vezes++;
         return "x";
       }),
-    ).rejects.toThrow(/next\(\) foi chamado mais de uma vez/);
+    ).rejects.toThrow(/next\(\) was called more than once/);
 
     // O centro rodou uma vez só — a segunda chamada foi barrada antes.
     expect(vezes).toBe(1);

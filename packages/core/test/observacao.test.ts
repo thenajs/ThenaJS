@@ -20,8 +20,8 @@ import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
  */
 
 /** Um workflow de um agente, e o provider por trás dele. */
-function fluxo(resposta = "ok") {
-  const provider = new FakeProvider([{ content: resposta }]);
+function fluxo(response = "ok") {
+  const provider = new FakeProvider([{ content: response }]);
   return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 

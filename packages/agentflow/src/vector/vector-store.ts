@@ -30,7 +30,7 @@ export abstract class VectorStore extends HttpTransport {
   /** Memoização do `ensureCollectionOnce` — uma vez por instância de store. */
   private preparada?: Promise<void>;
   /** Dimensão com que a collection foi preparada, para detectar conflito. */
-  private preparadaCom?: number;
+  private preparedWith?: number;
 
   /** Cria a collection se ainda não existir. Deve ser idempotente. */
   abstract ensureCollection(options: CollectionOptions): Promise<void>;
@@ -45,16 +45,16 @@ export abstract class VectorStore extends HttpTransport {
    * vez da causa. Uma collection guarda um tamanho só.
    */
   ensureCollectionOnce(options: CollectionOptions): Promise<void> {
-    if (this.preparadaCom !== undefined && this.preparadaCom !== options.size) {
+    if (this.preparedWith !== undefined && this.preparedWith !== options.size) {
       throw new Error(
-        `[thena] Este store já foi preparado com ${this.preparadaCom} dimensões, ` +
-          `mas agora recebeu embeddings de ${options.size}. Uma collection aceita ` +
-          `um único tamanho de vetor — modelos de embedding diferentes precisam de ` +
-          `stores diferentes (cada um com sua collection).`,
+        `[thena] This store was already prepared with ${this.preparedWith} ` +
+          `dimensions, but now received embeddings of ${options.size}. A ` +
+          `collection accepts a single vector size — different embedding models ` +
+          `need different stores (each with its own collection).`,
       );
     }
 
-    this.preparadaCom = options.size;
+    this.preparedWith = options.size;
     this.preparada ??= this.ensureCollection(options);
     return this.preparada;
   }

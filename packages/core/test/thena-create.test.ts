@@ -11,8 +11,8 @@ import { FakeProvider, makeAgent, makeWorkflow } from "./harness.js";
  * métodos do objeto devolvido, não do corpo dela.
  */
 
-function fluxo(resposta = "ok") {
-  const provider = new FakeProvider([{ content: resposta }]);
+function fluxo(response = "ok") {
+  const provider = new FakeProvider([{ content: response }]);
   return { provider, Fluxo: makeWorkflow([makeAgent({ provider })]) };
 }
 

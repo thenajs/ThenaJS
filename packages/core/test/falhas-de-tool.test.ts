@@ -110,12 +110,12 @@ describe("falhas de tool", () => {
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
-    const erro = await app
+    const fail = await app
       .run({ input: { message: "vai" } })
       .catch((e) => e as FatalToolError);
 
-    expect((erro as FatalToolError).message).toBe("banco indisponível");
-    expect((erro as FatalToolError).cause).toBe(original);
+    expect((fail as FatalToolError).message).toBe("banco indisponível");
+    expect((fail as FatalToolError).cause).toBe(original);
     await app.dispose();
   });
 
@@ -216,10 +216,10 @@ describe("erros de controle de fluxo não viram observação", () => {
     const runCtx = app.run({ input: { message: "vai" } });
     setTimeout(() => runCtx.abort(new Error("chega")), 10);
 
-    const erro = await captureError(runCtx.result);
+    const fail = await captureError(runCtx.result);
     // Sem a correção, o abort virava `{ content: "chega", isError: true }` e a
     // run seguia em frente com "a tool falhou" no histórico.
-    expect((erro as Error).message).toBe("chega");
+    expect((fail as Error).message).toBe("chega");
     await app.dispose();
   });
 

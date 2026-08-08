@@ -15,21 +15,21 @@ export interface Injectable {
  * parâmetro — injeção silenciosamente `undefined` é o pior modo de errar aqui.
  */
 export function resolvePoint(
-  ponto: InjectionPoint,
+  point: InjectionPoint,
   d: Injectable,
-  onde: string,
-  indice: number,
+  where: string,
+  index: number,
 ): unknown {
-  switch (ponto.kind) {
+  switch (point.kind) {
     case "input":
       return d.args;
 
     case "context":
       if (!d.ctx) {
         throw new Error(
-          `[thena] @context() em ${onde} (parâmetro ${indice}): o contexto ainda ` +
-            `não existe quando a classe é construída. Use @context() no execute de ` +
-            `uma tool, ou receba o ctx como parâmetro do hook.`,
+          `[thena] @context() in ${where} (parameter ${index}): the context ` +
+            `does not exist yet when the class is constructed. Use @context() ` +
+            `in a tool's execute, or take ctx as a hook parameter.`,
         );
       }
       return d.ctx;
@@ -37,19 +37,19 @@ export function resolvePoint(
     case "state":
       if (!d.workflowState) {
         throw new Error(
-          `[thena] @state() em ${onde} (parâmetro ${indice}): nenhum estado ` +
-            `declarado. Acrescente \`state: MinhaClasse\` no @Workflow.`,
+          `[thena] @state() in ${where} (parameter ${index}): no state ` +
+            `declared. Add \`state: MyClass\` to the @Workflow.`,
         );
       }
       return d.workflowState;
 
     case "memory": {
-      if (!ponto.store) return d.memories[0];
-      const found = d.memories.find((m) => m.store instanceof ponto.store!);
+      if (!point.store) return d.memories[0];
+      const found = d.memories.find((m) => m.store instanceof point.store!);
       if (!found) {
         throw new Error(
-          `[thena] @memory(${ponto.store.name}) em ${onde}: esse store não está ` +
-            `registrado em ThenaConfig.memory.`,
+          `[thena] @memory(${point.store.name}) in ${where}: that store is not ` +
+            `registered in ThenaConfig.memory.`,
         );
       }
       return found;
