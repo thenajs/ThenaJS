@@ -12,6 +12,13 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dist_tag:
+        description: "dist-tag do npm (`next` para não mexer no `latest`)"
+        required: false
+        default: "latest"
+        type: choice
+        options: ["latest", "next"]
 
 permissions:
   contents: read
@@ -37,11 +44,22 @@ jobs:
       - name: Build
         run: npm run build:clean
 
+      # Idempotente de propósito. O laço publica na ordem de dependência, então
+      # uma falha no meio deixava metade da release no npm — e npm não permite
+      # republicar uma versão. Pular o que já está publicado torna o retry (e um
+      # tag push depois de um dispatch) seguros, em vez de fatais.
       - name: Publish (na ordem de dependência)
         run: |
           for pkg in agentflow core tools qdrant-client flow cli; do
-            echo "→ publicando @thenajs/$pkg"
-            npm publish --workspace "@thenajs/$pkg" --provenance --access public
+            versao=$(node -p "require('./packages/$pkg/package.json').version")
+            if npm view "@thenajs/$pkg@$versao" version >/dev/null 2>&1; then
+              echo "→ @thenajs/$pkg@$versao já publicado, pulando"
+              continue
+            fi
+            echo "→ publicando @thenajs/$pkg@$versao com dist-tag '$DIST_TAG'"
+            npm publish --workspace "@thenajs/$pkg" \
+              --provenance --access public --tag "$DIST_TAG"
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ inputs.dist_tag || 'latest' }}
