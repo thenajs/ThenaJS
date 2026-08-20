@@ -23,7 +23,6 @@
   },
   "dependencies": {
     "@thenajs/core": "*",
-    "@thenajs/tools": "*",
     "zod": "^4.0.0"
   },
   "devDependencies": {

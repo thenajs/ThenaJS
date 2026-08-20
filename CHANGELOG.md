@@ -4,6 +4,31 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [Não publicado]
+
+### ⚠️ Quebras
+
+| O quê | O que fazer |
+| --- | --- |
+| O pacote `@thenajs/tools` foi **removido** | copie a tool que você usava das [Receitas de tools](https://thenajs.github.io/pt/techniques/tool-recipes) para `src/tools/` |
+
+O pacote tinha uma tool — a de shell — em 139 linhas. Um pacote publicado carrega
+versionamento, CI e uma promessa de compatibilidade; para algo que o usuário
+escreve em dez minutos, o custo não se paga. Pior, punha o nome do projeto por
+trás da escolha de dar execução arbitrária de comando a um modelo, que é decisão
+da aplicação e não do framework.
+
+O `thena create` deixa de instalar o pacote, e o exemplo da documentação passa a
+usar uma tool de ler arquivo.
+
+### Documentação
+
+Site reorganizado em inglês e português, com 70 páginas por idioma em nove
+seções, e paridade entre os idiomas validada no CI. As URLs anteriores
+(`/guias/*`, `/referencia/*`, `/comecar/*`, `/concepts/*`) passam a dar 404.
+
+---
+
 ## [0.9.0] — 2026-08-07
 
 Isolamento por execução, cancelamento, streaming, custo e configuração por

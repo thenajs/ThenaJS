@@ -71,7 +71,6 @@ export function projectFiles(name: string): ScaffoldFile[] {
     },
     dependencies: {
       "@thenajs/core": THENA_VERSION,
-      "@thenajs/tools": THENA_VERSION,
       zod: "^4.0.0",
     },
     devDependencies: {

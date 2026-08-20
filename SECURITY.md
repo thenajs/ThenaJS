@@ -46,26 +46,35 @@ Mesmo com o mascaramento, trate a pasta `report/` como dado sensível: não
 commite, não empacote em imagem, não sirva estaticamente. O `log: "verbose"`
 imprime o mesmo conteúdo no stdout, e daí para o seu agregador de logs.
 
-### `ShellTool` executa comando arbitrário
+### Uma tool de shell executa comando arbitrário
 
-O `@thenajs/tools` dá ao modelo **execução de comando** com as permissões do seu
-processo. Um agente que leia conteúdo malicioso — um README, uma issue, um
+O framework **não publica tool de shell**. A que estava no `@thenajs/tools` foi
+removida na 0.10 — uma tool é pequena o bastante para ser sua, e o pacote punha o
+nome do projeto por trás de uma escolha de risco que é da sua aplicação. As
+[Receitas de tools](https://thenajs.github.io/pt/techniques/tool-recipes) trazem
+uma para copiar, com o aviso.
+
+Se você usar uma: ela dá ao modelo **execução de comando** com as permissões do
+seu processo. Um agente que leia conteúdo malicioso — um README, uma issue, um
 arquivo do repositório — pode ser induzido a executar o que estiver escrito lá.
 
-Use `allow` sempre que o agente puder ver entrada não confiável:
+Quando o agente puder ver entrada não confiável, as duas checagens andam juntas:
 
 ```ts
-import { shellTool } from "@thenajs/tools";
+const PERMITIDOS = new Set(["git", "ls", "cat"]);
 
-tools: [shellTool({ allow: ["git", "ls", "cat"], timeoutMs: 10_000 })]
+const programa = command.trim().split(/\s+/)[0] ?? "";
+if (!PERMITIDOS.has(programa)) return { content: "não permitido", isError: true };
+
+// Sem isto a lista não vale nada: `git status; rm -rf /` começa com `git`.
+if (/[;&|`$><]/.test(command)) return { content: "sem encadeamento", isError: true };
 ```
 
-Com a allowlist ligada, encadeamento (`;`, `&&`, `|`, `$(…)`, `>`) é recusado —
-sem isso `echo ok; rm -rf /` passaria pela lista.
+E um `timeout`, senão um comando pendurado segura a execução para sempre.
 
-A classe `ShellTool`, sem argumentos, **não tem allowlist**: ela tem timeout e
-teto de saída, mas executa qualquer comando. É para ambiente controlado — sua
-máquina, um container descartável —, nunca para um serviço exposto.
+Isso limita **quais programas** rodam, não o que um permitido consegue fazer: o
+`cat` lê qualquer arquivo que o processo alcance. Para entrada não confiável, a
+fronteira é um contêiner ou um usuário restrito.
 
 ### Prompt injection
 

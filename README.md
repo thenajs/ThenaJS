@@ -17,7 +17,6 @@ usuário que o consome.
 packages/
   agentflow/       @thenajs/agentflow       engine: pipeline, providers, estado, tools, vetorial
   core/            @thenajs/core            decorators (@Agent/@Workflow/@Tool) + runtime
-  tools/           @thenajs/tools           tools prontas (ex.: ShellTool)
   qdrant-client/   @thenajs/qdrant-client   VectorStore para Qdrant, sobre a REST API
   flow/            @thenajs/flow            site local que mostra a execução ao vivo
   cli/             @thenajs/cli             gerador "thena g agent <nome>"
@@ -75,12 +74,11 @@ como `"./explorer.agent.md"` é resolvido em relação ao arquivo do agente.
 
 ```ts
 import { Agent } from "@thenajs/core";
-import { ShellTool } from "@thenajs/tools";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 
 @Agent({
   provider: LocalOllamaProvider,
-  tools: [ShellTool],
+  tools: [ReadFileTool],
   prompt: "./explorer.agent.md",
 })
 export class ExplorerAgent {}
@@ -113,15 +111,20 @@ export class ReadFileTool {
 }
 ```
 
-O pacote `@thenajs/tools` já traz a `ShellTool`.
+O framework **não publica pacote de tools**. Uma tool é uma classe com três
+campos e um método: um pacote para isso custaria mais em versionamento e suporte
+do que economiza, e colocaria o nome do projeto por trás de escolhas que são da
+sua aplicação.
 
-> ⚠️ A `ShellTool` dá ao modelo **execução arbitrária de comando**. Um agente
+Tools prontas para copiar — ler arquivo, shell, buscar página, chamar a sua API —
+estão em [Receitas de tools](https://thenajs.github.io/pt/techniques/tool-recipes).
+Copiou, é sua.
+
+> ⚠️ Uma tool de shell dá ao modelo **execução arbitrária de comando**. Um agente
 > que leia conteúdo de terceiro pode ser induzido a executar o que estiver
-> escrito lá. Use `shellTool({ allow: ["git", "ls"] })` sempre que o agente
-> puder ver entrada não confiável — a versão sem allowlist é para ambiente
-> controlado. Ver [SECURITY.md](./SECURITY.md).
+> escrito lá. Ver [SECURITY.md](./SECURITY.md).
 
-Tools próprias do app ficam em `src/tools/`.
+Tools do app ficam em `src/tools/`.
 
 Por padrão o `execute` recebe **só os argumentos** já validados pelo schema — o
 que mantém a tool trivial de testar. Quando precisar de mais, decore os
