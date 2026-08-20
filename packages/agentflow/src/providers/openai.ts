@@ -1,7 +1,7 @@
 import { ToolType, toFunctionTools } from "../tools/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
-import { lerSse } from "../http/index.js";
+import { readSse } from "../http/index.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
 /**
@@ -228,7 +228,7 @@ async function lerStreamOpenAI(
   let usage: Assistente["usage"] = {};
   const porIndice = new Map<number, RawOpenAIToolCall>();
 
-  for await (const payload of lerSse(response)) {
+  for await (const payload of readSse(response)) {
     let pedaco: OpenAIChatResponse;
     try {
       pedaco = JSON.parse(payload) as OpenAIChatResponse;

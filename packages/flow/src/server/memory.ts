@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionEvent } from "@thenajs/core";
-import type { FlowEvent, FlowRun, FlowSnapshot } from "../tipos.js";
+import type { FlowEvent, FlowRun, FlowSnapshot } from "../types.js";
 
 /**
  * O histórico vive só na memória do processo, de propósito: o Flow é uma janela

@@ -191,7 +191,7 @@ export class ReportRecorder {
    * pergunta que o recorder sabe responder sozinho. No-op fora de qualquer
    * passo, ou sem observação ativa.
    */
-  metaAtual(data: Record<string, unknown>): void {
+  currentMeta(data: Record<string, unknown>): void {
     const node = this.als.getStore()?.node;
     if (node) this.meta(node, data);
   }

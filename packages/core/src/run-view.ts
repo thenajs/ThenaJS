@@ -36,7 +36,7 @@ function runOnlyView(run: RunContext): Context {
     abort: (reason?: unknown) => run.abort(reason),
     stop: () => requestStop(run),
     onDispose: (fn: () => void | Promise<void>) => void run.cleanups.push(fn),
-    meta: (dados: Record<string, unknown>) => run.recorder.metaAtual(dados),
+    meta: (data: Record<string, unknown>) => run.recorder.currentMeta(data),
   } as unknown as Context;
 
   for (const field of STEP_ONLY_FIELDS) {

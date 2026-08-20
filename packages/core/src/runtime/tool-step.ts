@@ -57,8 +57,8 @@ export function buildToolStep(
         ctx,
         run: runCtx,
         // O nó só existe depois que o `registrarTool` abre — até lá, no-op.
-        meta: (dados) => {
-          if (invocation.node) runCtx.recorder.meta(invocation.node, dados);
+        meta: (data) => {
+          if (invocation.node) runCtx.recorder.meta(invocation.node, data);
         },
       };
 

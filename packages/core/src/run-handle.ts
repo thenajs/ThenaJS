@@ -169,8 +169,8 @@ export class Channel<T> {
 /** @deprecated Use `Canal<ExecutionEvent>`. Mantido para não quebrar imports. */
 export class EventQueue extends Channel<ExecutionEvent> {}
 
-/** Monta o handle a partir das peças que o `bootstrap` já tem. */
-export function createRunHandle<T>(peças: {
+/** Monta o handle a partir das parts que o `bootstrap` já tem. */
+export function createRunHandle<T>(parts: {
   runId: string;
   result: Promise<T>;
   signal: AbortSignal;
@@ -178,9 +178,9 @@ export function createRunHandle<T>(peças: {
   events: Channel<ExecutionEvent>;
   tokens: Channel<string>;
   /** A execução está sendo observada? Ver `run({ observe })`. */
-  observando: boolean;
+  observing: boolean;
 }): RunHandle<T> {
-  const { runId, result, signal, abort, events, tokens, observando } = peças;
+  const { runId, result, signal, abort, events, tokens, observing } = parts;
 
   // Sem isto, o padrão do POST+SSE derruba o processo: ninguém deu `await`
   // ainda quando a execução falha, e o Node dispara `unhandledRejection`. O
@@ -193,10 +193,10 @@ export function createRunHandle<T>(peças: {
    * ter tornado a observação opcional é não deixar ninguém descobrir isso
    * olhando um `for await` que nunca rende.
    */
-  let avisou = false;
+  let warned = false;
   const warnIfNotObserved = (method: string) => {
-    if (observando || avisou) return;
-    avisou = true;
+    if (observing || warned) return;
+    warned = true;
     console.warn(
       `[thena] ${method} will receive nothing: this run is not being observed. ` +
         `Use \`run({ observe: true })\`, or turn on \`report\`, \`log\` or a ` +

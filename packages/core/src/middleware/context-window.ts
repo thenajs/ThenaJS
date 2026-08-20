@@ -40,7 +40,7 @@ export interface ContextWindowOptions {
   maxCharsPerTool?: number;
   /**
    * O que dizer no lugar do que foi cortado. Uma nota explícita é melhor que
-   * um salto silencioso: sem ela o modelo vê a conversa começar no meio e pode
+   * um salto silencioso: sem ela o modelo vê a conversation começar no meio e pode
    * repetir trabalho que já fez.
    *
    * `false` corta sem avisar.
@@ -70,49 +70,49 @@ export function contextWindow(options: ContextWindowOptions = {}): ChatMiddlewar
     const original = inv.messages;
 
     // O bloco `system` do topo é intocável.
-    let corte = 0;
-    while (corte < original.length && original[corte].role === "system") corte++;
+    let head = 0;
+    while (head < original.length && original[head].role === "system") head++;
 
-    const fixas = original.slice(0, corte);
-    let conversa = original.slice(corte);
+    const system = original.slice(0, head);
+    let conversation = original.slice(head);
 
     if (maxCharsPerTool !== undefined) {
-      conversa = conversa.map((m) =>
+      conversation = conversation.map((m) =>
         m.role === "tool" && m.content.length > maxCharsPerTool
           ? { ...m, content: `${m.content.slice(0, maxCharsPerTool)}\n… [truncado]` }
           : m,
       );
     }
 
-    let cortou = false;
+    let trimmed = false;
 
-    if (maxTurns !== undefined && conversa.length > maxTurns) {
-      conversa = conversa.slice(-maxTurns);
-      cortou = true;
+    if (maxTurns !== undefined && conversation.length > maxTurns) {
+      conversation = conversation.slice(-maxTurns);
+      trimmed = true;
     }
 
     if (maxChars !== undefined) {
-      while (conversa.length > 1 && tamanho(conversa) > maxChars) {
-        conversa.shift();
-        cortou = true;
+      while (conversation.length > 1 && size(conversation) > maxChars) {
+        conversation.shift();
+        trimmed = true;
       }
     }
 
-    if (cortou && warnIndexFailure !== false) {
-      conversa = [{ role: "system", content: warnIndexFailure }, ...conversa];
+    if (trimmed && warnIndexFailure !== false) {
+      conversation = [{ role: "system", content: warnIndexFailure }, ...conversation];
     }
 
-    inv.messages = [...fixas, ...conversa];
+    inv.messages = [...system, ...conversation];
     inv.meta({
-      janelaCortou: cortou,
-      mensagensEnviadas: inv.messages.length,
-      mensagensOriginais: original.length,
+      windowTrimmed: trimmed,
+      messagesSent: inv.messages.length,
+      messagesOriginal: original.length,
     });
 
     return next();
   };
 }
 
-function tamanho(messages: Message[]): number {
-  return messages.reduce((soma, m) => soma + m.content.length, 0);
+function size(messages: Message[]): number {
+  return messages.reduce((sum, m) => sum + m.content.length, 0);
 }

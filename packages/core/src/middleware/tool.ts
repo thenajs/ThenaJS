@@ -23,7 +23,7 @@ export interface ToolInvocation {
    *
    * No-op quando não há observação ativa (sem `report`, `log` nem plugin).
    */
-  meta(dados: Record<string, unknown>): void;
+  meta(data: Record<string, unknown>): void;
   /** @internal Preenchido pelo `registrarTool` quando o nó é aberto. */
   node?: ExecutionNode;
 }
@@ -42,16 +42,16 @@ export const recordTool: ToolMiddleware = (inv, next) =>
     // A partir daqui o `inv.meta(...)` das camadas de dentro tem onde escrever.
     inv.node = node;
 
-    const resultado = await next();
+    const result = await next();
 
     inv.run.recorder.capture(node, {
       input: JSON.stringify(inv.args),
-      output: resultado.content,
+      output: result.content,
     });
-    inv.run.recorder.meta(node, { isError: resultado.isError });
-    if (resultado.isError) inv.run.recorder.markError(node, resultado.content);
+    inv.run.recorder.meta(node, { isError: result.isError });
+    if (result.isError) inv.run.recorder.markError(node, result.content);
 
-    return resultado;
+    return result;
   });
 
 /**
@@ -66,33 +66,33 @@ export const toolHooks: ToolMiddleware = async (inv, next) => {
 
   if (typeof agent.beforeTool === "function") {
     const call: ToolCall = { name: inv.name, args: inv.args };
-    const proximo = await agent.beforeTool(call, ctx);
-    if (proximo !== undefined) inv.args = proximo.args;
+    const rewritten = await agent.beforeTool(call, ctx);
+    if (rewritten !== undefined) inv.args = rewritten.args;
   }
 
-  let resultado = await next();
+  let result = await next();
 
   if (typeof agent.afterTool === "function") {
-    const substituto = await agent.afterTool(
+    const replacement = await agent.afterTool(
       {
         name: inv.name,
         args: inv.args,
-        output: resultado.content,
-        isError: resultado.isError,
+        output: result.content,
+        isError: result.isError,
       },
       ctx,
     );
     // String substitui só o texto (preserva o `isError`); para mudar a marca
     // de erro, o hook devolve um `ToolOutput` completo.
-    if (substituto !== undefined) {
-      resultado =
-        typeof substituto === "string"
-          ? { ...resultado, content: substituto }
-          : toToolOutput(substituto);
+    if (replacement !== undefined) {
+      result =
+        typeof replacement === "string"
+          ? { ...result, content: replacement }
+          : toToolOutput(replacement);
     }
   }
 
-  return resultado;
+  return result;
 };
 
 /** Conta a execução no orçamento da run. */

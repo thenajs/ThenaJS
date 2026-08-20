@@ -74,14 +74,14 @@ const PATTERNS: { re: RegExp; substituir: (m: string, ...g: string[]) => string 
  * resultado, porque `[REDACTED]` não casa com nenhum dos padrões.
  */
 export function redactSecrets(value: string): string {
-  let saida = value;
+  let out = value;
   for (const { re, substituir } of PATTERNS) {
     // `re` tem flag `g` e é reutilizada entre chamadas — zerar o lastIndex
     // evita que uma chamada comece do meio da anterior.
     re.lastIndex = 0;
-    saida = saida.replace(re, substituir as (...args: string[]) => string);
+    out = out.replace(re, substituir as (...args: string[]) => string);
   }
-  return saida;
+  return out;
 }
 
 /**

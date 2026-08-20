@@ -1,16 +1,16 @@
 /**
- * Leitura de resposta em stream, linha a linha.
+ * Leitura de resposta em stream, line a line.
  *
- * Os dois formatos que os providers usam são baseados em linha — NDJSON no
+ * Os dois formatos que os providers usam são baseados em line — NDJSON no
  * Ollama, SSE na OpenAI —, e o problema difícil é o mesmo: um chunk da rede não
- * respeita fronteira de linha nem de caractere UTF-8. Uma linha JSON pode
+ * respeita fronteira de line nem de caractere UTF-8. Uma line JSON pode
  * chegar partida em três leituras, e um emoji pode chegar com metade dos bytes
  * numa e metade na outra.
  *
  * `TextDecoder` com `{ stream: true }` resolve o segundo; o buffer de resto
  * resolve o primeiro.
  */
-export async function* lerLinhas(
+export async function* readLines(
   response: Response,
 ): AsyncGenerator<string, void, undefined> {
   if (!response.body) return;
@@ -30,17 +30,17 @@ export async function* lerLinhas(
       // A última pode estar incompleta — volta para o buffer.
       resto = lines.pop() ?? "";
 
-      for (const linha of lines) {
-        const limpa = linha.trim();
+      for (const line of lines) {
+        const limpa = line.trim();
         if (limpa) yield limpa;
       }
     }
 
-    // O que sobrou sem `\n` no fim ainda é uma linha.
+    // O que sobrou sem `\n` no fim ainda é uma line.
     const ultima = (resto + decoder.decode()).trim();
     if (ultima) yield ultima;
   } finally {
-    // Solta a conexão mesmo se quem consome parar no meio (`break`, erro,
+    // Solta a conexão mesmo se quem consome parar no half (`break`, erro,
     // cancelamento) — sem isto o socket fica pendurado.
     await reader.cancel().catch(() => {});
   }
@@ -50,13 +50,13 @@ export async function* lerLinhas(
  * Payloads de um stream SSE: só as linhas `data:`, já sem o prefixo, e sem o
  * `[DONE]` que a OpenAI manda no fim.
  */
-export async function* lerSse(
+export async function* readSse(
   response: Response,
 ): AsyncGenerator<string, void, undefined> {
-  for await (const linha of lerLinhas(response)) {
-    if (!linha.startsWith("data:")) continue;
+  for await (const line of readLines(response)) {
+    if (!line.startsWith("data:")) continue;
 
-    const payload = linha.slice(5).trim();
+    const payload = line.slice(5).trim();
     if (payload === "[DONE]") return;
     if (payload) yield payload;
   }

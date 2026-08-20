@@ -9,8 +9,8 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import type { FlowEvent, FlowRun, FlowSnapshot } from "../tipos.js";
-import { buildTree, posicionar, type FlowNode } from "./grafo.js";
+import type { FlowEvent, FlowRun, FlowSnapshot } from "../types.js";
+import { buildTree, layout, type FlowNode } from "./graph.js";
 
 const ICONS: Record<string, string> = {
   workflow: "▣",
@@ -121,7 +121,7 @@ export function App() {
 
   const { nodes, edges, mapa } = useMemo(() => {
     const arvore = buildTree(events);
-    return { ...posicionar(arvore), mapa: arvore };
+    return { ...layout(arvore), mapa: arvore };
   }, [events]);
 
   const detail = selecionado ? mapa.get(selecionado)?.dados : undefined;

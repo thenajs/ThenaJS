@@ -8,8 +8,8 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionEvent } from "@thenajs/core";
-import type { FlowOptions } from "../tipos.js";
-import { RunHistory } from "./memoria.js";
+import type { FlowOptions } from "../types.js";
+import { RunHistory } from "./memory.js";
 
 /** Onde o Vite deixa a interface, ao lado do JS compilado do servidor. */
 const UI_DIR = fileURLToPath(new URL("../ui/", import.meta.url));
@@ -163,21 +163,21 @@ export class FlowServer {
   }
 
   private async serveFile(path: string, res: ServerResponse): Promise<void> {
-    const relativo = normalize(path === "/" ? "index.html" : path.slice(1));
+    const relative = normalize(path === "/" ? "index.html" : path.slice(1));
 
     // Nunca sair do diretório da interface, mesmo com `..` na URL.
-    if (relativo.startsWith("..") || relativo.startsWith(sep)) {
+    if (relative.startsWith("..") || relative.startsWith(sep)) {
       res.writeHead(403).end();
       return;
     }
 
-    const arquivo = join(UI_DIR, relativo);
+    const file = join(UI_DIR, relative);
     try {
-      const conteudo = await readFile(arquivo);
+      const content = await readFile(file);
       res.writeHead(200, {
-        "content-type": MIME_TYPES[extname(arquivo)] ?? "application/octet-stream",
+        "content-type": MIME_TYPES[extname(file)] ?? "application/octet-stream",
       });
-      res.end(conteudo);
+      res.end(content);
     } catch {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end("não encontrado");

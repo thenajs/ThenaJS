@@ -216,7 +216,7 @@ export interface RunControls<D extends RunData = RunData> {
    * Grava telemetria no nó **deste passo**: aparece no `report.json` e no
    * payload do nó no Flow. No-op sem observação ativa.
    */
-  meta(dados: Record<string, unknown>): void;
+  meta(data: Record<string, unknown>): void;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExecutionEvent } from "@thenajs/core";
-import { RunHistory } from "../src/server/memoria.js";
+import { RunHistory } from "../src/server/memory.js";
 
 /**
  * A atribuição por `runId`. Com o cursor único que existia antes, os eventos

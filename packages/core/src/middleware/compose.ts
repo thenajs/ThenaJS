@@ -20,23 +20,23 @@ export function compose<I, O>(
   middlewares: Middleware<I, O>[],
 ): (inv: I, core: () => Promise<O>) => Promise<O> {
   return (inv, core) => {
-    let ultimo = -1;
+    let last = -1;
 
-    const despachar = (n: number): Promise<O> => {
+    const dispatch = (n: number): Promise<O> => {
       // Um middleware que chama `next()` duas vezes executaria o resto da
       // cadeia em duplicidade — inclusive a chamada ao modelo. Falhar alto é
       // melhor do que cobrar duas vezes em silêncio.
-      if (n <= ultimo) {
+      if (n <= last) {
         return Promise.reject(
           new Error("[thena] next() was called more than once in the same middleware."),
         );
       }
-      ultimo = n;
+      last = n;
 
       const middleware = middlewares[n];
-      return middleware ? middleware(inv, () => despachar(n + 1)) : core();
+      return middleware ? middleware(inv, () => dispatch(n + 1)) : core();
     };
 
-    return despachar(0);
+    return dispatch(0);
   };
 }

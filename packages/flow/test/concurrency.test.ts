@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Thena } from "@thenajs/core";
 import type { ExecutionEvent } from "@thenajs/core";
 import { FakeProvider, makeAgent, makeWorkflow } from "../../core/test/harness.js";
-import { RunHistory } from "../src/server/memoria.js";
+import { RunHistory } from "../src/server/memory.js";
 
 /**
  * Ponta a ponta: eventos **reais** do core, de duas execuções concorrentes,

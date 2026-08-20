@@ -1,7 +1,7 @@
 import { ToolType, toFunctionTools } from "../tools/index.js";
 import { Message, ProviderToolCall } from "../state/index.js";
 import { Providers, ProviderCredentials, RawAssistant } from "./provider.js";
-import { lerLinhas } from "../http/index.js";
+import { readLines } from "../http/index.js";
 import { SamplingParams, pruneUndefined } from "./sampling.types.js";
 
 /**
@@ -147,10 +147,10 @@ interface OllamaChatResponse {
 }
 
 /**
- * Consome o NDJSON do Ollama, emitindo cada pedaço de texto e juntando o turno.
+ * Consome o NDJSON do Ollama, emitindo cada pedaço de text e juntando o turno.
  *
- * Cada linha é um `OllamaChatResponse` parcial; a última traz `done: true` com
- * as contagens de token. As tool calls chegam inteiras numa linha só — o Ollama
+ * Cada line é um `OllamaChatResponse` parcial; a última traz `done: true` com
+ * as contagens de token. As tool calls chegam inteiras numa line só — o Ollama
  * não as fragmenta, diferente da OpenAI.
  */
 async function lerStreamOllama(
@@ -159,34 +159,34 @@ async function lerStreamOllama(
 ): Promise<OllamaChatResponse> {
   type ToolCalls = NonNullable<OllamaChatResponse["message"]>["tool_calls"];
 
-  let conteudo = "";
+  let content = "";
   let toolCalls: ToolCalls;
   let final: OllamaChatResponse = {};
 
-  for await (const linha of lerLinhas(response)) {
-    let pedaco: OllamaChatResponse;
+  for await (const line of readLines(response)) {
+    let chunk: OllamaChatResponse;
     try {
-      pedaco = JSON.parse(linha) as OllamaChatResponse;
+      chunk = JSON.parse(line) as OllamaChatResponse;
     } catch {
       // Linha que não é JSON não deve derrubar a geração inteira.
       continue;
     }
 
-    const texto = pedaco.message?.content;
-    if (texto) {
-      conteudo += texto;
-      onToken(texto);
+    const text = chunk.message?.content;
+    if (text) {
+      content += text;
+      onToken(text);
     }
 
-    if (pedaco.message?.tool_calls?.length) {
-      toolCalls = pedaco.message.tool_calls;
+    if (chunk.message?.tool_calls?.length) {
+      toolCalls = chunk.message.tool_calls;
     }
 
-    if (pedaco.done) final = pedaco;
+    if (chunk.done) final = chunk;
   }
 
   return {
     ...final,
-    message: { content: conteudo, tool_calls: toolCalls },
+    message: { content: content, tool_calls: toolCalls },
   };
 }

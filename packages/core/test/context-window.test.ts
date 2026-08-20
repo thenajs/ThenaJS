@@ -151,8 +151,8 @@ describe("telemetria", () => {
     await app.run({ input: { message: "vai" } });
     await app.dispose();
 
-    const ultimo = events.at(-1)!;
-    expect(ultimo.janelaCortou).toBe(true);
-    expect(ultimo.mensagensEnviadas).toBeLessThan(ultimo.mensagensOriginais as number);
+    const last = events.at(-1)!;
+    expect(last.windowTrimmed).toBe(true);
+    expect(last.messagesSent).toBeLessThan(last.messagesOriginal as number);
   });
 });

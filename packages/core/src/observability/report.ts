@@ -191,22 +191,22 @@ async function seedFromDisk(
 ): Promise<RunSummary[]> {
   const runs: RunSummary[] = [];
 
-  let entradas;
+  let entries;
   try {
-    entradas = await readdir(base, { withFileTypes: true });
+    entries = await readdir(base, { withFileTypes: true });
   } catch {
     return runs;
   }
 
-  for (const entrada of entradas) {
-    if (!entrada.isDirectory()) continue;
-    if (known.has(entrada.name)) continue;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (known.has(entry.name)) continue;
     try {
       const node: ExecutionNode = JSON.parse(
-        await readFile(join(base, entrada.name, "report.json"), "utf-8"),
+        await readFile(join(base, entry.name, "report.json"), "utf-8"),
       );
       runs.push({
-        runId: entrada.name,
+        runId: entry.name,
         name: node.name,
         status: node.status,
         durationMs: node.durationMs ?? 0,

@@ -21,7 +21,7 @@ export interface ChatInvocation {
    * Grava telemetria no nó `chat`: aparece no report e no grafo do Flow.
    * No-op quando não há observação ativa.
    */
-  meta(dados: Record<string, unknown>): void;
+  meta(data: Record<string, unknown>): void;
   /** @internal Preenchido pelo `registrarChat` quando o nó é aberto. */
   node?: ExecutionNode;
 }

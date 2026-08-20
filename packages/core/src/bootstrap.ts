@@ -113,7 +113,7 @@ function createApp<T = string, D extends RunData = RunData>(
       //
       // `observe: true` liga na mão, para o padrão POST+SSE, em que o único
       // consumidor é o handle e não há report, log nem plugin.
-      const observando =
+      const observing =
         options.observe ??
         (Boolean(report) || Boolean(log) || plugins.some((p) => p.onEvent));
 
@@ -128,13 +128,13 @@ function createApp<T = string, D extends RunData = RunData>(
       const runCtx = newRunContext({
         runId,
         settings: { stores },
-        recorder: recorderFor(runId, report, log, observando ? events : undefined),
+        recorder: recorderFor(runId, report, log, observing ? events : undefined),
         budget: options.budget,
         signal: options.signal,
         // A presença do sink é o que **liga o streaming** no provider. Oferecê-lo
         // sempre — como já foi — fazia toda run pedir resposta em stream, com
         // parsing de SSE e um callback por pedaço, mesmo sem ninguém lendo.
-        onToken: observando ? (t) => tokens.publish(t) : undefined,
+        onToken: observing ? (t) => tokens.publish(t) : undefined,
         data: options.data,
         // Lido a cada run, e não no bootstrap: um plugin registrado depois
         // vale para as execuções seguintes, igual aos ouvintes do recorder.
@@ -170,7 +170,7 @@ function createApp<T = string, D extends RunData = RunData>(
         abort: entry.abort,
         events,
         tokens,
-        observando,
+        observing,
       });
     },
 

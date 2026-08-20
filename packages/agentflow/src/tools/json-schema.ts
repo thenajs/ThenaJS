@@ -17,8 +17,8 @@ const cache = new WeakMap<object, unknown>();
 
 /** JSON Schema dos parâmetros de uma tool. */
 export function toJsonSchema(schema: z.ZodType): unknown {
-  const guardado = cache.get(schema);
-  if (guardado !== undefined) return guardado;
+  const cached = cache.get(schema);
+  if (cached !== undefined) return cached;
 
   const convertido = z.toJSONSchema(schema);
   cache.set(schema, convertido);

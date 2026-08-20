@@ -1,6 +1,6 @@
 import type { ThenaPlugin } from "@thenajs/core";
-import { FlowServer } from "./server/servidor.js";
-import type { FlowOptions } from "./tipos.js";
+import { FlowServer } from "./server/server.js";
+import type { FlowOptions } from "./types.js";
 
 /**
  * Sobe o site do Flow e transmite a execução para ele ao vivo.
