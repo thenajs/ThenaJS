@@ -33,7 +33,7 @@ Registre uma vez no config:
 
 ```ts
 export const config: ThenaConfig = {
-  memory: [MeuQdrant],
+  stores: [MeuQdrant],
 };
 ```
 

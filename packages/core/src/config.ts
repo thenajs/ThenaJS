@@ -49,7 +49,7 @@ export interface ThenaConfig {
    *
    * ```ts
    * export const config: ThenaConfig = {
-   *     memory: [QdrantNomic, QdrantOpenAI],
+   *     stores: [QdrantNomic, QdrantOpenAI],
    * };
    *
    * // no agente:
@@ -69,8 +69,13 @@ export interface ThenaConfig {
    *
    * Os embeddings saem do `provider` de cada agente, que já tem `embed()`
    * público e aceita `embedModel` para apontar um modelo dedicado.
+   *
+   * O nome é `stores`, e não `memory`, porque é isto que o campo guarda: os
+   * bancos. A memória em si é a `VectorMemory` que o `@memory()` injeta, e o
+   * `run({ memory })` é outra coisa ainda — o contexto que o modelo lê em todo
+   * turno desta execução.
    */
-  memory?: VectorStoreCtor[];
+  stores?: VectorStoreCtor[];
   /**
    * Mascaramento de segredo no conteúdo capturado — prompt, resposta, I/O das
    * tools e mensagem de erro — antes de ir para o report, para o log e para os

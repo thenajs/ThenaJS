@@ -258,7 +258,7 @@ describe("mensagens de erro da injeção", () => {
     @Workflow({ steps: [PedeMemoria] })
     class Fluxo {}
 
-    const app = Thena.create(Fluxo, { memory: [FakeVectorStore] });
+    const app = Thena.create(Fluxo, { stores: [FakeVectorStore] });
 
     await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
       /@memory\(FakeVectorStoreB\).*not registered/s,

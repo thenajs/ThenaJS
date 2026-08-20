@@ -11,6 +11,7 @@ que `^0.x.y` as instale sozinho.
 | O quê | O que fazer |
 | --- | --- |
 | O pacote `@thenajs/tools` foi **removido** | copie a tool que você usava das [Receitas de tools](https://thenajs.github.io/pt/techniques/tool-recipes) para `src/tools/` |
+| `ThenaConfig.memory` virou `ThenaConfig.stores` | renomeie o campo; o array e o resto continuam iguais |
 
 O pacote tinha uma tool — a de shell — em 139 linhas. Um pacote publicado carrega
 versionamento, CI e uma promessa de compatibilidade; para algo que o usuário
@@ -20,6 +21,22 @@ da aplicação e não do framework.
 
 O `thena create` deixa de instalar o pacote, e o exemplo da documentação passa a
 usar uma tool de ler arquivo.
+
+### `ThenaConfig.memory` → `ThenaConfig.stores`
+
+O campo guarda `VectorStoreCtor[]` — uma lista de **bancos**, não de memórias. O
+nome antigo colidia com o `run({ memory })`, que é outra coisa: o contexto que o
+modelo lê em todo turno da execução. Duas configs vizinhas, o mesmo nome,
+sentidos diferentes.
+
+Renomear o lado do banco custa uma linha para quem usa RAG e não toca no
+`run({ memory })`, que é a API que todo mundo usa. `VectorMemory` e `@memory()`
+ficam como estão: os métodos deles são `remember`, `recall` e `forget` — memória
+de verdade.
+
+O que sobra deixa de ser colisão e vira a distinção clássica: memória de trabalho
+(`run({ memory })`, dura a execução) e memória de longo prazo (`@memory()`, a
+vetorial).
 
 ### Documentação
 

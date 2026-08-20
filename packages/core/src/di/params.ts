@@ -49,7 +49,7 @@ export function resolvePoint(
       if (!found) {
         throw new Error(
           `[thena] @memory(${point.store.name}) in ${where}: that store is not ` +
-            `registered in ThenaConfig.memory.`,
+            `registered in ThenaConfig.stores.`,
         );
       }
       return found;

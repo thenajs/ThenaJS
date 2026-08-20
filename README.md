@@ -425,7 +425,7 @@ export class MeuQdrant extends QdrantStore {
 export const config: ThenaConfig = {
   log: true,
   report: true,
-  memory: [MeuQdrant],   // as classes — o framework instancia uma vez cada
+  stores: [MeuQdrant],   // as classes — o framework instancia uma vez cada
 };
 ```
 
@@ -468,7 +468,7 @@ stores separados — basta acrescentar ao array:
 
 ```ts
 export const config: ThenaConfig = {
-  memory: [QdrantNomic, QdrantOpenAI],
+  stores: [QdrantNomic, QdrantOpenAI],
 };
 
 @Agent({ provider: LocalOllamaProvider, prompt: "./a.agent.md" })   // 768

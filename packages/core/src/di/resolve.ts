@@ -48,7 +48,7 @@ export function resolveProvider(input: ProviderInput): Providers {
  * para apontar um modelo dedicado.
  */
 export function resolveMemory(provider: Providers): VectorMemory[] {
-  return currentRun().settings.memory.map(
+  return currentRun().settings.stores.map(
     (store) => new VectorMemory({ store, provider }),
   );
 }

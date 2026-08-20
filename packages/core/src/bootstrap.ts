@@ -16,7 +16,7 @@ function createApp<T = string, D extends RunData = RunData>(
 ): WorkflowApp<T, D> {
   // Instanciados uma vez por app, e compartilhados por todas as runs: uma
   // conexão e um `ensureCollection` por store, não um por execução.
-  const memory = (config.memory ?? []).map((Store) => new Store());
+  const stores = (config.stores ?? []).map((Store) => new Store());
 
   const plugins: ThenaPlugin[] = [];
 
@@ -127,7 +127,7 @@ function createApp<T = string, D extends RunData = RunData>(
       // não pede teto próprio, e é isso que faz o teto do topo valer lá dentro.
       const runCtx = newRunContext({
         runId,
-        settings: { memory },
+        settings: { stores },
         recorder: recorderFor(runId, report, log, observando ? events : undefined),
         budget: options.budget,
         signal: options.signal,

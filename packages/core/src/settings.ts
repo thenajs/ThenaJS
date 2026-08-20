@@ -6,7 +6,7 @@ import type { VectorStore } from "@thenajs/agentflow";
  */
 export interface RuntimeSettings {
   /** Stores vetoriais da aplicação, na ordem em que são injetados. */
-  memory: VectorStore[];
+  stores: VectorStore[];
 }
 
-export const DEFAULTS: RuntimeSettings = { memory: [] };
+export const DEFAULTS: RuntimeSettings = { stores: [] };
