@@ -46,8 +46,8 @@ export class RunHistory {
       run.steps++;
       runChanged = true;
       if (evento.depth === 0) {
-        run.fimEm = stamped.at;
-        run.duracaoMs = evento.durationMs ?? run.fimEm - run.inicioEm;
+        run.endedAt = stamped.at;
+        run.durationMs = evento.durationMs ?? run.endedAt - run.startedAt;
         run.status = evento.status === "error" ? "error" : "ok";
       } else if (evento.status === "error") {
         // Uma falha lá no fundo já deixa a run vermelha, sem esperar o fim.
@@ -62,10 +62,10 @@ export class RunHistory {
   snapshot(): FlowSnapshot {
     // A run em andamento mais recente; sem nenhuma rodando, a última que houve.
     const target =
-      this.runs.find((r) => r.status === "rodando")?.id ?? this.runs[0]?.id;
+      this.runs.find((r) => r.status === "running")?.id ?? this.runs[0]?.id;
     return {
       runs: this.runs,
-      runAtual: target,
+      currentRunId: target,
       events: target ? (this.events.get(target) ?? []) : [],
     };
   }
@@ -79,8 +79,8 @@ export class RunHistory {
     const run: FlowRun = {
       id,
       name,
-      inicioEm: Date.now(),
-      status: "rodando",
+      startedAt: Date.now(),
+      status: "running",
       steps: 0,
     };
     // Mais recente primeiro — é a que interessa.

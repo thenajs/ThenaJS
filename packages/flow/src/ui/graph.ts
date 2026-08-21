@@ -2,10 +2,12 @@ import type { Edge, Node } from "@xyflow/react";
 import type { FlowEvent } from "../types.js";
 
 export interface NodeData extends Record<string, unknown> {
-  rotulo: string;
+  label: string;
   kind: FlowEvent["kind"];
-  workflowState: "rodando" | "ok" | "error";
-  duracaoMs?: number;
+  // `workflowState` guarda o estado **deste nó**, não do workflow — nome herdado
+  // de um rename automático. Trocá-lo é item próprio; ver CURRENT_STATE.md.
+  workflowState: "running" | "ok" | "error";
+  durationMs?: number;
   fail?: string;
   payload?: Record<string, unknown>;
 }
@@ -38,7 +40,7 @@ export function buildTree(events: FlowEvent[]): Map<string, RawNode> {
         id: evento.id,
         parentId: evento.parentId,
         children: [],
-        data: { rotulo: evento.name, kind: evento.kind, workflowState: "rodando" },
+        data: { label: evento.name, kind: evento.kind, workflowState: "running" },
       });
       const parent = evento.parentId ? nodes.get(evento.parentId) : undefined;
       if (parent) parent.children.push(evento.id);
@@ -50,7 +52,7 @@ export function buildTree(events: FlowEvent[]): Map<string, RawNode> {
     node.data = {
       ...node.data,
       workflowState: evento.status === "error" ? "error" : "ok",
-      duracaoMs: evento.durationMs,
+      durationMs: evento.durationMs,
       fail: evento.error,
       payload: evento.data,
     };
@@ -103,16 +105,16 @@ export function layout(raw: Map<string, RawNode>): {
   for (const node of raw.values()) {
     nodes.push({
       id: node.id,
-      type: "passo",
+      type: "step",
       position: { x: depth(node) * (WIDTH + GAP_X), y: y.get(node.id) ?? 0 },
       data: node.data,
     });
-    if (node.parentId && nodes.has(node.parentId)) {
+    if (node.parentId && raw.has(node.parentId)) {
       edges.push({
         id: `${node.parentId}->${node.id}`,
         source: node.parentId,
         target: node.id,
-        animated: node.data.workflowState === "rodando",
+        animated: node.data.workflowState === "running",
         style: { stroke: node.data.workflowState === "error" ? "#f87171" : "#4b5563" },
       });
     }

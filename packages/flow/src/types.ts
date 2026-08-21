@@ -11,14 +11,21 @@ export interface FlowEvent extends ExecutionEvent {
   at: number;
 }
 
-/** Resumo de uma execução, para a lista lateral. */
+/**
+ * Resumo de uma execução, para a lista lateral.
+ *
+ * Os nomes de campo seguem o `ExecutionEvent` do core (`startedAt`, `endedAt`,
+ * `durationMs`) porque os dois viajam no mesmo stream: antes, a duração de um
+ * evento era `durationMs` e a da run era `duracaoMs`, o mesmo conceito escrito
+ * de duas formas no mesmo JSON. Ver ADR-021.
+ */
 export interface FlowRun {
   id: string;
   name: string;
-  inicioEm: number;
-  fimEm?: number;
-  duracaoMs?: number;
-  status: "rodando" | "ok" | "error";
+  startedAt: number;
+  endedAt?: number;
+  durationMs?: number;
+  status: "running" | "ok" | "error";
   /** Quantidade de passos concluídos. */
   steps: number;
 }
@@ -26,7 +33,11 @@ export interface FlowRun {
 /** O que o navegador recebe ao conectar. */
 export interface FlowSnapshot {
   runs: FlowRun[];
-  runAtual?: string;
+  /**
+   * Id da run que o navegador deve abrir — não a run inteira. `currentRun`
+   * sugeria o objeto e fazia quem lia esperar um `FlowRun`.
+   */
+  currentRunId?: string;
   events: FlowEvent[];
 }
 

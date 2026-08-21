@@ -6,7 +6,7 @@
   --fraco: #8b98ad;
   --ok: #34d399;
   --erro: #f87171;
-  --rodando: #60a5fa;
+  --running: #60a5fa;
   --destaque: #a78bfa;
   color-scheme: dark;
 }
@@ -148,8 +148,8 @@ body {
 .run--error {
   border-left-color: var(--erro);
 }
-.run--rodando {
-  border-left-color: var(--rodando);
+.run--running {
+  border-left-color: var(--running);
 }
 
 /* ---------- grafo ---------- */
@@ -214,18 +214,18 @@ body {
 .no--error {
   border-left-color: var(--erro);
 }
-.no--rodando {
-  border-left-color: var(--rodando);
+.no--running {
+  border-left-color: var(--running);
 }
 
 /* Enquanto o passo não terminou, o nó respira. */
-.no--rodando {
+.no--running {
   animation: respirar 1.6s ease-in-out infinite;
 }
 
 @keyframes respirar {
   50% {
-    border-color: var(--rodando);
+    border-color: var(--running);
   }
 }
 
@@ -259,9 +259,9 @@ body {
 .estado--error {
   color: var(--erro);
 }
-.etiqueta--rodando,
-.estado--rodando {
-  color: var(--rodando);
+.etiqueta--running,
+.estado--running {
+  color: var(--running);
 }
 
 /* ---------- detalhe ---------- */

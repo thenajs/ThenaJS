@@ -26,5 +26,12 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.json
       - name: Typecheck dos testes
         run: npm run test:types
+
+      # A UI do Flow tem tsconfig próprio e fica fora do `tsc -b` da raiz: o
+      # build dela é `vite build`, e o esbuild remove os tipos sem conferi-los.
+      # Sem esta etapa, um erro de tipo na interface chega ao npm — foi assim
+      # que três bugs de rename foram publicados na 0.9.0.
+      - name: Typecheck da UI do Flow
+        run: npm run typecheck:ui --workspace @thenajs/flow
       - name: Testes
         run: npm test

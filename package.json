@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:types": "tsc --noEmit -p tsconfig.test.json",
-    "typecheck": "npm run build && tsc --noEmit -p tsconfig.json && npm run test:types",
+    "typecheck": "npm run build && tsc --noEmit -p tsconfig.json && npm run test:types && npm run typecheck:ui --workspace @thenajs/flow",
     "start": "npm run build && tsx src/main.ts",
     "thena": "node packages/cli/dist/index.js",
     "lint": "eslint .",

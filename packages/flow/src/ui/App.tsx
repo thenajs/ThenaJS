@@ -30,10 +30,10 @@ function StepNode({ data, selected }: NodeProps<FlowNode>) {
       <Handle type="target" position={Position.Left} />
       <span className="no__icone">{ICONS[data.kind] ?? "•"}</span>
       <span className="no__texto">
-        <strong>{data.rotulo}</strong>
+        <strong>{data.label}</strong>
         <small>
           {data.kind}
-          {data.duracaoMs != null && ` · ${formatDuration(data.duracaoMs)}`}
+          {data.durationMs != null && ` · ${formatDuration(data.durationMs)}`}
         </small>
       </span>
       <Handle type="source" position={Position.Right} />
@@ -67,7 +67,7 @@ export function App() {
   const seguindo = useRef(true);
 
   useEffect(() => {
-    const fonte = new EventSource("/api/eventos");
+    const fonte = new EventSource("/api/events");
 
     fonte.addEventListener("open", () => setConectado(true));
     fonte.addEventListener("error", () => setConectado(false));
@@ -76,7 +76,7 @@ export function App() {
       const dados: FlowSnapshot = JSON.parse((e as MessageEvent).data);
       setConectado(true);
       setRuns(dados.runs);
-      setRunVisivel(dados.runAtual);
+      setRunVisivel(dados.currentRunId);
       setEventos(dados.events);
     });
 
@@ -98,7 +98,7 @@ export function App() {
       }
     });
 
-    fonte.addEventListener("evento", (e) => {
+    fonte.addEventListener("event", (e) => {
       const evento: FlowEvent = JSON.parse((e as MessageEvent).data);
       if (evento.runId !== foco.current) return;
       setEventos((atuais) => [...atuais, evento]);
@@ -108,7 +108,7 @@ export function App() {
   }, []);
 
   const openRun = useCallback(async (run: FlowRun) => {
-    seguindo.current = run.status === "rodando";
+    seguindo.current = run.status === "running";
     foco.current = run.id;
     setRunVisivel(run.id);
     setSelecionado(undefined);
@@ -124,7 +124,7 @@ export function App() {
     return { ...layout(arvore), mapa: arvore };
   }, [events]);
 
-  const detail = selecionado ? mapa.get(selecionado)?.dados : undefined;
+  const detail = selecionado ? mapa.get(selecionado)?.data : undefined;
   const run = runs.find((r) => r.id === runVisivel);
 
   return (
@@ -151,8 +151,8 @@ export function App() {
               >
                 <strong>{r.name}</strong>
                 <small>
-                  {formatarHora(r.inicioEm)} · {r.steps} passos
-                  {r.duracaoMs != null && ` · ${formatDuration(r.duracaoMs)}`}
+                  {formatarHora(r.startedAt)} · {r.steps} passos
+                  {r.durationMs != null && ` · ${formatDuration(r.durationMs)}`}
                 </small>
               </button>
             </li>
@@ -180,7 +180,7 @@ export function App() {
           <div className="rodape">
             <strong>{run.name}</strong>
             <span className={`etiqueta etiqueta--${run.status}`}>{run.status}</span>
-            {run.duracaoMs != null && <span>{formatDuration(run.duracaoMs)}</span>}
+            {run.durationMs != null && <span>{formatDuration(run.durationMs)}</span>}
           </div>
         )}
       </main>
@@ -188,7 +188,7 @@ export function App() {
       {detail && (
         <aside className="detalhe">
           <header>
-            <h2>{detail.rotulo}</h2>
+            <h2>{detail.label}</h2>
             <button onClick={() => setSelecionado(undefined)} aria-label="fechar">
               ✕
             </button>
@@ -200,10 +200,10 @@ export function App() {
             <dd className={`estado estado--${detail.workflowState}`}>
               {detail.workflowState}
             </dd>
-            {detail.duracaoMs != null && (
+            {detail.durationMs != null && (
               <>
                 <dt>duração</dt>
-                <dd>{formatDuration(detail.duracaoMs)}</dd>
+                <dd>{formatDuration(detail.durationMs)}</dd>
               </>
             )}
           </dl>

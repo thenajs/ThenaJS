@@ -84,7 +84,7 @@ export class FlowServer {
     // Comentário periódico: mantém a conexão viva através de proxies que cortam
     // streams ociosos.
     this.heartbeat = setInterval(() => {
-      for (const client of this.clients) client.write(": pulso\n\n");
+      for (const client of this.clients) client.write(": heartbeat\n\n");
     }, 15_000);
     this.heartbeat.unref();
 
@@ -97,7 +97,7 @@ export class FlowServer {
   publish(evento: ExecutionEvent): void {
     const { evento: stamped, run } = this.history.record(evento);
     if (run) this.send("run", run);
-    this.send("evento", stamped);
+    this.send("event", stamped);
   }
 
   async stop(): Promise<void> {
@@ -114,13 +114,13 @@ export class FlowServer {
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const path = new URL(req.url ?? "/", this.url).pathname;
 
-    if (path === "/api/eventos") return this.openStream(res);
+    if (path === "/api/events") return this.openStream(res);
 
     if (path.startsWith("/api/runs/")) {
       const events = this.history.eventsOf(path.slice("/api/runs/".length));
       return this.json(
         res,
-        events ? { events } : { fail: "run não encontrada" },
+        events ? { events } : { error: "run not found" },
         events ? 200 : 404,
       );
     }
@@ -180,7 +180,7 @@ export class FlowServer {
       res.end(content);
     } catch {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-      res.end("não encontrado");
+      res.end("not found");
     }
   }
 }

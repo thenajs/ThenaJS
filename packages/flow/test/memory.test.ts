@@ -77,9 +77,9 @@ describe("MemoriaDeRuns", () => {
     const a = runs.find((r) => r.id === "A")!;
     const b = runs.find((r) => r.id === "B")!;
 
-    expect(a.status).toBe("rodando");
+    expect(a.status).toBe("running");
     expect(b.status).toBe("ok");
-    expect(b.duracaoMs).toBe(42);
+    expect(b.durationMs).toBe(42);
   });
 
   it("um erro no fundo já deixa a run vermelha antes do fim", () => {
@@ -100,7 +100,7 @@ describe("MemoriaDeRuns", () => {
     history.record(evento({ runId: "A", phase: "end", status: "ok" }));
     history.record(evento({ runId: "B" }));
 
-    expect(history.snapshot().runAtual).toBe("B");
+    expect(history.snapshot().currentRunId).toBe("B");
   });
 
   it("descarta as runs mais antigas ao passar do teto", () => {
