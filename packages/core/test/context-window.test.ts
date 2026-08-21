@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { Thena, contextWindow, loop } from "@thenajs/core";
+import type { Message } from "@thenajs/core";
 import { FakeProvider, makeAgent, makeTool, makeWorkflow } from "./harness.js";
 
 /**
@@ -103,6 +104,129 @@ describe("maxCharsPorTool", () => {
     const obs = provider.chamadas.at(-1)!.messages.find((m) => m.role === "tool");
     expect(obs!.content.length).toBeLessThan(200);
     expect(obs!.content).toContain("[truncado]");
+  });
+});
+
+/**
+ * O par `assistant`(toolCalls) + `tool` é indivisível: a OpenAI recusa um `tool`
+ * sem a chamada que o pediu, com `400` — que o retry não retenta, por ser erro
+ * de contrato. Cortar por índice não sabe disso, e era o que acontecia.
+ */
+describe("pareamento assistant/tool", () => {
+  /** Roda N voltas de um agente que sempre chama tool: o histórico só tem pares. */
+  async function rodarComTool(
+    janela: ReturnType<typeof contextWindow>,
+    voltas: number,
+  ) {
+    const tool = makeTool(
+      { name: "ler", description: "lê", schema },
+      ({ x }: any) => x,
+    );
+    const provider = new FakeProvider([
+      { tool: { name: "ler", arguments: { x: "a" } } },
+    ]);
+    const Fluxo = makeWorkflow([
+      loop({
+        steps: [makeAgent({ provider, tools: [tool] })],
+        until: () => false,
+        maxIterations: voltas,
+      }),
+    ]);
+
+    const app = Thena.create(Fluxo, {});
+    await app.use({ name: "janela", chat: janela });
+    await app.run({ input: { message: "vai" } });
+    await app.dispose();
+
+    return provider.chamadas.at(-1)!.messages;
+  }
+
+  /** Todo `tool` precisa de um `assistant` com toolCalls imediatamente antes. */
+  function orfas(messages: Message[]) {
+    return messages.filter((m, i) => {
+      if (m.role !== "tool") return false;
+      return !messages[i - 1]?.toolCalls?.length;
+    });
+  }
+
+  it("`maxTurns` ímpar não deixa um `tool` órfão no começo", async () => {
+    // 3 é ímpar de propósito: o corte cai no meio de um par.
+    const enviadas = await rodarComTool(contextWindow({ maxTurns: 3 }), 5);
+
+    const primeira = enviadas.find((m) => m.role !== "system");
+    expect(primeira?.role).not.toBe("tool");
+    expect(orfas(enviadas)).toEqual([]);
+  });
+
+  it("`maxChars` também recua, mesmo quando sobra só o par", async () => {
+    // Observação grande e teto pequeno: o laço de `maxChars` para com uma única
+    // mensagem (o guard é `length > 1`), e essa mensagem é o `tool`. Sem o
+    // recuo, o que seguia para o modelo era `system, system(aviso), tool`.
+    const tool = makeTool({ name: "ler", description: "lê", schema }, () =>
+      "T".repeat(50),
+    );
+    const provider = new FakeProvider([
+      { tool: { name: "ler", arguments: { x: "a" } } },
+    ]);
+    const Fluxo = makeWorkflow([
+      loop({
+        steps: [makeAgent({ provider, tools: [tool] })],
+        until: () => false,
+        maxIterations: 6,
+      }),
+    ]);
+
+    const app = Thena.create(Fluxo, {});
+    await app.use({ name: "janela", chat: contextWindow({ maxChars: 40 }) });
+    await app.run({ input: { message: "vai" } });
+    await app.dispose();
+
+    const enviadas = provider.chamadas.at(-1)!.messages;
+    expect(orfas(enviadas)).toEqual([]);
+    // O preço, explicitado: com um teto pequeno demais para caber um par
+    // inteiro, a conversa fica vazia e sobra só o bloco `system`. É pior que
+    // cortar menos, e é melhor que um 400 — mas ninguém deve "consertar" isso
+    // mais tarde sem saber que era a escolha.
+    expect(enviadas.every((m) => m.role === "system")).toBe(true);
+  });
+
+  it("o aviso entra antes do que sobrou, não no meio de um par", async () => {
+    const enviadas = await rodarComTool(contextWindow({ maxTurns: 3 }), 5);
+
+    const aviso = enviadas.findIndex((m) => m.content.includes("omitido"));
+    expect(aviso).toBeGreaterThanOrEqual(0);
+    // Depois do aviso não pode vir um `tool`: seria par quebrado com um system
+    // no meio, que é exatamente o mesmo 400 com aparência de conserto.
+    expect(enviadas[aviso + 1]?.role).not.toBe("tool");
+  });
+
+  it("registra quantas órfãs caíram, separado do corte por teto", async () => {
+    const events: Record<string, unknown>[] = [];
+    const tool = makeTool(
+      { name: "ler", description: "lê", schema },
+      ({ x }: any) => x,
+    );
+    const provider = new FakeProvider([
+      { tool: { name: "ler", arguments: { x: "a" } } },
+    ]);
+    const Fluxo = makeWorkflow([
+      loop({
+        steps: [makeAgent({ provider, tools: [tool] })],
+        until: () => false,
+        maxIterations: 5,
+      }),
+    ]);
+
+    const app = Thena.create(Fluxo, {
+      log: (e) => e.kind === "chat" && e.data && events.push(e.data),
+    });
+    await app.use({ name: "janela", chat: contextWindow({ maxTurns: 3 }) });
+    await app.run({ input: { message: "vai" } });
+    await app.dispose();
+
+    const last = events.at(-1)!;
+    expect(last.windowTrimmed).toBe(true);
+    expect(last.windowOrphansDropped).toBe(1);
   });
 });
 

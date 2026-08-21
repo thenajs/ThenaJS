@@ -27,7 +27,10 @@ import type { ChatMiddleware } from "./chat.js";
 export interface ContextWindowOptions {
   /**
    * Quantas mensagens do fim do histórico manter. Um turno com tool ocupa duas
-   * (assistant + tool), então `maxTurnos: 12` guarda ~6 idas e voltas.
+   * (assistant + tool), então `maxTurns: 12` guarda ~6 idas e voltas.
+   *
+   * É um **teto, não uma cota**: se o corte cair no meio de um par, chega uma
+   * mensagem a menos. Mandar meio par é `400` no provider.
    */
   maxTurns?: number;
   /** Teto de caracteres do histórico. Corta do começo até caber. */
@@ -98,6 +101,26 @@ export function contextWindow(options: ContextWindowOptions = {}): ChatMiddlewar
       }
     }
 
+    // Os dois cortes acima olham para o índice, não para o par. Um turno com
+    // tool ocupa duas mensagens — `assistant` com `toolCalls` e o `tool` que
+    // responde a ela — e cortar entre as duas deixa o `tool` órfão. A OpenAI
+    // recusa isso com `400`, que o `retry.ts` **não** retenta por ser erro de
+    // contrato. Ou seja: sem este recuo, o middleware que existe para evitar um
+    // 400 de janela estourada passa a produzir um 400 de mensagem inválida.
+    //
+    // Recuar até a fronteira, em vez de tentar remendar o par: reconstruir o
+    // `assistant` que falta significaria inventar uma `toolCall` que o modelo
+    // não emitiu. Custa algumas mensagens a menos que o `maxTurns` pedido — e
+    // é por isso que o teto é um teto, não uma cota.
+    //
+    // Só a borda inicial quebra: `slice(-maxTurns)` e `shift()` cortam pela
+    // frente, então o fim do histórico chega sempre íntegro.
+    let orphansDropped = 0;
+    while (conversation.length && conversation[0].role === "tool") {
+      conversation.shift();
+      orphansDropped++;
+    }
+
     if (trimmed && warnIndexFailure !== false) {
       conversation = [{ role: "system", content: warnIndexFailure }, ...conversation];
     }
@@ -105,6 +128,10 @@ export function contextWindow(options: ContextWindowOptions = {}): ChatMiddlewar
     inv.messages = [...system, ...conversation];
     inv.meta({
       windowTrimmed: trimmed,
+      // Separado do `windowTrimmed` de propósito: cortar por teto e cortar para
+      // salvar um par são causas diferentes, e sem distingui-las quem lê o
+      // report não sabe se a janela está apertada demais (R-15).
+      windowOrphansDropped: orphansDropped,
       messagesSent: inv.messages.length,
       messagesOriginal: original.length,
     });
