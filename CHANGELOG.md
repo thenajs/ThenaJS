@@ -4,7 +4,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
-## [Não publicado]
+## [0.10.0] — 2026-08-21
 
 ### ⚠️ Quebras
 
@@ -12,6 +12,9 @@ que `^0.x.y` as instale sozinho.
 | --- | --- |
 | O pacote `@thenajs/tools` foi **removido** | copie a tool que você usava das [Receitas de tools](https://thenajs.github.io/pt/techniques/tool-recipes) para `src/tools/` |
 | `ThenaConfig.memory` virou `ThenaConfig.stores` | renomeie o campo; o array e o resto continuam iguais |
+| O protocolo SSE do `@thenajs/flow` passou a inglês | nada a fazer se você só usa `thenaFlow()`; se você importa `FlowRun`/`FlowSnapshot`, veja a tabela abaixo |
+| `parallel` passou a anexar na ordem de declaração | nada a fazer, a não ser que você dependesse da ordem de conclusão — que variava a cada execução |
+| `ctx.output` depois de um `parallel` é o do último ramo **declarado** | se você lia `ctx.output` esperando um ramo específico, leia `ctx.state` |
 
 O pacote tinha uma tool — a de shell — em 139 linhas. Um pacote publicado carrega
 versionamento, CI e uma promessa de compatibilidade; para algo que o usuário
@@ -21,6 +24,104 @@ da aplicação e não do framework.
 
 O `thena create` deixa de instalar o pacote, e o exemplo da documentação passa a
 usar uma tool de ler arquivo.
+
+### `parallel` virou determinístico
+
+Um combinador cuja saída muda entre execuções idênticas não é uma limitação
+aceitável: é contrato incompleto numa primitiva que o framework possui. Três
+mudanças (ADR-022, ADR-023):
+
+| | Antes | Agora |
+| --- | --- | --- |
+| Ordem no `history` | de conclusão — variava com a latência do modelo | de **declaração**, estável |
+| `ctx.output` / `ctx.turn` | do ramo que terminasse por último | do último ramo **declarado** |
+| Leitura do histórico | cada ramo lia o estado do momento | todos leem um snapshot do início do bloco |
+| Ramo irmão após uma falha | seguia rodando e escrevendo | cancelado; o bloco inteiro é descartado |
+
+O isolamento entre ramos era **acidental**: funcionava só porque todo ramo lia
+antes do primeiro `await`. Um `beforePrompt` que consultasse um cache já fazia o
+segundo ramo enxergar a resposta do primeiro. Agora é garantido.
+
+```ts
+@Workflow({ steps: [parallel([Seguranca, Performance, Estilo]), Resumidor] })
+export class RevisaoWorkflow {}
+```
+
+O `Resumidor` passa a ver os três pareceres sempre na mesma ordem. Um prompt que
+diga "o primeiro parecer é o de segurança" deixa de quebrar sozinho.
+
+O que **não** mudou: `tasks`, `memory` e o `state` do `@Workflow` continuam
+compartilhados entre os ramos — são o ponto de coleta, e o padrão recomendado
+segue sendo cada agente escrever no seu próprio campo. O bloco também continua
+concorrente: ordenar a anexação não serializa a execução.
+
+### `contextWindow` não quebra mais o par de tool
+
+O corte olhava para o índice e não para o par. Quando a fronteira caía entre um
+`assistant` com `toolCalls` e o `tool` que respondia a ela, o que seguia para o
+modelo era um `tool` órfão — e a OpenAI recusa isso com `400`, que o retry **não**
+retenta por ser erro de contrato.
+
+O middleware existe para evitar um 400 de janela estourada, e estava produzindo
+um 400 de mensagem inválida. Agora o corte recua até a fronteira do par.
+
+`maxTurns` passa a ser um **teto, não uma cota**: se o corte cair no meio de um
+par, chega uma mensagem a menos. O `report` ganhou `windowOrphansDropped`,
+separado de `windowTrimmed`, para "cortei pelo teto" e "cortei para salvar um
+par" não parecerem a mesma coisa.
+
+### O protocolo do Flow passou a inglês
+
+O fio entre o `FlowServer` e o navegador falava português — `inicioEm`,
+`duracaoMs`, `runAtual`, o status `"rodando"`, a rota `/api/eventos` e o evento
+SSE `evento` — enquanto o resto do framework já tinha migrado. O mesmo conceito
+viajava no mesmo JSON com dois nomes: a duração era `durationMs` no evento e
+`duracaoMs` na run.
+
+| Antes | Agora |
+| --- | --- |
+| `FlowRun.inicioEm` | `FlowRun.startedAt` |
+| `FlowRun.fimEm` | `FlowRun.endedAt` |
+| `FlowRun.duracaoMs` | `FlowRun.durationMs` |
+| `FlowRun.status: "rodando"` | `FlowRun.status: "running"` |
+| `FlowSnapshot.runAtual` | `FlowSnapshot.currentRunId` |
+| `GET /api/eventos` | `GET /api/events` |
+| evento SSE `evento` | evento SSE `event` |
+
+O protocolo é **interno ao pacote** (ADR-021): servidor e interface são
+publicados juntos, e a forma documentada de consumir o stream de fora é
+`ThenaPlugin.onEvent`, que entrega o `ExecutionEvent` do core — esse não muda.
+Quem só chama `thenaFlow()` não faz nada.
+
+O `packages/flow/test/protocol.test.ts` passa a fixar rotas, nomes de evento e
+formato de frame. Era a única fronteira de rede do repositório sem verificação:
+`memory.test.ts` cobria o formato dos dados, e um rename de rota atravessava
+lint, typecheck e suíte inteiros para só quebrar no navegador.
+
+### Correções
+
+- **O grafo do Flow não desenhava.** `graph.ts` chamava `nodes.has(...)` num
+  array, o que lança `TypeError` na primeira aresta — ou seja, em qualquer
+  execução com mais de um nó.
+- **O nó customizado nunca era usado.** Os nós saíam com `type: "passo"` e o
+  `App.tsx` registrava `{ step: StepNode }`; o React Flow caía no renderizador
+  padrão.
+- **O painel de detalhe nunca abria.** O `App.tsx` lia `?.dados` de um objeto
+  que tem `data`.
+
+Os três são resíduo do rename automático para inglês. Dois eram erro de tipo, e
+passaram porque nada no repositório roda o typecheck da UI — o
+`packages/flow/src/ui/tsconfig.json` existe e ninguém o executa.
+
+- **O CI voltou a rodar.** O `format:check` reprovava em
+  `packages/agentflow/test/stream.test.ts` e é a segunda etapa do workflow, então
+  build, os dois typechecks e a suíte não chegavam a executar.
+- **A publicação deixou de ter uma lista cravada.** O laço do `publish.yml`
+  ainda iterava sobre `tools`, removido nesta versão; sob `bash -e` isso
+  abortava a release depois de `agentflow` e `core` já terem ido ao npm, e a
+  idempotência do laço não ajudava porque a falha acontecia antes da checagem.
+  Agora a lista é a env `PACOTES` e um passo anterior a qualquer `npm publish`
+  reprova se ela e `packages/` divergirem, nos dois sentidos.
 
 ### `ThenaConfig.memory` → `ThenaConfig.stores`
 
