@@ -27,8 +27,40 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    # Ordem de **dependência**, não alfabética: `agentflow` antes de `core`, e
+    # `core` antes de todo mundo que o consome. Derivar esta lista do glob de
+    # workspaces resolveria a manutenção, mas devolveria ordem alfabética — `cli`
+    # primeiro, `agentflow` no meio — publicando pacote que aponta para irmão
+    # ainda ausente do registry. Por isso a ordem continua escrita à mão; o que é
+    # conferido mecanicamente é a *composição*, no passo abaixo.
+    env:
+      PACOTES: "agentflow core qdrant-client flow cli"
+
     steps:
       - uses: actions/checkout@v4
+
+      # Esta lista e `packages/` têm de conter exatamente os mesmos nomes.
+      # Sem a conferência, remover um pacote deixava um nome órfão aqui — foi o
+      # que aconteceu com `tools` — e o `node -p` daquele nome saía com 1. Como
+      # `run:` roda sob `bash -e`, o laço morria no meio da release, com
+      # `agentflow` e `core` já no npm e sem republicação possível.
+      #
+      # E a idempotência do laço não salvava: a falha acontece na leitura da
+      # versão, *antes* da checagem `npm view`, então o retry morria no mesmo
+      # ponto. Falhar aqui custa um job; falhar lá custa um número de versão.
+      - name: Conferir a lista de publicação
+        run: |
+          emDisco=$(ls -1 packages | sort)
+          naLista=$(printf '%s\n' $PACOTES | sort)
+          if [ "$naLista" != "$emDisco" ]; then
+            echo "::error::A lista PACOTES e packages/ divergem."
+            echo "  '<' sobra na lista (pacote removido de packages/?)"
+            echo "  '>' falta na lista (pacote novo em packages/?)"
+            diff <(echo "$naLista") <(echo "$emDisco") || true
+            exit 1
+          fi
+          echo "✓ $(echo $PACOTES | wc -w) pacotes conferidos, na ordem: $PACOTES"
 
       - uses: actions/setup-node@v4
         with:
@@ -50,7 +82,7 @@ jobs:
       # tag push depois de um dispatch) seguros, em vez de fatais.
       - name: Publish (na ordem de dependência)
         run: |
-          for pkg in agentflow core tools qdrant-client flow cli; do
+          for pkg in $PACOTES; do
             versao=$(node -p "require('./packages/$pkg/package.json').version")
             if npm view "@thenajs/$pkg@$versao" version >/dev/null 2>&1; then
               echo "→ @thenajs/$pkg@$versao já publicado, pulando"

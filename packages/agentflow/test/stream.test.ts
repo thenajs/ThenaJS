@@ -31,7 +31,11 @@ async function collect<T>(it: AsyncIterable<T>): Promise<T[]> {
 
 describe("readLines", () => {
   it("separa linhas de um chunk único", async () => {
-    expect(await collect(readLines(responseWith("a\nb\nc\n")))).toEqual(["a", "b", "c"]);
+    expect(await collect(readLines(responseWith("a\nb\nc\n")))).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
   it("junta line partida entre chunks", async () => {
@@ -81,6 +85,8 @@ describe("readSse", () => {
   });
 
   it("tolera `data:` sem espaço depois dos dois-pontos", async () => {
-    expect(await collect(readSse(responseWith('data:{"a":1}\n\n')))).toEqual(['{"a":1}']);
+    expect(await collect(readSse(responseWith('data:{"a":1}\n\n')))).toEqual([
+      '{"a":1}',
+    ]);
   });
 });
