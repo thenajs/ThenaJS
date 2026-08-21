@@ -3,10 +3,14 @@ import type { PipelineContext, Step } from "@thenajs/agentflow";
 import { currentRun, throwIfAborted } from "../run-context.js";
 import type { LoopStopReason, WorkflowContext, WorkflowStep } from "../types.js";
 import { buildAgentStep } from "./agent-step.js";
+import { buildParallelStep } from "./parallel-step.js";
 
 /**
  * Compila um passo de workflow em um `Step` do engine, recursivamente.
- * `parallel` e `loop` reutilizam os combinadores do próprio `Pipeline`.
+ *
+ * `loop` reutiliza o combinador do próprio `Pipeline`. `parallel` **não**: a
+ * ordem de anexação e o isolamento entre ramos são política, e o combinador do
+ * engine não os oferece — ver `parallel-step.ts`.
  */
 export function compileStep(
   step: WorkflowStep,
@@ -19,9 +23,12 @@ export function compileStep(
   }
 
   if (step.kind === "parallel") {
-    const parallelStep = pipeline.parallel({
-      steps: step.steps.map((s) => compileStep(s, pipeline, workflowState)),
-    });
+    // `buildParallelStep` e não `pipeline.parallel`: o combinador do engine é
+    // `Promise.all` sobre um ctx só, sem ordem nem isolamento. Os dois são
+    // política e moram no core (ADR-001/ADR-022).
+    const parallelStep = buildParallelStep(
+      step.steps.map((s) => compileStep(s, pipeline, workflowState)),
+    );
     return (ctx) =>
       currentRun().recorder.around("parallel", "parallel", async () =>
         parallelStep(ctx),

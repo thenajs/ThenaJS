@@ -8,9 +8,20 @@ import type {
 } from "./types.js";
 
 /**
- * Bloco paralelo: os passos rodam concorrentes sobre o mesmo contexto.
- * Use para agentes independentes — todos recebem a mesma entrada e a leitura
- * dos resultados costuma ser feita em `ctx.state`, não em `ctx.output`.
+ * Bloco paralelo: os passos rodam concorrentes. Use para agentes independentes.
+ *
+ * Três garantias (ADR-022, ADR-023):
+ *
+ * - **Todos leem o mesmo histórico** — um snapshot tirado no início do bloco,
+ *   então um ramo nunca enxerga o que outro escreveu, mesmo que espere antes de
+ *   ler.
+ * - **As escritas entram na ordem de declaração**, não na de conclusão:
+ *   `parallel([A, B])` produz `A, B` no `history` mesmo que `B` responda antes.
+ *   `ctx.output` e `ctx.turn` ficam com os do **último ramo declarado**.
+ * - **Um ramo que falha cancela os irmãos**, e nada do bloco é anexado.
+ *
+ * Coletar resultado em campo próprio (`ctx.meuCampo` ou o `state` do workflow)
+ * continua sendo melhor que ler `ctx.output`: com N ramos, N-1 saídas se perdem.
  */
 export function parallel(steps: WorkflowStep[]): ParallelStep {
   return { kind: "parallel", steps };
@@ -94,8 +105,9 @@ export function calledTool(ctx: WorkflowContext): boolean {
  * `until` pronto: para o loop quando o agente respondeu **sem** chamar tool
  * (padrão ReAct — "repita enquanto usa tools; pare quando responder").
  *
- * Pensado para loops de **um** agente. Em `parallel` dentro de loop, vários
- * agentes gravam `ctx.turn` e o último vence — nesse caso escreva um `until`
+ * Pensado para loops de **um** agente. Em `parallel` dentro de loop, `ctx.turn`
+ * é o do último ramo **declarado** (ADR-022) — determinístico, mas ainda assim
+ * a resposta de um ramo só: se a parada depender dos outros, escreva um `until`
  * próprio. Sem turno registrado, retorna `true` (para o loop) por segurança.
  */
 export const untilAnswered = (ctx: WorkflowContext): boolean => !calledTool(ctx);
