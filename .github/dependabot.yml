@@ -1,0 +1,28 @@
+# Atualização de dependência por PR, e não por lembrança.
+#
+# O `nanoid` de agosto/2026 é o caso que motivou isto: uma falha `high` num
+# transitivo do build ficou aberta por duas releases porque nada olhava.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # Um PR por semana com o lote de patch/minor de dev; major vem separado,
+    # porque é o que exige ler changelog.
+    groups:
+      dev-minor:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci(deps)"

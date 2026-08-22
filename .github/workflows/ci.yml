@@ -16,6 +16,24 @@ jobs:
           node-version: "20.19"
           cache: npm
       - run: npm ci
+
+      # Duas varreduras, com pesos diferentes de propósito.
+      #
+      # A que **reprova** olha só o que é publicado (`--omit=dev`): é o que chega
+      # na máquina de quem instala, e falha `high` ali é motivo para parar a
+      # esteira. Hoje a árvore de produção é `zod` e mais nada, então este passo
+      # é barato e quase sempre verde — o que é o ponto: quando ficar vermelho,
+      # é de verdade.
+      #
+      # A informativa cobre o build inteiro e **não** reprova. Uma falha num
+      # transitivo do `vite` não é motivo para travar a release de um pacote que
+      # não o embala; é motivo para o Dependabot abrir PR, que é o que ele faz.
+      - name: Auditoria (produção)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Auditoria (build, informativa)
+        run: npm audit || true
+
       - name: Lint
         run: npm run lint
       - name: Formatação
@@ -33,5 +51,8 @@ jobs:
       # que três bugs de rename foram publicados na 0.9.0.
       - name: Typecheck da UI do Flow
         run: npm run typecheck:ui --workspace @thenajs/flow
-      - name: Testes
-        run: npm test
+      # `test:coverage` no lugar de `test`: roda a mesma suíte e ainda reprova
+      # se a cobertura cair abaixo da linha de base medida. Um só passo, porque
+      # dois rodariam os mesmos 477 testes duas vezes.
+      - name: Testes e cobertura
+        run: npm run test:coverage

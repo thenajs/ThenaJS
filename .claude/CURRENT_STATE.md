@@ -13,9 +13,10 @@ about a minute; do that rather than trusting this file blindly.
 
 | Check | Result |
 |---|---|
-| `npm test` | **447 passing**, 41 files, ~0.9 s |
+| `npm test` | **477 passing**, 44 files, ~1.3 s |
 | `npm run lint` | **0 errors**, 42 warnings (declared debt, see below) |
 | `npm run typecheck` | clean (build + app typecheck + test typecheck) |
+| `npm run test:coverage` | **89.3% lines**, 88.8% statements, 84.0% functions, 77.8% branches |
 | `npm run format:check` | clean |
 
 All seven CI steps pass. The seventh is new: `typecheck:ui` runs `tsc` over the
@@ -155,11 +156,16 @@ match `NODE_TYPES` in `App.tsx` by hand, and no compiler checks that pair.
 
 Ranked by risk.
 
+Coverage is measured since 2026-08-22 and the thresholds in `vitest.config.ts`
+are the **measured baseline**, not a target: they exist to fail a regression, and
+raising them is a deliberate decision. `packages/flow/src/ui/**` is excluded —
+it has its own build and would drag the number down without saying anything.
+
 | Area | LOC | State |
 |---|---|---|
 | `packages/flow/src/ui/**` | ~350 | **Typechecked since 2026-08-21, still no lint and no tests.** `npm run typecheck:ui --workspace @thenajs/flow` is now the 7th CI step — before it, `ui/tsconfig.json` existed and nothing ran it, which is how three runtime bugs shipped (see above). `graph.ts` — the pure part — is now covered by `test/graph.test.ts`. Still excluded in `eslint.config.js`, and no test renders a React component. |
-| `packages/cli` | 333 | 0 tests. Generates whole projects. |
-| `packages/qdrant-client` | 192 | 0 tests. |
+| `packages/cli` | 333 | 10 tests on `templates.ts` since 2026-08-22, including the one that pins `THENA_VERSION` to the CLI's own version — the drift that would make `thena create` generate a project asking for a version that is not on npm. `index.ts` (the command wiring) is still untested. |
+| `packages/qdrant-client` | 192 | 14 tests since 2026-08-22, with `fetch` stubbed. They pin what goes out (route, body, auth header) and what is done with what comes back — including the guard that `remove({})` calls nothing, because deleting everything must not be implicit. |
 | `examples/` | — | Outside the workspace; CI never compiles it. |
 
 Architectural invariants with **no** enforcement: **R-22** (a refactor that
@@ -201,7 +207,9 @@ Other known, accepted debt:
 - The report ledger grows without bound; every index render re-reads the whole
   file. Measured and covered by tests (`ledger-do-report.test.ts`) — projection
   is ~12.6 MB at 100k runs. Accepted for now.
-- Version drift. The version lives in **ten** places that must move together
+- Version drift. `packages/cli/test/templates.test.ts` now fails if
+  `THENA_VERSION` and the CLI's own version diverge, which closes the worst of
+  it — the rest is still manual. The version lives in **ten** places that must move together
   with nothing linking them, and three of them are easy to miss: the five
   package `version` fields, the **three internal dependency ranges**
   (`core -> agentflow`, `qdrant-client -> core`, `flow -> core`), the
