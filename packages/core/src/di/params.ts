@@ -1,4 +1,4 @@
-import type { VectorMemory } from "@thenajs/agentflow";
+import type { ToolType, VectorMemory } from "@thenajs/agentflow";
 import type { InjectionPoint } from "../decorators/inject.js";
 import type { AgentContext } from "../types.js";
 
@@ -8,6 +8,8 @@ export interface Injectable {
   memories: VectorMemory[];
   ctx?: AgentContext;
   args?: unknown;
+  /** As tools do agente, já embrulhadas. Só existe durante o `execute`. */
+  peers?: ToolType[];
 }
 
 /**
@@ -42,6 +44,16 @@ export function resolvePoint(
         );
       }
       return d.workflowState;
+
+    case "tools":
+      if (!d.peers) {
+        throw new Error(
+          `[thena] @tools() in ${where} (parameter ${index}): the tool list ` +
+            `does not exist yet when the class is constructed — the tools are ` +
+            `wrapped per step invocation. Use @tools() in a tool's execute.`,
+        );
+      }
+      return d.peers;
 
     case "memory": {
       if (!point.store) return d.memories[0];

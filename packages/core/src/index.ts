@@ -17,7 +17,7 @@ export { run, runWorkflow } from "./runtime/run-workflow.js";
 export { buildAgentStep } from "./runtime/agent-step.js";
 export { WorkflowRuntime } from "./runtime/workflow-runtime.js";
 export { Thena, bootstrapWorkflow } from "./bootstrap.js";
-export { input, context, state, memory } from "./decorators/inject.js";
+export { input, context, state, memory, tools } from "./decorators/inject.js";
 export type { ThenaPlugin } from "./plugin.js";
 export type { RunContext, RunMiddleware } from "./run-context.js";
 export type { RunHandle } from "./run-handle.js";

@@ -136,9 +136,20 @@ export function buildAgentStep(
           if (replaced !== undefined) system = replaced;
         }
 
+        // Uma cópia por invocação, e não o `available` compartilhado: o
+        // `peers` só existe depois que as tools são embrulhadas, e mutar o
+        // objeto do escopo externo vazaria entre invocações do mesmo passo.
+        const stepAvailable: Injectable = { ...available };
+
         const tools = baseTools.map((tool) =>
-          buildToolStep(tool, instance, agentCtx, available),
+          buildToolStep(tool, instance, agentCtx, stepAvailable),
         );
+
+        // Fecha o ciclo: `@tools()` resolve no `execute`, então basta a lista
+        // existir aqui. É o que permite uma tool despachar as irmãs **já
+        // embrulhadas** — com nó no report, hooks, autorização, orçamento e
+        // política de erro por chamada, e não em volta do lote.
+        stepAvailable.peers = tools;
 
         // system do agente + projeção do estado (memory/tasks + history).
         const messages: Message[] = [

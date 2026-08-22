@@ -151,6 +151,7 @@ describe("superfície pública do @thenajs/core", () => {
     "runWorkflow",
     "state",
     "toToolOutput",
+    "tools",
     "turnOf",
     "untilAnswered",
     "wasExhausted",
@@ -166,6 +167,33 @@ describe("superfície pública do @thenajs/core", () => {
    * `bootstrapWorkflow` são valores e já estão na lista acima; estes são os que
    * só existem no nível de tipo, onde o `import *` não alcança.
    */
+  /**
+   * Declarar `"license": "MIT"` no manifesto é uma afirmação SPDX, não o aviso.
+   * A própria licença exige que o aviso de copyright viaje em toda cópia — e o
+   * npm só embala o `LICENSE` que estiver **no diretório do pacote**, não o da
+   * raiz. Sem esta trava, o próximo pacote nasce publicando sem aviso, que foi
+   * exatamente o que aconteceu com os seis primeiros.
+   */
+  it("todo pacote publicável tem LICENSE e declara MIT", () => {
+    const dir = join(raiz, "packages");
+    const pacotes = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+
+    expect(pacotes.length).toBeGreaterThan(0);
+
+    for (const pacote of pacotes) {
+      const manifesto = JSON.parse(
+        readFileSync(join(dir, pacote, "package.json"), "utf-8"),
+      );
+      expect(manifesto.license, `${pacote}: license no package.json`).toBe("MIT");
+      expect(
+        existsSync(join(dir, pacote, "LICENSE")),
+        `${pacote}: falta o arquivo LICENSE`,
+      ).toBe(true);
+    }
+  });
+
   it("os aliases @deprecated do nível de tipo continuam exportados", () => {
     const indice = readFileSync(join(raiz, "packages/core/src/index.ts"), "utf-8");
 

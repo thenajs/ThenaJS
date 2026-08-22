@@ -20,7 +20,8 @@ export type InjectionPoint =
   | { kind: "input" }
   | { kind: "context" }
   | { kind: "state" }
-  | { kind: "memory"; store?: VectorStoreCtor };
+  | { kind: "memory"; store?: VectorStoreCtor }
+  | { kind: "tools" };
 
 /** classe -> método -> índice do parâmetro -> o que ele pede. */
 const entry = new WeakMap<Function, Map<string, (InjectionPoint | undefined)[]>>();
@@ -108,6 +109,20 @@ export const context = <D extends RunData = RunData>(): ParameterDecorator &
  * ```
  */
 export const state = (): ParameterDecorator => mark({ kind: "state" });
+
+/**
+ * As **outras tools do mesmo agente**, já embrulhadas na cadeia de middleware —
+ * é o que permite uma tool despachar outra sem perder nó do report, hooks,
+ * autorização, orçamento e política de erro.
+ *
+ * Só faz sentido no `execute`: no construtor a lista ainda não existe, porque as
+ * tools são embrulhadas por invocação do passo, e não uma vez na compilação.
+ *
+ * ```ts
+ * async execute(@input() args: Args, @tools() siblings: ToolType[]) { … }
+ * ```
+ */
+export const tools = (): ParameterDecorator => mark({ kind: "tools" });
 
 /**
  * Uma memória vetorial. Sem argumento, a primeira registrada; com a classe do
