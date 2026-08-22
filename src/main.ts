@@ -16,7 +16,9 @@ const app = Thena.create(ExplorerWorkflow, config);
 // não o framework. Chamadas concorrentes são seguras: cada uma tem seu contexto.
 const saida = await app.run({
   input: {
-    message: "Olá",
+    message:
+      "Compare os arquivos src/config.ts e src/main.ts: o que cada um faz? " +
+      "Leia os dois antes de responder.",
   },
   memory: {
     userId: "123",
