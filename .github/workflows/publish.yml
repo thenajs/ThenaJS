@@ -38,7 +38,7 @@ jobs:
       PACOTES: "agentflow core tools qdrant-client flow cli"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Esta lista e `packages/` têm de conter exatamente os mesmos nomes.
       # Sem a conferência, remover um pacote deixava um nome órfão aqui — foi o
