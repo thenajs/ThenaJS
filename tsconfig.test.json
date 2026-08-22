@@ -11,7 +11,8 @@
     // um `dist/` que pode estar velho.
     "paths": {
       "@thenajs/core": ["./packages/core/src/index.ts"],
-      "@thenajs/agentflow": ["./packages/agentflow/src/index.ts"]
+      "@thenajs/agentflow": ["./packages/agentflow/src/index.ts"],
+      "@thenajs/tools": ["./packages/tools/src/index.ts"]
     },
     "baseUrl": "."
   },

@@ -8,6 +8,9 @@
       "path": "packages/core"
     },
     {
+      "path": "packages/tools"
+    },
+    {
       "path": "packages/qdrant-client"
     },
     {

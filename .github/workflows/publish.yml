@@ -35,7 +35,7 @@ jobs:
     # ainda ausente do registry. Por isso a ordem continua escrita à mão; o que é
     # conferido mecanicamente é a *composição*, no passo abaixo.
     env:
-      PACOTES: "agentflow core qdrant-client flow cli"
+      PACOTES: "agentflow core tools qdrant-client flow cli"
 
     steps:
       - uses: actions/checkout@v4

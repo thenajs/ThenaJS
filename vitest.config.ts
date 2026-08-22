@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       "@thenajs/agentflow": src("agentflow"),
       "@thenajs/core": src("core"),
+      "@thenajs/tools": src("tools"),
     },
   },
   test: {

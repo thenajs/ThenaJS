@@ -1,0 +1,37 @@
+{
+  "name": "@thenajs/tools",
+  "version": "0.11.0",
+  "description": "Tools prontas para agentes ThenaJS (ex.: ParallelTool).",
+  "license": "MIT",
+  "author": "castroneto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thenajs/ThenaJS.git",
+    "directory": "packages/tools"
+  },
+  "homepage": "https://github.com/thenajs/ThenaJS#readme",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "dependencies": {
+    "@thenajs/core": "^0.11.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "zod": "^4.0.0"
+  }
+}
