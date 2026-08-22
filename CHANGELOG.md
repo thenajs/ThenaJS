@@ -4,6 +4,76 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.11.0] — 2026-08-22
+
+### `@tools()` — uma tool alcança as irmãs
+
+Ponto de injeção novo, no mesmo padrão de `@input()`, `@context()` e `@state()`.
+Ele entrega as **outras tools do mesmo agente, já embrulhadas** na cadeia de
+middleware:
+
+```ts
+async execute(@input() args: Args, @tools() siblings: ToolType[]) { … }
+```
+
+"Já embrulhadas" é o ponto inteiro. Uma tool que despacha as irmãs por esta porta
+mantém, **por chamada**, o nó no report, os hooks do agente, os middlewares de
+`app.use({ tool })` — onde mora a autorização —, a contagem de orçamento e a
+política de erro. Uma lista passada por fora perderia as cinco.
+
+Só funciona no `execute`: no construtor a lista ainda não existe, porque as tools
+são embrulhadas por invocação do passo. Usar no construtor dá erro dizendo isso.
+
+### `@thenajs/tools` está de volta, com a `ParallelTool`
+
+O pacote foi removido na `0.10.0` por dois motivos. O principal era
+posicionamento: ele existia para publicar uma tool de shell, e entregar execução
+de comando arbitrário ao modelo é decisão da aplicação, não do framework. Esse
+motivo continua valendo — **a `ShellTool` não voltou e não volta**.
+
+O que voltou é outra coisa:
+
+```ts
+import { ParallelTool } from "@thenajs/tools";
+
+@Agent({ tools: [ReadFileTool, ListDirTool, ParallelTool], … })
+export class ExplorerAgent {}
+```
+
+Ela empacota N chamadas num turno só. O provider honra uma tool call por turno,
+então ler três arquivos custava três idas ao modelo; agora custa uma. O ganho é
+**round-trip**, não CPU.
+
+Não recebe tool nenhuma — o `@tools()` resolve isso. E é **opt-in**: basta não
+registrá-la para o agente voltar ao comportamento anterior, que é o que se faz
+com um modelo fraco demais para montar o lote.
+
+Uma chamada que falha não derruba as outras, e o lote só é marcado como erro se
+**tudo** falhar — senão o `maxFails` do loop contaria uma falha que não houve.
+
+### Licença nos pacotes
+
+Os seis `package.json` declaravam `"license": "MIT"`, mas **não existia arquivo de
+licença em lugar nenhum** — nem na raiz, nem nos pacotes. O campo é uma
+declaração SPDX; a licença exige que o aviso de copyright viaje em toda cópia, e
+o npm só embala o `LICENSE` que estiver no diretório do pacote.
+
+Agora são sete arquivos, e um teste em `architecture.test.ts` varre `packages/*`
+exigindo `LICENSE` presente e `MIT` declarado — o próximo pacote não nasce sem.
+
+Quem instalou a `0.10.0` recebeu tarball sem aviso; a `0.11.0` corrige.
+
+### README
+
+De 1.324 para 149 linhas, em inglês. O manual já vivia no site (71 páginas por
+idioma) e o README o duplicava — agora ele é a primeira tela: o que é, o GIF do
+quickstart, o teto de custo em código, por que existe, e os links.
+
+O que era de repositório e não tinha destino — monorepo, scripts, publicação —
+foi para o `CONTRIBUTING.md`.
+
+---
+
 ## [0.10.0] — 2026-08-21
 
 ### ⚠️ Quebras

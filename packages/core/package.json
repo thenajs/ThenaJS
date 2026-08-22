@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/core",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Camada de DX do ThenaJS: decorators (@Agent/@Workflow/@Tool) e runtime sobre o @thenajs/agentflow.",
   "license": "MIT",
   "author": "castroneto",
@@ -27,6 +27,6 @@
     "node": ">=20.19"
   },
   "dependencies": {
-    "@thenajs/agentflow": "^0.10.0"
+    "@thenajs/agentflow": "^0.11.0"
   }
 }

@@ -2,6 +2,7 @@
   "name": "thenajs",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@thenajs/core": "*",
+    "@thenajs/tools": "*",
     "zod": "^4.0.0"
   },
   "devDependencies": {
