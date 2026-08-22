@@ -118,3 +118,43 @@ src/           o app de exemplo que consome tudo
 O [ROADMAP.md](./ROADMAP.md) tem as fases, o esforço estimado e — importante —
 o que foi **adiado com o motivo**. Antes de propor algo grande, vale conferir se
 já está lá e por quê.
+
+## Publicação
+
+Os pacotes vão para o **npm público** (scope `@thenajs`, org npm `thenajs`) pela
+Action [`publish.yml`](.github/workflows/publish.yml), disparada por uma tag
+`v*`:
+
+```bash
+# bump da versão em todos os lugares, então:
+git tag -a v0.11.0 -m "v0.11.0 — ..." && git push origin v0.11.0
+```
+
+A Action roda `npm ci` → `npm run build:clean` → `npm publish` de cada pacote,
+com provenance, **na ordem de dependência**: `agentflow → core → tools →
+qdrant-client → flow → cli`. Um passo anterior confere que a lista `PACOTES` e
+`packages/` têm exatamente os mesmos nomes — sem isso, remover um pacote
+derrubava a release no meio, com metade já publicada e sem republicação
+possível.
+
+Num push de tag não existe `inputs.dist_tag`, então o default é `latest`. Para
+validar antes, dispare pela aba _Actions_ com `dist_tag: next` e promova depois
+com `npm dist-tag add`.
+
+### A versão vive em dez lugares
+
+Todos precisam se mover juntos, e três não ocorrem a ninguém:
+
+| | Onde |
+| --- | --- |
+| 1–6 | o `version` dos seis pacotes |
+| **7–9** | os **ranges internos**: `core → agentflow`, `tools → core`, `qdrant-client → core`, `flow → core` |
+| 10 | `package-lock.json` (o CI roda `npm ci`, que reprova se divergir) |
+
+Em `0.x`, `^0.10.0` significa `>=0.10.0 <0.11.0` — subir só os campos `version`
+faz o `core` publicado **recusar** o próprio irmão, e o npm instala o anterior ao
+lado. O workspace continua verde porque resolve para o irmão local: o defeito só
+existe no pacote publicado.
+
+Pré-requisito: secret **`NPM_TOKEN`** (npm automation token com acesso à org
+`thenajs`) no repositório.
