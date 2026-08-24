@@ -1,3 +1,4 @@
+import type { State } from "@thenajs/agentflow";
 import { Pipeline, StateManager } from "@thenajs/agentflow";
 import { getWorkflowMetadata } from "../decorators/metadata.js";
 import {
@@ -9,14 +10,8 @@ import {
   withRun,
 } from "../run-context.js";
 import type { RunBudget } from "../budget.js";
-import type { WorkflowInput } from "../types.js";
 import { buildAgentStep } from "./agent-step.js";
 import { compileStep } from "./compile.js";
-
-/** Deriva a string inicial do pipeline a partir do `input` do workflow. */
-export function toInitial(input: WorkflowInput): string {
-  return typeof input.message === "string" ? input.message : JSON.stringify(input);
-}
 
 /**
  * Executa um único agente. Toda a orquestração (pipeline, estado, contexto)
@@ -42,14 +37,22 @@ export async function run<T = string>(AgentClass: Function, input: string): Prom
  * mesmo estado. Passos podem ser agentes (sequenciais), blocos `parallel` ou
  * `loop`. A saída do último passo é retornada.
  *
- * `memory` é o contexto inicial semeado no estado (`state.memory`) antes da
- * execução — disponível para os agentes e para os `until` dos loops.
+ * O passado da conversa entra pelo `seed` do último parâmetro — os três buckets
+ * do estado. Antes havia um `memory` separado para isso; ele saiu na 0.12,
+ * porque `seed.memory` faz o mesmo e sem duas portas para o mesmo bucket.
  */
 export async function runWorkflow<T = string>(
   WorkflowClass: Function,
   input: string,
-  memory?: unknown,
   runBudget?: RunBudget,
+  /**
+   * De onde a execução parte e para onde o estado final vai.
+   *
+   * A entrega é por callback, e não pelo `RunContext`: uma run aninhada abre um
+   * contexto **filho**, então escrever lá não chegaria a quem chamou. Quem
+   * fornece o sink sabe qual execução está esperando.
+   */
+  conversa?: { seed?: Partial<State>; onState?: (state: State) => void },
 ): Promise<T> {
   // Uma run aninhada (tool que dispara outro workflow) herda id, recorder e
   // settings do pai. Sem `runBudget`, herda também o teto — um sub-workflow
@@ -63,13 +66,23 @@ export async function runWorkflow<T = string>(
   return withRun(runCtx, async () => {
     const meta = getWorkflowMetadata(WorkflowClass);
     const state = new StateManager();
-    if (memory !== undefined) {
-      // `memory` do estado é string[]; serializa contexto não-textual.
-      state.append(
-        "memory",
-        typeof memory === "string" ? memory : JSON.stringify(memory),
-      );
+
+    // O estado de onde a execução parte. **Cópia dos arrays**, e não a
+    // referência: sem isto a run passaria a escrever no array de quem chamou —
+    // o transcript do chamador cresceria por baixo dele, e duas runs semeadas
+    // com o mesmo objeto se contaminariam (R-13).
+    //
+    // Os `Message` em si não são copiados: a execução só **acrescenta** turnos,
+    // nunca edita os que recebeu.
+    const seed = conversa?.seed;
+    if (seed) {
+      state.state = {
+        history: seed.history ? [...seed.history] : [],
+        tasks: seed.tasks ? [...seed.tasks] : [],
+        memory: seed.memory ? [...seed.memory] : [],
+      };
     }
+
     // Uma instância por execução: os valores iniciais são as inicializações de
     // campo da classe, e todos os passos veem o mesmo objeto.
     const workflowState = meta.state ? new meta.state() : undefined;
@@ -85,6 +98,14 @@ export async function runWorkflow<T = string>(
       const antes = runCtx.budget.usage();
       try {
         const ctx = await pipeline.run(input);
+
+        // Entrega o estado a quem vai continuar a conversa. Instantâneo, e não
+        // a referência: os arrays da execução continuam sendo dela.
+        conversa?.onState?.({
+          history: [...ctx.state.history],
+          tasks: [...ctx.state.tasks],
+          memory: [...ctx.state.memory],
+        });
         // O cancelamento é checado **entre** passos. Sem esta última checagem,
         // um `ctx.abort()` no passo final não teria mais ninguém para notá-lo,
         // e a run resolveria normalmente — cancelamento silenciosamente

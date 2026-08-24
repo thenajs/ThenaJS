@@ -1,5 +1,6 @@
+import type { State } from "@thenajs/agentflow";
 import { randomUUID } from "node:crypto";
-import { runWorkflow, toInitial } from "./runtime/run-workflow.js";
+import { runWorkflow } from "./runtime/run-workflow.js";
 import type { RunData, WorkflowApp } from "./types.js";
 import type { ThenaPlugin } from "./plugin.js";
 import type { ThenaConfig, LogConfig, ReportOptions } from "./config.js";
@@ -144,13 +145,18 @@ function createApp<T = string, D extends RunData = RunData>(
         },
       });
 
+      let finalState: State | undefined;
+
       // A exceção sobe. Engoli-la e devolver `undefined` obrigava todo call
       // site a adivinhar o que deu errado — e num handler HTTP escondia a
       // falha por completo.
       // Sem `budget` aqui: ele já está no contexto acima. Passá-lo de novo
       // criaria um segundo tracker com os mesmos limites, medindo o mesmo gasto.
       const result = withRun(runCtx, () =>
-        runWorkflow<T>(WorkflowClass, toInitial(options.input), options.memory),
+        runWorkflow<T>(WorkflowClass, options.prompt, undefined, {
+          seed: options.state,
+          onState: (s) => (finalState = s),
+        }),
       );
 
       const entry = { abort: runCtx.abort, result };
@@ -171,6 +177,7 @@ function createApp<T = string, D extends RunData = RunData>(
         events,
         tokens,
         observing,
+        finalState: () => finalState,
       });
     },
 
@@ -210,7 +217,7 @@ function createApp<T = string, D extends RunData = RunData>(
  *   const app = Thena.create(ExplorerWorkflow, { log: true, report: true });
  *   await app.use(thenaFlow({ port: 4100 }));
  *
- *   console.log(await app.run({ input: { message: "Olá" } }));
+ *   console.log(await app.run({ prompt: "Olá" }));
  *   await app.dispose();
  * }
  *

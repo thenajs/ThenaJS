@@ -23,7 +23,7 @@ travels in an `AsyncLocalStorage`-backed `RunContext`.
 **1. Establish ground truth before reading prose.**
 
 ```bash
-npm test          # 429 tests, ~1s. If this is not green, stop and say so.
+npm test          # 501 tests, ~1s. If this is not green, stop and say so.
 ```
 
 Do not skip this. It takes one second and it is the only statement about this
@@ -131,6 +131,43 @@ npm run lint && npm run format:check && npm test && npm run typecheck
 Run it once at the end, not in a loop. Lint must have **0 errors**; warnings
 are pre-existing, declared debt (see CURRENT_STATE.md) — do not "fix" them as
 a side quest.
+
+---
+
+## Writing a test — and when not to
+
+Default here is the same as everywhere else in this file: **do not add one
+unless it holds something.** A test that walks a path another test already
+walked does not protect the path twice; it duplicates the cost of every future
+change to it (R-22).
+
+The check is mechanical, costs two commands, and beats judgement:
+
+```bash
+npm run test:coverage      # note the numbers for the file you touched
+# add the test
+npm run test:coverage      # did they move?
+```
+
+**If the numbers do not move, the test is a duplicate.** Either say in a
+comment what it holds that coverage cannot see — a semantic trap, a public
+contract, a regression that already happened once — or delete it.
+
+Three ways this repo has produced dead tests, all of them plausible-looking one
+at a time:
+
+- **Restating a unit test one level up.** `retry.test.ts` already pins
+  `isRetryableByDefault` against a list of statuses; a transport test that
+  asserts "503 retries" after one that asserts "429 retries" adds a number, not
+  a path.
+- **Symmetry for its own sake.** Writing the mirror of a test because the pair
+  looks tidy. The bug happened in one direction; that is the direction worth
+  guarding.
+- **Testing the platform.** Asserting that `AbortSignal.timeout` fires is a
+  test of Node, not of this code.
+
+Coverage is the floor of this judgement, not the ceiling: a test can be worth
+keeping while moving nothing. It just has to say so out loud.
 
 ---
 

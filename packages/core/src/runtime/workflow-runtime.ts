@@ -1,5 +1,5 @@
 import type { WorkflowRunOptions } from "../types.js";
-import { runWorkflow, toInitial } from "./run-workflow.js";
+import { runWorkflow } from "./run-workflow.js";
 
 /**
  * Serviço injetável que executa workflows. Uma tool pode recebê-lo no construtor
@@ -11,11 +11,8 @@ import { runWorkflow, toInitial } from "./run-workflow.js";
  */
 export class WorkflowRuntime {
   run<T = string>(WorkflowClass: Function, options: WorkflowRunOptions): Promise<T> {
-    return runWorkflow<T>(
-      WorkflowClass,
-      toInitial(options.input),
-      options.memory,
-      options.budget,
-    );
+    return runWorkflow<T>(WorkflowClass, options.prompt, options.budget, {
+      seed: options.state,
+    });
   }
 }

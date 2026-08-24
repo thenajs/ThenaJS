@@ -25,7 +25,7 @@ function toolQueRoda(SubFluxo: Function, budget?: object) {
     constructor(private readonly runtime: WorkflowRuntime) {}
     execute() {
       return this.runtime.run<string>(SubFluxo, {
-        input: { message: "sub" },
+        prompt: "sub",
         ...(budget ? { budget } : {}),
       });
     }
@@ -56,7 +56,7 @@ describe("orçamento em run aninhada", () => {
     ]);
 
     const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub)), {});
-    await app.run({ input: { message: "vai" }, budget: { maxChatCalls: 1 } });
+    await app.run({ prompt: "vai", budget: { maxChatCalls: 1 } });
     await app.dispose();
 
     // Sem a correção: 5 (o sub rodava inteiro). Com ela: no máximo 1 — a
@@ -88,7 +88,7 @@ describe("orçamento em run aninhada", () => {
       ]),
       {},
     );
-    await app.run({ input: { message: "vai" }, budget: { maxTokens: 100_000 } });
+    await app.run({ prompt: "vai", budget: { maxTokens: 100_000 } });
     await app.dispose();
 
     // Os 1000 tokens gastos dentro do sub-workflow contam na run de cima.
@@ -108,7 +108,7 @@ describe("orçamento em run aninhada", () => {
       fluxoQueChamaSub(toolQueRoda(Sub, { maxChatCalls: 1 })),
       {},
     );
-    await app.run({ input: { message: "vai" }, budget: { maxChatCalls: 50 } });
+    await app.run({ prompt: "vai", budget: { maxChatCalls: 50 } });
     await app.dispose();
 
     // O pai deixaria passar 50; o filho para na 1ª.
@@ -129,7 +129,7 @@ describe("orçamento em run aninhada", () => {
       fluxoQueChamaSub(toolQueRoda(Sub, { maxChatCalls: 999 })),
       {},
     );
-    await app.run({ input: { message: "vai" }, budget: { maxChatCalls: 1 } });
+    await app.run({ prompt: "vai", budget: { maxChatCalls: 1 } });
     await app.dispose();
 
     expect(dentro.chamadas.length).toBeLessThanOrEqual(1);
@@ -147,7 +147,7 @@ describe("orçamento em run aninhada", () => {
     // O `mode` que decide é o de quem estourou — aqui, o do pai.
     await expect(
       app.run({
-        input: { message: "vai" },
+        prompt: "vai",
         budget: { maxChatCalls: 1, mode: "throw" },
       }),
     ).rejects.toThrow(/Run budget exhausted/);
@@ -165,7 +165,7 @@ describe("orçamento em run aninhada", () => {
 
     const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub)), {});
     await app.run({
-      input: { message: "vai" },
+      prompt: "vai",
       budget: { maxChatCalls: 1, onExceeded: (i) => estouros.push(i.reason) },
     });
     await app.dispose();
@@ -191,7 +191,7 @@ describe("orçamento em run aninhada", () => {
     const app = Thena.create(fluxoQueChamaSub(toolQueRoda(Sub), parent), {
       report: { dir },
     });
-    await app.run({ input: { message: "vai" }, budget: { maxTokens: 9999 } });
+    await app.run({ prompt: "vai", budget: { maxTokens: 9999 } });
     await app.dispose();
 
     const [pasta] = readdirSync(dir, { withFileTypes: true }).filter((e) =>
@@ -226,7 +226,7 @@ describe("orçamento em run aninhada", () => {
         // Trava de segurança do teste: sem a correção o orçamento não segura
         // nada, e sem isto a suíte inteira travaria em vez de falhar.
         if (++profundidade > 40) throw new Error("recursão sem freio");
-        return this.runtime.run<string>(Recursivo, { input: { message: "again" } });
+        return this.runtime.run<string>(Recursivo, { prompt: "again" });
       }
     };
     Tool({ name: "sub", description: "recursa", schema })(RecursivoTool as never);
@@ -237,7 +237,7 @@ describe("orçamento em run aninhada", () => {
     })(Recursivo);
 
     const app = Thena.create(Recursivo, {});
-    await app.run({ input: { message: "vai" }, budget: { maxChatCalls: 3 } });
+    await app.run({ prompt: "vai", budget: { maxChatCalls: 3 } });
     await app.dispose();
 
     // O orçamento é global à run: a recursão morre no teto, não na stack.
@@ -269,8 +269,8 @@ describe("orçamento em run aninhada", () => {
     const appB = Thena.create(tres(b), {});
 
     const [saidaA, saidaB] = await Promise.all([
-      appA.run({ input: { message: "a" }, budget: { maxChatCalls: 1 } }),
-      appB.run({ input: { message: "b" } }),
+      appA.run({ prompt: "a", budget: { maxChatCalls: 1 } }),
+      appB.run({ prompt: "b" }),
     ]);
     await Promise.all([appA.dispose(), appB.dispose()]);
 

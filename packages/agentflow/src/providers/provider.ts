@@ -174,8 +174,12 @@ export class Providers extends HttpTransport {
     const assistant: Message = {
       role: "assistant",
       content,
-      // 1 por turno (sem parallel tool calls): o assistant fica com o mesmo
-      // call que respondemos, preservando o pareamento exigido pela API.
+      // 1 por turno, **por decisão** (ADR-025) — não é limitação pendente. A
+      // execução concorrente é a `ParallelTool`, que cabe num modelo fraco:
+      // preencher um schema com uma lista é problema mais fácil do que emitir
+      // um array `tool_calls` nativo, e é o caminho que o resgate por texto
+      // consegue sustentar. Aqui o assistant fica com o mesmo call que
+      // respondemos, preservando o pareamento exigido pela API.
       toolCalls: call ? [call] : undefined,
     };
 
@@ -187,7 +191,7 @@ export class Providers extends HttpTransport {
     const tool = tools.find((t) => t.name === call.name);
     const result = tool
       ? await this.executarTool(tool, call)
-      : { content: `Tool '${call.name}' não encontrada.`, isError: true };
+      : { content: `Tool '${call.name}' not found.`, isError: true };
 
     const toolMessage: Message = {
       role: "tool",
@@ -243,10 +247,10 @@ export class Providers extends HttpTransport {
       args = tool.schema.parse(call.arguments);
     } catch (error) {
       const origem =
-        call.source === "rescued" ? " (chamada resgatada do texto da resposta)" : "";
+        call.source === "rescued" ? " (call rescued from the response text)" : "";
       return {
         content:
-          `Argumentos inválidos para a tool '${call.name}'${origem}: ` +
+          `Invalid arguments for tool '${call.name}'${origem}: ` +
           ((error as Error)?.message ?? String(error)),
         isError: true,
       };

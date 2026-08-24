@@ -22,6 +22,6 @@ describe("harness", () => {
 
     const [system] = provider.chamadas[0].messages;
     expect(system.role).toBe("system");
-    expect(system.content).toContain("agente de teste");
+    expect(system.content).toContain("test agent");
   });
 });

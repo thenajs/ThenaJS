@@ -20,7 +20,7 @@ function criarToolQueRodaWorkflow(SubFluxo: Function) {
     constructor(private readonly runtime: WorkflowRuntime) {}
     execute() {
       return this.runtime.run<string>(SubFluxo, {
-        input: { message: "sub" },
+        prompt: "sub",
       });
     }
   };
@@ -55,7 +55,7 @@ describe("run aninhada", () => {
     // pai"), e era o que tornava `maxCostUsd` contornável por qualquer agente
     // com uma tool que disparasse workflow. A matriz completa (teto próprio
     // mais apertado, mais largo, throw, recursão) está em `nested-budget`.
-    await runWorkflow(Fluxo, "vai", undefined, { maxChatCalls: 1 });
+    await runWorkflow(Fluxo, "vai", { maxChatCalls: 1 });
 
     expect(providerFilho.chamadas).toHaveLength(0);
   });
@@ -78,7 +78,7 @@ describe("run aninhada", () => {
     ]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const [pasta] = readdirSync(dir, { withFileTypes: true }).filter((e) =>

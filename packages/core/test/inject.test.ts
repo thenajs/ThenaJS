@@ -260,7 +260,7 @@ describe("mensagens de erro da injeção", () => {
 
     const app = Thena.create(Fluxo, { stores: [FakeVectorStore] });
 
-    await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
+    await expect(app.run({ prompt: "vai" })).rejects.toThrow(
       /@memory\(FakeVectorStoreB\).*not registered/s,
     );
     await app.dispose();

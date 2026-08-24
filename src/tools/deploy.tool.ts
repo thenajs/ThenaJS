@@ -30,8 +30,11 @@ export class DeployTool {
     const pedidoOriginal = ctx.state.history.find((m) => m.role === "user")?.content;
 
     return this.runtime.run(DeployWorkflow, {
-      input: { message: `Faça o deploy de ${repository}` },
-      memory: { pedidoOriginal },
+      prompt: `Faça o deploy de ${repository}`,
+      // Texto legível em vez de JSON: isto vira mensagem `system` no
+      // sub-workflow, e o modelo lê melhor uma frase do que um objeto
+      // serializado.
+      state: { memory: [`Pedido original do usuário: ${pedidoOriginal}`] },
     });
   }
 }

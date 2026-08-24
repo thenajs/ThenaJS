@@ -37,6 +37,22 @@ tool itself. Budget accounting, report nesting and chain order all depend on
 this (ADR-003).
 *Guarded by:* test (`report.test.ts` asserts the tool node nests under chat).
 
+### R-26 — Satellite packages depend on the engine, not the core
+`VectorStore` and the provider base live in `@thenajs/agentflow`; `@thenajs/core`
+only re-exports them for convenience. A satellite that imports from `core` drags
+decorators, DI, bootstrap, the recorder and the report into an install that only
+wanted a vector store.
+
+R-01 does not cover this. It watches the arrow *leaving* the engine, and this is
+the arrow *entering* from the satellites — which is exactly where it inverted:
+`qdrant-client` imported `VectorStore` from `core` until 0.11.
+
+*Verify:* `grep -rn "@thenajs/core" packages/qdrant-client/src` must return
+nothing, **and** the package manifest must not depend on `@thenajs/core` either.
+*Guarded by:* **test** — `architecture.test.ts` checks both. Checking only the
+imports would leave the published package still pulling the core at install
+time; the `tsconfig` project reference has to follow too, or `tsc -b` breaks.
+
 ---
 
 ## Naming and files that are contracts
@@ -172,10 +188,11 @@ report reader will tell it apart.
 
 ## Data flow
 
-### R-16 — `run({ data })` never reaches the model; `run({ memory })` does
-`memory` is serialized into the `system` message, so the model reads it and it
-lands in the report on disk. `data` is transported, propagated to nested runs,
-and kept out of the model. The framework interprets nothing inside `data`.
+### R-16 — `run({ data })` never reaches the model; `run({ state })` does
+`state.tasks` and `state.memory` are serialized into the `system` message and
+`state.history` becomes the turns, so the model reads all three and they land in
+the report on disk. `data` is transported, propagated to nested runs, and kept
+out of the model. The framework interprets nothing inside `data`.
 *Guarded by:* test.
 
 ### R-17 — `contextWindow` never trims the leading `system` block
@@ -224,6 +241,26 @@ so a test can never pass against a stale build. Never add a build step to the
 test path.
 *Guarded by:* toolchain (config), not by a test.
 
+### R-27 — A test that moves no coverage is a duplicate until it says otherwise
+Adding a test is not free: every assertion is a thing a future change has to
+answer for (R-22), so five tests pinning one behaviour turn one legitimate
+change into five red lines and make an echo look like a fire.
+
+The check is two runs of `npm run test:coverage` around the new test. If the
+numbers do not move, the test walks a path something else already walks —
+delete it, or write in a comment what it holds that coverage cannot see: a
+semantic trap, a public contract, a regression that already happened once.
+
+The exemptions are real, not a loophole. `transport.test.ts` keeps "com
+`timeoutMs`, o signal externo continua valendo", which moves nothing: its
+sibling covers the branch, and this one exists because `?? ` silently dropped
+the timeout once.
+
+*Guarded by:* nothing automatic — this is a question asked at review time, and
+the measurement is cheap enough to be routine. Applies to new tests; the
+existing suite is not to be audited for this (the sweep would cost more than
+the duplication).
+
 ### R-22 — A refactor that requires editing a test assertion is not a refactor
 If the assertion has to change, behaviour changed. That is a different task,
 with a different name and a `CHANGELOG.md` entry.
@@ -263,5 +300,5 @@ may send one message fewer.
 - Error messages name the class, the parameter, and the fix (`di/params.ts`).
 - `eqeqeq` is an error (`null` excepted).
 - `printWidth: 88`, Prettier. Markdown is hand-formatted and ignored.
-- Lint must be **0 errors**. The 42 warnings are declared debt — see
+- Lint must be **0 errors**. The 40 warnings are declared debt — see
   CURRENT_STATE.md before "fixing" any of them.

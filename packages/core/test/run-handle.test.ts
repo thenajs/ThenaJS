@@ -32,7 +32,7 @@ describe("o handle é thenable", () => {
     const { Fluxo } = fluxo("resultado");
     const app = Thena.create(Fluxo, {});
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("resultado");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("resultado");
     await app.dispose();
   });
 
@@ -40,7 +40,7 @@ describe("o handle é thenable", () => {
     const { Fluxo } = fluxo("resultado");
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     expect(exec.result).toBeInstanceOf(Promise);
     await expect(exec.result).resolves.toBe("resultado");
     await app.dispose();
@@ -61,7 +61,7 @@ describe("o handle é thenable", () => {
 
     let passouNoFinally = false;
     const saida = await app
-      .run({ input: { message: "vai" } })
+      .run({ prompt: "vai" })
       .finally(() => void (passouNoFinally = true))
       .catch((e) => `peguei: ${(e as Error).message}`);
 
@@ -75,10 +75,7 @@ describe("o handle é thenable", () => {
     const app = Thena.create(Fluxo, {});
 
     await expect(
-      Promise.all([
-        app.run({ input: { message: "1" } }),
-        app.run({ input: { message: "2" } }),
-      ]),
+      Promise.all([app.run({ prompt: "1" }), app.run({ prompt: "2" })]),
     ).resolves.toEqual(["x", "x"]);
     await app.dispose();
   });
@@ -90,7 +87,7 @@ describe("runId síncrono", () => {
     const app = Thena.create(Fluxo, {});
 
     // Sem await: é o que permite responder `{ runId }` num POST.
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     expect(exec.runId).toMatch(/^[0-9a-f-]{36}$/);
 
     await exec;
@@ -101,8 +98,8 @@ describe("runId síncrono", () => {
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
 
-    const a = app.run({ input: { message: "1" } });
-    const b = app.run({ input: { message: "2" } });
+    const a = app.run({ prompt: "1" });
+    const b = app.run({ prompt: "2" });
     expect(a.runId).not.toBe(b.runId);
 
     await Promise.all([a, b]);
@@ -114,7 +111,7 @@ describe("runId síncrono", () => {
     const app = Thena.create(Fluxo, {});
 
     const events: ExecutionEvent[] = [];
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     exec.onEvent((e) => events.push(e));
     await exec;
     await app.dispose();
@@ -129,7 +126,7 @@ describe("abort", () => {
     const app = Thena.create(Fluxo, {});
 
     const inicio = Date.now();
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     exec.abort();
 
     const fail = await captureError(exec);
@@ -167,7 +164,7 @@ describe("abort", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const exec = (caixa.exec = app.run({ input: { message: "vai" } }));
+    const exec = (caixa.exec = app.run({ prompt: "vai" }));
 
     expect((await captureError(exec)).name).toBe("AbortError");
     expect(provider.chamadas).toHaveLength(2);
@@ -179,7 +176,7 @@ describe("abort", () => {
     const app = Thena.create(Fluxo, {});
     const minhaRazao = new Error("usuário desistiu");
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     exec.abort(minhaRazao);
 
     expect(await captureError(exec)).toBe(minhaRazao);
@@ -190,7 +187,7 @@ describe("abort", () => {
     const { Fluxo } = fluxo("x", 30);
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     exec.abort();
 
     expect((await captureError(exec)).name).toBe("AbortError");
@@ -205,7 +202,7 @@ describe("abort", () => {
     );
     const app = Thena.create(makeWorkflow([Agente]), {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     exec.abort();
 
     expect((await captureError(exec)).name).toBe("AbortError");
@@ -222,7 +219,7 @@ describe("signal vindo de fora", () => {
     controller.abort();
 
     const fail = await captureError(
-      app.run({ input: { message: "vai" }, signal: controller.signal }),
+      app.run({ prompt: "vai", signal: controller.signal }),
     );
     expect(fail.name).toBe("AbortError");
     expect(provider.chamadas).toHaveLength(0);
@@ -234,7 +231,7 @@ describe("signal vindo de fora", () => {
     const app = Thena.create(Fluxo, {});
 
     const fail = await captureError(
-      app.run({ input: { message: "vai" }, signal: AbortSignal.timeout(20) }),
+      app.run({ prompt: "vai", signal: AbortSignal.timeout(20) }),
     );
     expect(fail.name).toBe("TimeoutError");
     await app.dispose();
@@ -246,7 +243,7 @@ describe("signal vindo de fora", () => {
     const controller = new AbortController();
 
     // O handle aborta primeiro; o externo nunca dispara.
-    const exec = app.run({ input: { message: "vai" }, signal: controller.signal });
+    const exec = app.run({ prompt: "vai", signal: controller.signal });
     exec.abort(new Error("pelo handle"));
 
     expect((await captureError(exec)).message).toBe("pelo handle");
@@ -261,7 +258,7 @@ describe("signal vindo de fora", () => {
     const SubTool = class {
       constructor(private readonly runtime: any) {}
       execute() {
-        return this.runtime.run(SubFluxo, { input: { message: "sub" } });
+        return this.runtime.run(SubFluxo, { prompt: "sub" });
       }
     };
     Tool({ name: "sub", description: "sub", schema })(SubTool as never);
@@ -275,7 +272,7 @@ describe("signal vindo de fora", () => {
       {},
     );
 
-    const exec = app.run({ input: { message: "pai" } });
+    const exec = app.run({ prompt: "pai" });
     exec.abort();
 
     expect((await captureError(exec)).name).toBe("AbortError");
@@ -290,7 +287,7 @@ describe("onEvent e eventStream", () => {
     const { Fluxo } = fluxo("x", 40);
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     // deixa a execução andar antes de assinar — o caso do SSE que conecta tarde
     await new Promise((r) => setTimeout(r, 15));
 
@@ -308,7 +305,7 @@ describe("onEvent e eventStream", () => {
     const app = Thena.create(Fluxo, {});
 
     const vistos: ExecutionEvent[] = [];
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const stop = exec.onEvent((e) => vistos.push(e));
     const quantosAoParar = vistos.length;
     stop();
@@ -322,7 +319,7 @@ describe("onEvent e eventStream", () => {
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const vistos: ExecutionEvent[] = [];
     for await (const e of exec.eventStream) vistos.push(e);
 
@@ -335,7 +332,7 @@ describe("onEvent e eventStream", () => {
     const { Fluxo } = fluxo("intacto");
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     exec.onEvent(() => {
       throw new Error("assinante ruim");
     });
@@ -350,7 +347,7 @@ describe("dispose drena as execuções em voo", () => {
     const { Fluxo } = fluxo("x", 500);
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     const capturado = captureError(exec);
 
     const inicio = Date.now();

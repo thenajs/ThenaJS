@@ -34,7 +34,7 @@ describe("app.run", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const app = Thena.create(fluxoOk("resultado"), {});
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(saida).toBe("resultado");
@@ -46,7 +46,7 @@ describe("app.run", () => {
 
     const app = Thena.create(fluxoQueLanca("falhou feio"), {});
 
-    await expect(app.run({ input: { message: "vai" } })).rejects.toThrow("falhou feio");
+    await expect(app.run({ prompt: "vai" })).rejects.toThrow("falhou feio");
     expect(process.exitCode).toBeUndefined();
     expect(fail).not.toHaveBeenCalled();
 
@@ -56,8 +56,8 @@ describe("app.run", () => {
   it("uma run que falha não impede a seguinte no mesmo app", async () => {
     const app = Thena.create(fluxoOk("ok"), {});
 
-    await app.run({ input: { message: "1" } });
-    await app.run({ input: { message: "2" } });
+    await app.run({ prompt: "1" });
+    await app.run({ prompt: "2" });
     await app.dispose();
 
     // Sem estado de processo para "sujar", a segunda run é indiferente à
@@ -71,11 +71,11 @@ describe("app.run", () => {
 
     const app = Thena.create(fluxoOk("ok"), { log: doApp });
 
-    await app.run({ input: { message: "1" }, log: daRun });
+    await app.run({ prompt: "1", log: daRun });
     expect(daRun).toHaveBeenCalled();
     expect(doApp).not.toHaveBeenCalled();
 
-    await app.run({ input: { message: "2" } });
+    await app.run({ prompt: "2" });
     expect(doApp).toHaveBeenCalled();
 
     await app.dispose();

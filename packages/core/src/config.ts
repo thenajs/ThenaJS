@@ -72,8 +72,8 @@ export interface ThenaConfig {
    *
    * O nome é `stores`, e não `memory`, porque é isto que o campo guarda: os
    * bancos. A memória em si é a `VectorMemory` que o `@memory()` injeta, e o
-   * `run({ memory })` é outra coisa ainda — o contexto que o modelo lê em todo
-   * turno desta execução.
+   * `run({ state })` é outra coisa ainda — o `memory` de lá é o contexto que o
+   * modelo lê em todo turno desta execução.
    */
   stores?: VectorStoreCtor[];
   /**

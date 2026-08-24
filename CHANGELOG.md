@@ -4,6 +4,198 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
+## [0.12.0] — não lançado
+
+### ⚠️ Quebras
+
+| O quê | O que fazer |
+| --- | --- |
+| `run({ input: { message } })` virou `run({ prompt })` | tire o embrulho: `app.run({ prompt: "…" })` |
+| O tipo `WorkflowInput` foi **removido** do pacote | ninguém precisava dele; `WorkflowRunOptions` continua exportado |
+| Um `input` sem `message` não é mais serializado como prompt | serialize você: `prompt: JSON.stringify(payload)` |
+| `state.set()` e `state.append()` são tipados pela chave | `"tasks"`/`"memory"` só aceitam `string`, `"history"` só `Message` |
+
+### `run({ prompt })` — o embrulho saiu
+
+```ts
+- await app.run({ input: { message: "Revise src/" } });
++ await app.run({ prompt: "Revise src/" });
+```
+
+O `input` era um saco aberto (`{ message?: string; [key: string]: unknown }`) que
+ninguém abria. Nada no framework injetava aquele objeto — `@input()` é outra
+coisa, os argumentos validados de uma **tool**. O único consumidor reduzia o
+objeto a uma string antes de entrar no pipeline, e era só isso. Sobrava um
+wrapper de uma chave, com nome que sugeria o par input/output de IO num método
+que, por definição, só recebe entrada.
+
+Junto foi o fallback de serialização: sem `message`, o objeto inteiro virava o
+prompt em JSON. Era a única razão de o tipo ser aberto, e escondia um erro comum
+— um campo com o nome errado não falhava, virava prompt. Quem quer mandar
+estrutura para o modelo agora diz isso explicitamente.
+
+Payload estruturado tem duas portas melhores, e a escolha entre elas é o que o
+modelo pode ver: `data` para o que ele **não** deve ler, `state.memory` para o
+que ele deve.
+
+**Atenção ao nome:** `prompt` agora significa duas coisas, e a documentação
+sempre diz qual. O `@Agent({ prompt })` é o markdown de sistema, fixo por classe;
+o `run({ prompt })` é a fala do usuário, um por execução.
+
+### O que chega ao modelo agora está em inglês
+
+**Leia este item mesmo que nada no seu código mude** — é o único da lista que não
+quebra compilação nem lança erro, e mesmo assim altera comportamento.
+
+O framework injetava português no prompt e nas observações que o modelo lê:
+
+```diff
+- "Tarefas:\n"                                    → state.tasks no system
++ "Tasks:\n"
+- "Tool 'x' não encontrada."                       → observação de tool
++ "Tool 'x' not found."
+- "Argumentos inválidos para a tool 'x'"           → schema recusou os args
++ "Invalid arguments for tool 'x'"
+- " (chamada resgatada do texto da resposta)"      → sufixo da chamada resgatada
++ " (call rescued from the response text)"
+- "[…histórico anterior omitido…]"                 → nota do contextWindow
++ "[…previous history omitted to fit the window…]"
+- "\n… [truncado]"                                 → corte por maxCharsPerTool
++ "\n… [truncated]"
+```
+
+Os prompts que o `thena create` e o `thena g agent` geram também passaram a ser
+em inglês. Projetos já gerados não mudam — o markdown está no seu repositório.
+
+Três efeitos que valem atenção:
+
+- **O idioma da resposta pode mudar.** Se o seu agente respondia em português em
+  parte porque o `system` dizia `Tarefas:`, ele agora vê `Tasks:`. Modelos
+  pequenos são sensíveis a isso: o idioma do contexto puxa o da resposta. Se
+  você quer resposta em português, diga isso no `.agent.md` — que é onde essa
+  decisão sempre deveria ter morado, e não num literal do framework.
+- **O cache de prefixo do provider é invalidado uma vez.** O `system` mudou, e
+  ele é o prefixo estável que compra o desconto em tokens já vistos. A primeira
+  chamada depois de atualizar paga preço cheio; da segunda em diante normaliza.
+- **Parsing da saída pode parar de casar.** Se você procurava `"não encontrada"`
+  num `afterTool`, num `until` ou em teste, troque pelo texto novo.
+
+Ficaram em português, de propósito, as mensagens que **não** vão ao modelo: a
+interface do CLI, os rótulos do report HTML, o logger e os erros de configuração
+dirigidos a quem desenvolve.
+
+### `StateManager` tipado pela chave
+
+```ts
+- set(key: keyof State, value: any)
+- append(key: keyof State, value: any)
++ set<K extends keyof State>(key: K, value: State[K]): void
++ append<K extends keyof State>(key: K, value: State[K][number]): void
+```
+
+O tipo do valor não tinha nenhuma relação com a chave, então isto compilava:
+
+```ts
+ctx.state.append("tasks", { id: 1, texto: "x" });   // agora: erro de tipo
+```
+
+E o resultado era `[object Object]` na mensagem `system` — o modelo recebia lixo
+e nada avisava. O erro só aparecia como comportamento estranho, longe da causa.
+
+**Quebra em compilação, nunca em runtime.** Quem escreve JavaScript não vê
+diferença. E quem for atingido quase certamente tinha um defeito: os três
+padrões que deixaram de compilar (objeto em `tasks`, string solta em `memory`,
+texto cru em `history`) já produziam prompt errado.
+
+O padrão documentado de manter um ramo fora do transcript continua igual:
+
+```ts
+ctx.state.set("history", ctx.state.history.slice(0, -1));   // Message[] ✓
+```
+
+A mensagem de erro do `append` também ficou útil: prefixo `[thena]`, o nome do
+método, a chave recebida e a causa provável — antes era `State is not an array.`
+
+### `contextWindow({ notice })` — `warnIndexFailure` virou alias
+
+Não é quebra: o nome antigo continua aceito e funcionando.
+
+```ts
+- contextWindow({ maxTurns: 12, warnIndexFailure: "…cortado…" })
++ contextWindow({ maxTurns: 12, notice: "…cortado…" })
+```
+
+`warnIndexFailure` é o tratador de falha ao gravar o índice do report, em
+`observability/report.ts`. O nome chegou aqui por um rename automatizado que
+atravessou arquivos e ficou exportado como API pública, descrevendo uma coisa e
+significando outra — a nota que substitui o histórico cortado.
+
+O alias fica marcado `@deprecated`. Quando os dois vierem, `notice` vence. A
+remoção é uma versão futura, com entrada própria aqui.
+
+### `@thenajs/core` declara o peer de `zod`
+
+Correção de empacotamento. **Quem já usa `zod` 4 não sente nada** — não há
+mudança de API nem de comportamento.
+
+```diff
+  "dependencies": { "@thenajs/agentflow": "^0.11.0" },
++ "peerDependencies": { "zod": "^4.0.0" }
+```
+
+O `core` exige `zod` na própria API pública — `@Tool({ schema })` é tipado como
+`z.ZodType` — mas não o declarava em lugar nenhum do manifesto. Herdava o peer
+do `agentflow` por transitividade, e era isso que deixava o npm resolver um
+conflito **aninhando** em vez de reclamar.
+
+O estrago, medido num projeto limpo com `zod` 3 já instalado:
+
+```
+node_modules/zod                            3.25.76   ← o do seu projeto
+node_modules/@thenajs/core/node_modules/zod 4.4.3     ← instalado sem aviso
+```
+
+Você escrevia o schema com uma cópia e o framework o convertia com a outra. A
+primeira chamada ao modelo morria assim, sem nada apontando para cá:
+
+```
+TypeError: Cannot read properties of undefined (reading 'def')
+    at zod/v4/core/to-json-schema.js
+```
+
+Com o peer declarado, o npm deixa de aninhar: fica uma cópia só, e a instalação
+avisa. Se a sua for a 3, o erro passa a ser `z.toJSONSchema is not a function` —
+que nomeia o que falta (`toJSONSchema` chegou no `zod` 4) em vez de estourar
+dentro do conversor.
+
+O `README` também estava errado: dizia `npm i @thenajs/core`, sem o `zod`. Agora
+diz `npm i @thenajs/core zod`. O `thena create` já gerava `zod: "^4.0.0"` no
+projeto novo, e `docs/get-started/installation` já mandava instalar os dois — o
+caminho quebrado era o de quem copiava a linha do README.
+
+### `@thenajs/qdrant-client` depende do engine, não do core
+
+```diff
+- "dependencies": { "@thenajs/core": "^0.11.0" }
++ "dependencies": { "@thenajs/agentflow": "^0.11.0" }
+```
+
+`VectorStore` mora em `@thenajs/agentflow`; o `core` apenas o reexportava. Quem
+instalava só o cliente Qdrant baixava junto decorators, DI, bootstrap, recorder e
+report — nada disso usado.
+
+A superfície pública do pacote é a mesma (`QdrantStore`, `QdrantCredentials`), e
+`import { QdrantStore } from "@thenajs/qdrant-client"` não muda. O único jeito de
+sentir é dependência fantasma: importar `@thenajs/core` sem tê-lo no seu
+`package.json`, contando com o hoisting para achá-lo por baixo do Qdrant. Se for
+o seu caso, declare o `core` como dependência direta — que é o que ele sempre
+foi, para qualquer projeto que use os decorators.
+
+Uma regra de arquitetura (`RULES.md` R-26) e um teste passam a impedir a volta:
+nenhum satélite pode importar o `core`, nem declará-lo no manifesto.
+
+---
+
 ## [0.11.0] — 2026-08-22
 
 ### `@tools()` — uma tool alcança as irmãs

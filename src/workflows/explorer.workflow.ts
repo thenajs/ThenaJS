@@ -20,7 +20,6 @@ import { ExplorerState } from "./explorer.state.js";
     PlannerAgent,
     loop({
       steps: [ExplorerAgent, ReviewerAgent],
-      // `true` significa PARAR. O 2º parâmetro é a instância de ExplorerState.
       until: (_ctx, s: ExplorerState) => s.aprovado,
       maxIterations: 5,
       onExhausted: (_ctx, voltas) =>

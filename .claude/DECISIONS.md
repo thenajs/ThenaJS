@@ -446,3 +446,95 @@ consequence, and reporting one of them would name the symptom.
 inside the agent, via `onError` — that path is unchanged. Discarding the whole
 block on failure is deliberate: merging what the survivors reached would leave
 the history holding half of a block that did not happen.
+
+---
+
+## ADR-024 — `run({ prompt })` is a flat string; there is no structured input bag
+
+**Status:** accepted · **Breaking in 0.12.0** · **Enforcement:**
+`packages/core/test/steps-helpers.test.ts` ("o prompt vira a primeira mensagem
+user")
+
+**Decision.** `WorkflowRunOptions.prompt: string` replaces
+`input: WorkflowInput`. The `WorkflowInput` type is deleted, along with the
+`toInitial()` helper and its fallback of serialising the whole object when
+`message` was absent.
+
+**Why.** The bag was never opened. `WorkflowInput` declared
+`[key: string]: unknown`, but nothing in the framework injected that object —
+`@input()` is a different thing entirely, the schema-validated arguments of a
+**tool** (`di/params.ts`), and `buildAgentStep` never populates `args` for an
+agent constructor. The only consumer was `toInitial()`, which reduced it to a
+string before the pipeline. So the open shape bought nothing and cost the
+reader a level of nesting plus a name — `input` — that suggests the input/output
+pair of IO, on a method that only ever takes input.
+
+The `JSON.stringify` fallback went with it because it turned a typo into a
+silent success: `{ mesage: "..." }` did not fail, it became the prompt.
+
+**Consequences.** Structured payloads have two better doors, and which one you
+want is decided by what the model may see: `data` for what it must **not** read,
+`state.memory` for what it must. Sending a structure as the prompt is still
+possible and now has to be said out loud — `prompt: JSON.stringify(payload)`.
+
+The cost accepted here is a name collision: `prompt` already means the agent's
+system markdown in `@Agent({ prompt })`. The two are distinguished everywhere by
+qualifier — *the agent's prompt* versus *the run's prompt* — and the docs
+glossary carries the entry. Reviving `message` as the field name would avoid the
+collision but reintroduces the wrapper, since `message` alone at the top level
+would read as a config option rather than the user's turn.
+
+---
+
+## ADR-025 — `ParallelTool` is the concurrency strategy, not native parallel tool calls
+
+**Status:** accepted · **Enforcement:** `packages/tools/test/parallel.test.ts`,
+`packages/core/test/performance.test.ts` ("N tools em sequência custam N turnos")
+
+**Decision.** `Providers.chat` honours **one** tool call per turn —
+`raw.toolCalls?.[0]` — and concurrent tool execution is offered through
+`@thenajs/tools`' `ParallelTool`, which takes a list of sibling calls in its
+schema and runs them under `Promise.all`. Native `tool_calls[n]` support is
+**not** planned. This is a design choice, not a pending gap.
+
+**Why.** The framework's target is mixing weak local models with paid frontier
+ones in the same workflow, unchanged. That goal makes native parallel tool calls
+the worst available bet:
+
+- They require the model to emit a well-formed `tool_calls` **array**. Small
+  local models frequently have no reliable native tool calling at all — which is
+  precisely why `rescueToolCalls` exists and ships **on by default**, and why
+  `extractToolCall` parses a call out of free text.
+- The rescue path extracts **one** call from loose JSON in prose. Extending it
+  to N would be markedly more fragile, and it is the path the weak models
+  actually take.
+- Supporting native N would make behaviour **diverge by provider**: the same
+  workflow would batch on GPT and serialise on llama. Parity across models is
+  the product, so a faster path that only strong models reach is a regression in
+  the thing being sold.
+
+`ParallelTool` turns "emit N native tool calls" into "fill one Zod schema with a
+list" — a much easier problem for a weak model, and one that fails the
+recoverable way the framework already handles: an invalid schema comes back as
+an observation and the model corrects on the next turn. Cost is identical where
+it matters: one round-trip either way.
+
+**Consequences.** Round-trip economy depends on the **prompt** telling the model
+that `parallel` exists and when to reach for it (see
+`src/agents/explorer/explorer.agent.md`). A workflow that registers the tool but
+never mentions it in the prompt pays N round-trips — the tool is available, not
+automatic.
+
+Two costs accepted:
+
+- Strong models are trained to emit parallel tool calls natively; routing them
+  through the indirection spends a slot in the tool catalogue and prompt
+  attention that could go to the task.
+- `ParallelTool` validates its sub-calls itself (`target.schema.parse`), because
+  on the normal path the provider is what validates. That is a second
+  implementation of the same contract, and it has to stay in step with
+  `Providers.executarTool`.
+
+**Do not "fix" this.** A reviewer reading `toolCalls?.[0]` will read it as a
+limitation — that has already happened once, in an external code review. The
+comments at `provider.ts` and in `performance.test.ts` point here.

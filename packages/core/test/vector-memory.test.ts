@@ -30,7 +30,7 @@ describe("injeção de memória", () => {
     const app = Thena.create(Fluxo, {
       stores: [FakeVectorStore, FakeVectorStoreB],
     });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(recebidos).toHaveLength(2);
@@ -56,7 +56,7 @@ describe("injeção de memória", () => {
     const app = Thena.create(Fluxo, {
       stores: [FakeVectorStore, FakeVectorStoreB],
     });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(recebido?.store).toBeInstanceOf(FakeVectorStoreB);
@@ -79,7 +79,7 @@ describe("injeção de memória", () => {
     const app = Thena.create(Fluxo, {
       stores: [FakeVectorStore, FakeVectorStoreB],
     });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(recebido?.store).toBeInstanceOf(FakeVectorStore);
@@ -107,7 +107,7 @@ describe("injeção de memória", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, { stores: [FakeVectorStore] });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(stores).toHaveLength(2);
@@ -132,7 +132,7 @@ describe("remember / recall", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, { stores: [FakeVectorStore] });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
 
     await mem!.remember("um texto qualquer");
     await app.dispose();
@@ -162,7 +162,7 @@ describe("remember / recall", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, { stores: [FakeVectorStore] });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
 
     await mem!.remember("lembrança", { dataset: "notas" });
     const achados = await mem!.recall("busca", { dataset: "notas", limit: 3 });
@@ -192,7 +192,7 @@ describe("remember / recall", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, { stores: [FakeVectorStore] });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
 
     await mem!.remember("x");
     await mem!.recall("busca", { dataset: null });

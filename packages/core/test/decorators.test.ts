@@ -26,7 +26,7 @@ describe("@Agent — origem do prompt", () => {
     @Agent({ provider, prompt: new URL("./fixtures/agente.md", import.meta.url) })
     class ComUrl {}
 
-    expect(getAgentMetadata(ComUrl).prompt).toContain("agente de teste");
+    expect(getAgentMetadata(ComUrl).prompt).toContain("test agent");
   });
 
   it("aceita caminho absoluto", () => {
@@ -36,7 +36,7 @@ describe("@Agent — origem do prompt", () => {
     @Agent({ provider, prompt: absoluto })
     class ComAbsoluto {}
 
-    expect(getAgentMetadata(ComAbsoluto).prompt).toContain("agente de teste");
+    expect(getAgentMetadata(ComAbsoluto).prompt).toContain("test agent");
   });
 
   it("aceita caminho relativo ao arquivo do agente", () => {
@@ -47,7 +47,7 @@ describe("@Agent — origem do prompt", () => {
     @Agent({ provider, prompt: "./fixtures/agente.md" })
     class ComRelativo {}
 
-    expect(getAgentMetadata(ComRelativo).prompt).toContain("agente de teste");
+    expect(getAgentMetadata(ComRelativo).prompt).toContain("test agent");
   });
 
   it("erro claro quando o markdown não existe", () => {
@@ -76,7 +76,7 @@ describe("@Agent — origem do prompt", () => {
 
     expect(provider.chamadas[0].messages[0]).toEqual({
       role: "system",
-      content: "Você é um agente de teste.\n",
+      content: "You are a test agent.\n",
     });
   });
 });

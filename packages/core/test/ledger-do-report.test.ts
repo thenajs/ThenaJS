@@ -54,7 +54,7 @@ async function rodarComReport(dir: string, mensagem = "vai"): Promise<void> {
     makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
     { report: { dir } },
   );
-  await app.run({ input: { message: mensagem } });
+  await app.run({ prompt: mensagem });
   // `dispose` drena os renders agendados — sem isso o índice pode não ter saído.
   await app.dispose();
 }

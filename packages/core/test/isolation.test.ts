@@ -48,8 +48,8 @@ describe("isolamento entre execuções", () => {
     const longo = Thena.create(fluxoDeTresPassos(providerLongo), {});
 
     const [saidaCurto, saidaLongo] = await Promise.all([
-      curto.run({ input: { message: "a" }, budget: { maxChatCalls: 1 } }),
-      longo.run({ input: { message: "b" } }),
+      curto.run({ prompt: "a", budget: { maxChatCalls: 1 } }),
+      longo.run({ prompt: "b" }),
     ]);
 
     // O teto de um não pode cortar o outro: o `curto` para no 1º passo, o
@@ -73,10 +73,7 @@ describe("isolamento entre execuções", () => {
       log: (e) => eventosB.push(e),
     });
 
-    await Promise.all([
-      appA.run({ input: { message: "a" } }),
-      appB.run({ input: { message: "b" } }),
-    ]);
+    await Promise.all([appA.run({ prompt: "a" }), appB.run({ prompt: "b" })]);
 
     // Nenhum evento cruzou: cada recorder é da sua execução.
     expect(eventosA.length).toBeGreaterThan(0);
@@ -101,10 +98,7 @@ describe("isolamento entre execuções", () => {
       report: { dir: dirB },
     });
 
-    await Promise.all([
-      appA.run({ input: { message: "a" } }),
-      appB.run({ input: { message: "b" } }),
-    ]);
+    await Promise.all([appA.run({ prompt: "a" }), appB.run({ prompt: "b" })]);
     await Promise.all([appA.dispose(), appB.dispose()]);
 
     const arvore = (dir: string): ExecutionNode => {
@@ -134,7 +128,7 @@ describe("isolamento entre execuções", () => {
     });
 
     await appA.dispose();
-    await appB.run({ input: { message: "b" } });
+    await appB.run({ prompt: "b" });
 
     expect(eventosB.length).toBeGreaterThan(0);
     await appB.dispose();
@@ -148,8 +142,8 @@ describe("isolamento entre execuções", () => {
       log: (e) => events.push(e),
     });
 
-    await app.run({ input: { message: "1" } });
-    await app.run({ input: { message: "2" } });
+    await app.run({ prompt: "1" });
+    await app.run({ prompt: "2" });
     await app.dispose();
 
     const ids = new Set(events.map((e) => e.runId));

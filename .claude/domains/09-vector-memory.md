@@ -8,10 +8,10 @@ Long-term, semantic memory. Distinct from the two other things called "memory".
 |---|---|---|
 | `ThenaConfig.stores` | The **databases** (`VectorStoreCtor[]`). Renamed from `memory` precisely because of this collision. | app |
 | `VectorMemory` (`@memory()`) | Semantic search: `remember` / `recall` / `forget`. | app |
-| `run({ memory })` | Text seeded into `state.memory`, projected into the `system` message. **The model reads it.** | run |
+| `run({ state })` | Seeds the three buckets. `tasks` and `memory` are projected into the `system` message. **The model reads them.** | run |
 | `ctx.state.memory` | The `string[]` bucket behind the above. | run |
 
-Working memory is `run({ memory })`; long-term memory is `@memory()`.
+Working memory is `run({ state }).memory`; long-term memory is `@memory()`.
 
 ## Key files
 

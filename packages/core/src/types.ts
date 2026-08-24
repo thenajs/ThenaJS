@@ -4,6 +4,7 @@ import type {
   SamplingParams,
   ToolOutput,
   ToolType,
+  State,
 } from "@thenajs/agentflow";
 import type { BudgetUsage, RunBudget } from "./budget.js";
 import type { ThenaPlugin } from "./plugin.js";
@@ -145,7 +146,7 @@ export type AgentContext<D extends RunData = RunData> = PipelineContext &
  * type MinhaExecucao = { contaId: string; regiao: string };
  *
  * const app = Thena.create<string, MinhaExecucao>(Fluxo, config);
- * await app.run({ input, data: { contaId: "acme", regiao: "sa-east-1" } });
+ * await app.run({ prompt, data: { contaId: "acme", regiao: "sa-east-1" } });
  *
  * context<MinhaExecucao>().data.contaId;   // string, sem cast
  * ```
@@ -170,7 +171,7 @@ export interface RunControls<D extends RunData = RunData> {
   readonly runId: string;
   /**
    * O canal de dados da execução (`run({ data })`). **Nunca vai para o
-   * modelo** — é a diferença para o `run({ memory })`.
+   * modelo** — é a diferença para o `run({ state })`.
    *
    * Sempre presente (objeto vazio quando não informado), e não opcional: é o
    * acesso mais frequente da API, e um `?.` aqui apareceria em todo call site
@@ -369,28 +370,51 @@ export interface WorkflowMetadata {
 }
 
 /**
- * Entrada de uma execução do workflow. `message`, quando presente, vira a
- * entrada inicial do pipeline; senão o objeto inteiro é serializado.
- */
-export interface WorkflowInput {
-  message?: string;
-  [key: string]: unknown;
-}
-
-/**
  * Opções de `app.run(...)`.
  *
  * `report` e `log` sobrescrevem o `ThenaConfig` **apenas nesta execução** —
  * possível porque cada run tem o próprio contexto.
  */
 export interface WorkflowRunOptions<D extends RunData = RunData> {
-  input: WorkflowInput;
   /**
-   * Contexto inicial / memória persistente do workflow. É semeada no `memory`
-   * do estado antes da execução, ficando disponível para os agentes e para os
-   * `until` dos loops (ex.: `userId`, `sessionId`).
+   * A primeira mensagem `user` da execução — o que o modelo lê antes de tudo o
+   * mais.
+   *
+   * Campo direto, e não um `input: { message }` como até a 0.11: o embrulho era
+   * um saco aberto que ninguém abria. Nada no framework injetava aquele objeto;
+   * ele só era reduzido a uma string antes de entrar no pipeline. Payload
+   * estruturado tem duas portas melhores, e a escolha entre elas é o que o
+   * modelo pode ver: `data` para o que ele **não** deve ler, `state.memory`
+   * para o que ele deve.
+   *
+   * Não confundir com o `prompt` do `@Agent` — aquele é o markdown de sistema,
+   * fixo por classe; este é a fala do usuário, por execução.
    */
-  memory?: Record<string, unknown>;
+  prompt: string;
+  /**
+   * O estado de onde esta execução parte — os três buckets que ela lê e
+   * escreve. Sem ele a run nasce com o histórico vazio, que é o certo para uma
+   * chamada solta e errado para o segundo turno de uma conversa.
+   *
+   * ```ts
+   * const turno1 = app.run({ prompt: "leia o config.ts" });
+   * const anterior = (await turno1.state()).history;
+   *
+   * await app.run({
+   *   prompt: "e o segundo arquivo?",
+   *   state: { history: anterior },
+   * });
+   * ```
+   *
+   * O `prompt` entra **depois** do que foi semeado, então a ordem da conversa
+   * se preserva. Os arrays são copiados: a execução nunca escreve no seu.
+   *
+   * Os três buckets vão para onde sempre foram: `history` são os turnos, e
+   * `tasks`/`memory` são projetados numa mensagem `system`. A diferença de
+   * carregar conversa em `history` e não em `memory` é que o `contextWindow`
+   * apara turnos velhos, e **não** corta o bloco `system` (R-17).
+   */
+  state?: Partial<State>;
   /**
    * Teto da execução inteira (tempo, chamadas, tokens, custo). Sem `budget`,
    * nada é medido nem checado.
@@ -413,7 +437,7 @@ export interface WorkflowRunOptions<D extends RunData = RunData> {
    * handle:
    *
    * ```ts
-   * const exec = app.run({ input, observe: true });
+   * const exec = app.run({ prompt, observe: true });
    * res.json({ runId: exec.runId });
    * for await (const e of exec.eventStream) sse(e);
    * ```
@@ -424,8 +448,8 @@ export interface WorkflowRunOptions<D extends RunData = RunData> {
    * primeiro vence.
    *
    * ```ts
-   * app.run({ input, signal: req.signal });              // cliente desconectou
-   * app.run({ input, signal: AbortSignal.timeout(30_000) });
+   * app.run({ prompt, signal: req.signal });              // cliente desconectou
+   * app.run({ prompt, signal: AbortSignal.timeout(30_000) });
    * ```
    */
   signal?: AbortSignal;
@@ -440,7 +464,7 @@ export interface WorkflowRunOptions<D extends RunData = RunData> {
    * deve ver; use `memory` para o contexto que o modelo **deve** ler.
    *
    * ```ts
-   * await app.run({ input, data: { contaId: "acme", regiao: "sa-east-1" } });
+   * await app.run({ prompt, data: { contaId: "acme", regiao: "sa-east-1" } });
    * ```
    */
   data?: D;

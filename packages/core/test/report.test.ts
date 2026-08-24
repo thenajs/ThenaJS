@@ -45,7 +45,7 @@ describe("report", () => {
 
     const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const entradas = readdirSync(dir, { withFileTypes: true });
@@ -65,8 +65,8 @@ describe("report", () => {
 
     const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "1" } });
-    await app.run({ input: { message: "2" } });
+    await app.run({ prompt: "1" });
+    await app.run({ prompt: "2" });
     await app.dispose();
 
     const pastas = readdirSync(dir, { withFileTypes: true }).filter((e) =>
@@ -86,8 +86,8 @@ describe("report", () => {
 
     const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "1" } });
-    await app.run({ input: { message: "2" } });
+    await app.run({ prompt: "1" });
+    await app.run({ prompt: "2" });
     await app.dispose();
 
     const lines = readFileSync(join(dir, "runs.jsonl"), "utf-8")
@@ -117,7 +117,7 @@ describe("report", () => {
     const app = Thena.create(Fluxo, { report: { dir } });
 
     // Primeira run: cria o ledger.
-    await app.run({ input: { message: "1" } });
+    await app.run({ prompt: "1" });
     await app.dispose();
 
     // Uma subpasta de lixo. O índice antigo dava `JSON.parse` nela a cada run;
@@ -127,7 +127,7 @@ describe("report", () => {
     writeFileSync(join(dir, "lixo", "report.json"), "{ não é json");
 
     const app2 = Thena.create(Fluxo, { report: { dir } });
-    await app2.run({ input: { message: "2" } });
+    await app2.run({ prompt: "2" });
     await app2.dispose();
 
     const indice = readFileSync(join(dir, "index.html"), "utf-8");
@@ -157,7 +157,7 @@ describe("report", () => {
 
     const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "nova" } });
+    await app.run({ prompt: "nova" });
     await app.dispose();
 
     const indice = readFileSync(join(dir, "index.html"), "utf-8");
@@ -171,7 +171,7 @@ describe("report", () => {
 
     const Fluxo = makeWorkflow([makeAgent({ provider: new FakeProvider() })]);
     const app = Thena.create(Fluxo, { report: { dir, format: "json" } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const [pasta] = readdirSync(dir, { withFileTypes: true }).filter((e) =>
@@ -195,8 +195,8 @@ describe("report", () => {
     // O índice era um read-modify-write sem coordenação: as duas liam a pasta e
     // escreviam `index.html`, e a última a escrever apagava a outra.
     await Promise.all([
-      app.run({ input: { message: "a" } }).result,
-      app.run({ input: { message: "b" } }).result,
+      app.run({ prompt: "a" }).result,
+      app.run({ prompt: "b" }).result,
     ]);
     await app.dispose();
 
@@ -229,7 +229,7 @@ describe("report", () => {
     const Fluxo = makeWorkflow([makeAgent({ provider, tools: [Ferramenta] })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const raiz = lerArvore(dir);
@@ -257,7 +257,7 @@ describe("report", () => {
     ]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const no = lerArvore(dir).children[0];
@@ -277,7 +277,7 @@ describe("report", () => {
     const Fluxo = makeWorkflow([makeAgent({ provider })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const raiz = lerArvore(dir);
@@ -300,7 +300,7 @@ describe("report", () => {
     const Fluxo = makeWorkflow([makeAgent({ provider, tools: [Ferramenta] })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const tool = lerArvore(dir).children[0].children[0].children[0];

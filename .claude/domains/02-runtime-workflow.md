@@ -11,7 +11,7 @@ build the tool objects the provider will call; run nested workflows.
 
 | File | What |
 |---|---|
-| `packages/core/src/runtime/run-workflow.ts` | `runWorkflow`, `run` (single agent), `toInitial` |
+| `packages/core/src/runtime/run-workflow.ts` | `runWorkflow`, `run` (single agent) |
 | `packages/core/src/runtime/compile.ts` | `compileStep` — agent / `parallel` / `loop`, loop brakes, `stoppedBy` |
 | `packages/core/src/runtime/parallel-step.ts` | `buildParallelStep` — frozen read, per-branch scope, ordered merge, sibling cancel |
 | `packages/core/src/runtime/agent-step.ts` | The agent turn: hooks, messages, chat chain, `ctx.turn` |
@@ -85,8 +85,9 @@ any change here touches something else.
   `until`.
 - The agent step catches, then calls `throwIfAborted` **before** `onError` — so
   cancellation never becomes a fallback answer.
-- `toInitial`: `input.message` becomes the first user message; otherwise the
-  whole object is JSON-serialized.
+- `WorkflowRunOptions.prompt` is a plain string and reaches the pipeline
+  untouched. There is no input bag and no serialisation fallback (ADR-024) — the
+  `toInitial` helper that did both is gone.
 
 ## Tests
 

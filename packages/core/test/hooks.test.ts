@@ -33,7 +33,7 @@ describe("beforePrompt", () => {
 
     await runWorkflow(makeWorkflow([Agente]), "vai");
 
-    expect(provider.chamadas[0].messages[0].content).toContain("agente de teste");
+    expect(provider.chamadas[0].messages[0].content).toContain("test agent");
   });
 
   it("recebe o prompt e o contexto", async () => {
@@ -50,7 +50,7 @@ describe("beforePrompt", () => {
 
     await runWorkflow(makeWorkflow([Agente]), "vai");
 
-    expect(recebido.prompt).toContain("agente de teste");
+    expect(recebido.prompt).toContain("test agent");
     expect(recebido.temCtx).toBe(true);
   });
 });

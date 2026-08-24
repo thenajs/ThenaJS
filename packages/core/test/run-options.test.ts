@@ -12,8 +12,10 @@ describe("opções de run", () => {
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
 
     await app.run({
-      input: { message: "Olá" },
-      memory: { conta: "acme", chaveInterna: "segredo-123" },
+      prompt: "Olá",
+      state: {
+        memory: [JSON.stringify({ conta: "acme", chaveInterna: "segredo-123" })],
+      },
     });
     await app.dispose();
 
@@ -31,7 +33,7 @@ describe("opções de run", () => {
     const provider = new FakeProvider([{ content: "ok" }]);
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
 
-    await app.run({ input: { message: "Olá" } });
+    await app.run({ prompt: "Olá" });
     await app.dispose();
 
     // O ctx nasce em `Pipeline.createContext()` com `{ state, logs }` e nada
@@ -39,6 +41,6 @@ describe("opções de run", () => {
     // for verdade, `memory` é a única via, e ela passa pelo modelo.
     const [system] = provider.chamadas[0].messages;
     expect(system.role).toBe("system");
-    expect(system.content).toBe("Você é um agente de teste.\n");
+    expect(system.content).toBe("You are a test agent.\n");
   });
 });

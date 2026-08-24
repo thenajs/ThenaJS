@@ -51,7 +51,7 @@ export class ExplorerWorkflow {}
 
 ```ts
 const app = Thena.create(ExplorerWorkflow, { log: true, report: true });
-console.log(await app.run({ input: { message: "Revise o diretório src/" } }));
+console.log(await app.run({ prompt: "Revise o diretório src/" }));
 ```
 
 ## O que este pacote garante

@@ -1,6 +1,6 @@
 # Current state
 
-**Snapshot taken:** 2026-08-21 · branch `main` · last commit `eae2f32` plus
+**Snapshot taken:** 2026-08-24 · branch `main` · last commit `9cfe7a8` plus
 uncommitted work (see below)
 
 Where the project is *right now*. Not a history — `CHANGELOG.md` is for that.
@@ -13,10 +13,10 @@ about a minute; do that rather than trusting this file blindly.
 
 | Check | Result |
 |---|---|
-| `npm test` | **477 passing**, 44 files, ~1.3 s |
-| `npm run lint` | **0 errors**, 42 warnings (declared debt, see below) |
+| `npm test` | **501 passing**, 46 files, ~1.0 s |
+| `npm run lint` | **0 errors**, 40 warnings (declared debt, see below) |
 | `npm run typecheck` | clean (build + app typecheck + test typecheck) |
-| `npm run test:coverage` | **89.3% lines**, 88.8% statements, 84.0% functions, 77.8% branches |
+| `npm run test:coverage` | **90.0% lines**, 89.7% statements, 84.6% functions, 79.4% branches |
 | `npm run format:check` | clean |
 
 All seven CI steps pass. The seventh is new: `typecheck:ui` runs `tsc` over the
@@ -66,9 +66,9 @@ TRUTH.md.
 |---|---|---|
 | `README.md:35` | dependency graph includes `tools` | package removed |
 | `README.md` "Publicação" | publish order `agentflow → core → tools → cli` | `tools` gone |
-| `CONTRIBUTING.md` | "246 testes" | 429 |
+| `CONTRIBUTING.md` | "246 testes" | 501 |
 | `CONTRIBUTING.md` "Onde as coisas ficam" | lists `tools/ tools prontas` | removed |
-| `ROADMAP.md` | "367 testes" | 429 |
+| `ROADMAP.md` | "367 testes" | 501 |
 | `ROADMAP.md:21,58,189` | `ShellTool` shipped | removed with the package |
 | `SECURITY.md:51` | says the shell tool was removed | **correct** — this one is current |
 
@@ -97,17 +97,18 @@ wire; the sweep stopped at the protocol on purpose.
 
 **User-facing strings still in Portuguese**, despite commit `fa49651`:
 
+**Everything that reached the model was translated in `0.12.0`** — the
+`system` projection of `state.tasks`, the tool observations, the rescued-call
+suffix and both trim notices, plus the prompts the CLI generates. What is left
+is Portuguese that a **developer** reads, never the model:
+
 | Location | String |
 |---|---|
-| `packages/agentflow/src/providers/provider.ts:190` | `Tool 'x' não encontrada.` |
-| `packages/agentflow/src/providers/provider.ts:249` | `Argumentos inválidos para a tool …` |
 | `packages/core/src/decorators/resolve-caller.ts:48` | `[@Agent] Não foi possível descobrir…` |
-| `packages/agentflow/src/state/state.ts:54` | `Tarefas:` — goes into the system prompt |
-| `packages/core/src/middleware/context-window.ts:51` | the default trim notice |
 | `packages/core/src/observability/report.ts` | HTML report labels |
 | `packages/core/src/observability/logger.ts` | verbose log labels |
 | `packages/flow/src/server/server.ts:123,183` | 404 strings |
-| `packages/cli/src/**` | the entire CLI interface |
+| `packages/cli/src/**` | the CLI interface (the generated prompts are English now) |
 
 `packages/core/test/**` describes/its are also in Portuguese — that is a
 deliberate house style, not drift.
@@ -121,13 +122,11 @@ or typechecks it.
 These look intentional and are not. Do **not** "fix" them without reading the
 note.
 
-- **`ContextWindowOptions.warnIndexFailure`** — a **public** option that holds
-  the notice text left in place of trimmed history. The name is meaningless; it
-  collided with an internal function of the same name in
-  `observability/report.ts:127`. The published docs already apologise for it
-  (`docs/en/techniques/context-management.md:79`: *"its name does not
-  suggest"*). It is exported public API — renaming is a breaking change
-  (RULES.md R-18), not a cleanup.
+- **`ContextWindowOptions.warnIndexFailure`** — **resolved in `0.12.0`.**
+  Renamed to `notice`, with the old name kept as a `@deprecated` alias, so it is
+  not a breaking change. `docs/{en,pt}/techniques/context-management.md` still
+  teach the old name and still carry the note promising the rename — **the
+  submodule has not been updated yet**, and it must be before publishing.
 - **`NodeData.workflowState`** (`packages/flow/src/ui/graph.ts`) — holds a
   node's status, not any workflow state. Still misnamed; its *values* were
   renamed to `"running"` with the protocol, the field was not.
@@ -190,9 +189,9 @@ invariant, watch the test go red, restore.
 
 ## Declared technical debt
 
-The 42 lint warnings are deliberate, with reasons in `eslint.config.js`:
+The 40 lint warnings are deliberate, with reasons in `eslint.config.js`:
 
-- **`no-explicit-any` (~23)** — the DI boundaries (`instance`, the injection
+- **`no-explicit-any` (~21)** — the DI boundaries (`instance`, the injection
   plan), middleware invocation, and parsing raw provider JSON. Typing these
   properly is its own piece of work.
 - **`no-unsafe-function-type` (~19)** — `Function` is used where the framework
@@ -209,12 +208,19 @@ Other known, accepted debt:
   is ~12.6 MB at 100k runs. Accepted for now.
 - Version drift. `packages/cli/test/templates.test.ts` now fails if
   `THENA_VERSION` and the CLI's own version diverge, which closes the worst of
-  it — the rest is still manual. The version lives in **ten** places that must move together
-  with nothing linking them, and three of them are easy to miss: the five
-  package `version` fields, the **three internal dependency ranges**
-  (`core -> agentflow`, `qdrant-client -> core`, `flow -> core`), the
-  `THENA_VERSION` literal in `packages/cli/src/templates.ts`, and
-  `package-lock.json`. In `0.x`, `^0.10.0` means `>=0.10.0 <0.11.0`, so leaving a
+  it — the rest is still manual. The version lives in **twelve** places that must
+  move together with nothing linking them: the **six** package `version` fields,
+  the **four internal dependency ranges**, the `THENA_VERSION` literal in
+  `packages/cli/src/templates.ts`, and `package-lock.json`.
+
+  The four ranges, which is the half that gets missed:
+
+  | From | To |
+  |---|---|
+  | `core` | `agentflow` |
+  | `flow` | `core` |
+  | `tools` | `core` |
+  | `qdrant-client` | `agentflow` (was `core` until `0.12.0` — see R-26) | In `0.x`, `^0.10.0` means `>=0.10.0 <0.11.0`, so leaving a
   range at `^0.9.0` makes the published `core` refuse its own sibling and npm
   installs the previous `agentflow` beside it. The workspace stays green either
   way, because it resolves to the local sibling — the defect exists only in the
@@ -245,18 +251,19 @@ Not commitments — what the code and history imply is pending.
 - Take `packages/flow/src/ui/**` out of the ESLint `ignores`. The typecheck is
   wired now; lint is the half that is still missing, and it is what would have
   caught the Portuguese leftovers on the wire in the first place.
-- Finish the `0.10.0` release: the bump is done in the tree (ten places, plus
-  the CHANGELOG section closed), nothing is committed, tagged or published.
-  Open decisions: which `dist-tag` (`latest` is still on `0.6.0`, `next` on
-  `0.9.0`), creating the git tag (`0.9.0` shipped without one), and what happens
-  to `@thenajs/tools`, still installable on npm.
+- Finish the `0.12.0` release. Measured on npm: **`latest` is on `0.11.0`** for
+  all six packages and `next` is behind it, on `0.9.0`. The tree is still on
+  `0.11.0` — the bump across the twelve places has not been done, nothing is
+  committed, and `CHANGELOG.md` has `[0.12.0] — não lançado` written up.
+  Open: the bump, the git tag (`git tag` stops at **v0.6.0** — `0.9.0`, `0.10.0`
+  and `0.11.0` all shipped without one, via workflow dispatch), whether `next`
+  gets pointed at `0.12.0` or abandoned, and updating the `docs/` submodule,
+  which still teaches `warnIndexFailure`.
 - Make the version drift mechanical: have the CLI read its own `package.json` at
   runtime instead of the `THENA_VERSION` literal, and add a CI check that every
   internal range equals `^<sibling version>`.
 - Refresh `README.md`, `ROADMAP.md`, `CONTRIBUTING.md` against reality, or
   shrink the README and defer to `docs/` per ADR-020.
-- Decide the fate of `warnIndexFailure`: keep, or rename with a deprecated
-  alias and a minor bump.
 - The `ClassLike` refactor that would let `no-unsafe-function-type` become an
   error.
 - Tests for `cli` and `qdrant-client`; some safety net for the Flow UI.

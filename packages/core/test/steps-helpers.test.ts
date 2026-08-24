@@ -212,32 +212,22 @@ describe("wasExhausted", () => {
 });
 
 describe("entrada da run", () => {
-  it("input.message vira a primeira mensagem user", async () => {
+  it("o prompt vira a primeira mensagem user", async () => {
     const provider = new FakeProvider();
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
-    await app.run({ input: { message: "olá mundo" } });
+    await app.run({ prompt: "olá mundo" });
     await app.dispose();
 
     const user = provider.chamadas[0].messages.find((m) => m.role === "user");
     expect(user?.content).toBe("olá mundo");
   });
 
-  it("sem message, o objeto inteiro é serializado", async () => {
-    const provider = new FakeProvider();
-    const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
-    await app.run({ input: { userId: 7, acao: "revisar" } });
-    await app.dispose();
-
-    const user = provider.chamadas[0].messages.find((m) => m.role === "user");
-    expect(JSON.parse(user!.content)).toEqual({ userId: 7, acao: "revisar" });
-  });
-
   it("memory da run é semeada no state e projetada como system", async () => {
     const provider = new FakeProvider();
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.run({
-      input: { message: "oi" },
-      memory: { sessionId: "abc" },
+      prompt: "oi",
+      state: { memory: [JSON.stringify({ sessionId: "abc" })] },
     });
     await app.dispose();
 

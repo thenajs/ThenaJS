@@ -12,7 +12,7 @@ When two sources disagree about what this system does, they rank like this:
 
 | # | Source | Why it ranks here |
 |---|---|---|
-| 1 | **The passing test suite** | Executable. Cannot rot. 429 tests, ~1s. |
+| 1 | **The passing test suite** | Executable. Cannot rot. 501 tests, ~1s. |
 | 2 | **Source code in `packages/*/src`** | What actually ships. |
 | 3 | **`DECISIONS.md`** | The *why*, which code cannot carry. Ranks above comments because it is curated and dated. |
 | 4 | **Header comments in source files** | In this repo they are unusually good — they name rejected alternatives. Rank below code only because code can be edited without them. |

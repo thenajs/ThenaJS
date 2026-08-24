@@ -25,8 +25,8 @@ describe("Flow com execuções concorrentes", () => {
     const appB = Thena.create(fluxoLento(5, "B"), { log: publish });
 
     const [a, b] = await Promise.all([
-      appA.run({ input: { message: "a" } }),
-      appB.run({ input: { message: "b" } }),
+      appA.run({ prompt: "a" }),
+      appB.run({ prompt: "b" }),
     ]);
     await Promise.all([appA.dispose(), appB.dispose()]);
 
@@ -66,8 +66,8 @@ describe("Flow com execuções concorrentes", () => {
     const appRuim = Thena.create(Quebrado, { log: publish });
 
     const [ok, ruim] = await Promise.all([
-      appOk.run({ input: { message: "a" } }),
-      appRuim.run({ input: { message: "b" } }).catch(() => "REJEITOU"),
+      appOk.run({ prompt: "a" }),
+      appRuim.run({ prompt: "b" }).catch(() => "REJEITOU"),
     ]);
     await Promise.all([appOk.dispose(), appRuim.dispose()]);
 

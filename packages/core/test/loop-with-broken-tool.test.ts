@@ -61,7 +61,7 @@ describe("freios do loop", () => {
     const Fluxo = makeWorkflow([loop({ steps: [Agente], until: untilAnswered })]);
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "leia" } });
+    await app.run({ prompt: "leia" });
     await app.dispose();
 
     expect(provider.chamadas).toHaveLength(DEFAULT_MAX_FAILS);
@@ -77,7 +77,7 @@ describe("freios do loop", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(provider.chamadas).toHaveLength(DEFAULT_MAX_ITERATIONS);
@@ -115,7 +115,7 @@ describe("freios do loop", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const saida = await app.run({ input: { message: "leia" } });
+    const saida = await app.run({ prompt: "leia" });
     await app.dispose();
 
     // Chegou ao fim: 4 falhas totais não mataram, porque nunca houve 3 seguidas.
@@ -152,7 +152,7 @@ describe("freios do loop", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "leia" } });
+    await app.run({ prompt: "leia" });
     await app.dispose();
 
     expect(registradas.map((f) => f.consecutive)).toEqual([1, 2, 1]);
@@ -176,7 +176,7 @@ describe("freios do loop", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "leia" } });
+    await app.run({ prompt: "leia" });
     await app.dispose();
 
     // Avisou em 1 e 2 antes de cortar em 3 — é o que um número só não daria.
@@ -194,7 +194,7 @@ describe("freios do loop", () => {
     ]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "leia" } });
+    await app.run({ prompt: "leia" });
     await app.dispose();
 
     const no = lerNoDoLoop(dir);
@@ -221,7 +221,7 @@ describe("freios do loop", () => {
 
     const app = Thena.create(Fluxo, {});
     await app.run({
-      input: { message: "leia" },
+      prompt: "leia",
       // Sem este teto, este teste rodaria para sempre. É o risco que os
       // defaults acima existem para evitar.
       budget: { maxChatCalls: 25 },
@@ -268,7 +268,7 @@ describe("freios do loop", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "leia" } });
+    await app.run({ prompt: "leia" });
     await app.dispose();
 
     // 6 turnos = as duas voltas completas. Contador vazando cortaria em 4.

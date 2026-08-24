@@ -48,10 +48,19 @@ export interface ContextWindowOptions {
    *
    * `false` corta sem avisar.
    */
+  notice?: string | false;
+  /**
+   * @deprecated Use `notice`.
+   *
+   * O nome veio de um rename automatizado que atravessou arquivos:
+   * `warnIndexFailure` é o tratador de falha ao gravar o índice do report
+   * (`observability/report.ts`), e não tem relação com a nota do corte de
+   * histórico. Continua funcionando — `notice`, quando informado, vence.
+   */
   warnIndexFailure?: string | false;
 }
 
-const DEFAULT_NOTICE = "[…histórico anterior omitido para caber na janela…]";
+const DEFAULT_NOTICE = "[…previous history omitted to fit the window…]";
 
 /**
  * Middleware que aplica a janela. Preserva **sempre** as mensagens `system`
@@ -62,12 +71,11 @@ const DEFAULT_NOTICE = "[…histórico anterior omitido para caber na janela…]
  * prompt do provider — cortar do topo zeraria o desconto a cada turno.
  */
 export function contextWindow(options: ContextWindowOptions = {}): ChatMiddleware {
-  const {
-    maxTurns,
-    maxChars,
-    maxCharsPerTool,
-    warnIndexFailure = DEFAULT_NOTICE,
-  } = options;
+  const { maxTurns, maxChars, maxCharsPerTool } = options;
+
+  // `notice` vence o nome antigo; `?? ` e não `||` para `false` (cortar em
+  // silêncio) não ser confundido com "não informado" e cair no default.
+  const notice = options.notice ?? options.warnIndexFailure ?? DEFAULT_NOTICE;
 
   return async (inv, next) => {
     const original = inv.messages;
@@ -82,7 +90,7 @@ export function contextWindow(options: ContextWindowOptions = {}): ChatMiddlewar
     if (maxCharsPerTool !== undefined) {
       conversation = conversation.map((m) =>
         m.role === "tool" && m.content.length > maxCharsPerTool
-          ? { ...m, content: `${m.content.slice(0, maxCharsPerTool)}\n… [truncado]` }
+          ? { ...m, content: `${m.content.slice(0, maxCharsPerTool)}\n… [truncated]` }
           : m,
       );
     }
@@ -121,8 +129,8 @@ export function contextWindow(options: ContextWindowOptions = {}): ChatMiddlewar
       orphansDropped++;
     }
 
-    if (trimmed && warnIndexFailure !== false) {
-      conversation = [{ role: "system", content: warnIndexFailure }, ...conversation];
+    if (trimmed && notice !== false) {
+      conversation = [{ role: "system", content: notice }, ...conversation];
     }
 
     inv.messages = [...system, ...conversation];

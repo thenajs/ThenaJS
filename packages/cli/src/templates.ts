@@ -33,11 +33,11 @@ export class ${className} {}
 
 /** Template inicial simples do `<name>.agent.md` — só o prompt. */
 export function agentMdTemplate(name: string): string {
-  return `# Agente ${name}
+  return `# Agent ${name}
 
-Você é o agente **${name}**.
+You are the **${name}** agent.
 
-Descreva aqui, em linguagem natural, o objetivo e o comportamento do agente.
+Describe here, in natural language, this agent's goal and behaviour.
 `;
 }
 
@@ -153,14 +153,14 @@ Gere mais agentes com \`thena g agent <nome>\`.
 import { AssistantWorkflow } from "./workflows/assistant.workflow";
 import { config } from "./config";
 
-const message = process.argv.slice(2).join(" ") || "Olá! O que você faz?";
+const prompt = process.argv.slice(2).join(" ") || "Hello! What do you do?";
 
 async function bootstrap() {
   // \`create\` não é async — quem espera é o \`run\`.
   const app = Thena.create(AssistantWorkflow, config);
 
   // O \`run\` devolve a saída e propaga o erro — quem imprime é a aplicação.
-  console.log(await app.run({ input: { message } }));
+  console.log(await app.run({ prompt }));
 
   await app.dispose();
 }
@@ -208,10 +208,9 @@ export class AssistantAgent {}
     },
     {
       path: "src/agents/assistant/assistant.agent.md",
-      content: `# Assistente
+      content: `# Assistant
 
-Você é um assistente prestativo e direto. Responda **em português**, de forma
-concisa e objetiva.
+You are a helpful, direct assistant. Answer concisely and to the point.
 `,
     },
     {

@@ -25,7 +25,7 @@ describe("Thena.create", () => {
     expect(typeof app.run).toBe("function");
     expect(app).not.toBeInstanceOf(Promise);
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("pronto");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("pronto");
     await app.dispose();
   });
 
@@ -35,7 +35,7 @@ describe("Thena.create", () => {
     // `await` sobre valor não-Promise resolve para o próprio valor.
     const app = await Thena.create(Fluxo, {});
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("pronto");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("pronto");
     await app.dispose();
   });
 
@@ -44,7 +44,7 @@ describe("Thena.create", () => {
     const { Fluxo } = fluxo("ok");
 
     const app = Thena.create<string, MinhaData>(Fluxo, {});
-    await app.run({ input: { message: "x" }, data: { conta: "acme" } });
+    await app.run({ prompt: "x", data: { conta: "acme" } });
     await app.dispose();
   });
 });
@@ -59,7 +59,7 @@ describe("bootstrapWorkflow (@deprecated)", () => {
     expect(promessa).toBeInstanceOf(Promise);
 
     const app = await promessa;
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("do alias");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("do alias");
     await app.dispose();
   });
 
@@ -71,8 +71,8 @@ describe("bootstrapWorkflow (@deprecated)", () => {
     const novo = Thena.create(b.Fluxo, {});
 
     const [x, y] = await Promise.all([
-      antigo.run({ input: { message: "vai" } }),
-      novo.run({ input: { message: "vai" } }),
+      antigo.run({ prompt: "vai" }),
+      novo.run({ prompt: "vai" }),
     ]);
     await Promise.all([antigo.dispose(), novo.dispose()]);
 

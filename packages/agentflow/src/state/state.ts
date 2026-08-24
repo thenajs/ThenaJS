@@ -24,18 +24,33 @@ export class StateManager {
     return this.state[key];
   }
 
-  set(key: keyof State, value: any) {
+  /**
+   * Troca um bucket inteiro. Genérico por chave, e não `any`: é o que faz
+   * `set("tasks", [msg])` parar de compilar — antes o tipo do valor não tinha
+   * nenhuma relação com a chave, e o erro só aparecia como comportamento
+   * estranho na projeção do prompt.
+   */
+  set<K extends keyof State>(key: K, value: State[K]): void {
     this.state[key] = value;
   }
 
-  append(key: keyof State, value: any) {
+  /** Acrescenta um item ao bucket. O tipo do item vem da chave. */
+  append<K extends keyof State>(key: K, value: State[K][number]): void {
     const list = this.state[key];
 
     if (!Array.isArray(list)) {
-      throw new Error("State is not an array.");
+      throw new Error(
+        `[thena] StateManager.append("${key}"): that bucket is not an array. ` +
+          `The state has three buckets — history, tasks and memory — and all ` +
+          `three are arrays. Something replaced this one, most likely by ` +
+          `assigning to \`state.state\` directly.`,
+      );
     }
 
-    list.push(value);
+    // `State[K]` é a união `Message[] | string[]`, e o TypeScript não aceita
+    // `push` de um item da união num array da união. A chave já amarrou os dois
+    // na assinatura, então o estreitamento aqui é seguro.
+    (list as State[K][number][]).push(value);
   }
 
   /**
@@ -51,7 +66,7 @@ export class StateManager {
       system.push(this.memory.join("\n"));
     }
     if (this.tasks.length) {
-      system.push("Tarefas:\n" + this.tasks.map((t) => `- ${t}`).join("\n"));
+      system.push("Tasks:\n" + this.tasks.map((t) => `- ${t}`).join("\n"));
     }
 
     const messages: Message[] = [];

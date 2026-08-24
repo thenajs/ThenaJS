@@ -15,14 +15,15 @@ const app = Thena.create(ExplorerWorkflow, config);
 // O `run` devolve a saída e **propaga** o erro — quem imprime é a aplicação,
 // não o framework. Chamadas concorrentes são seguras: cada uma tem seu contexto.
 const saida = await app.run({
-  input: {
-    message:
-      "Compare os arquivos src/config.ts e src/main.ts: o que cada um faz? " +
-      "Leia os dois antes de responder.",
-  },
-  memory: {
-    userId: "123",
-    sessionId: "abc",
+  prompt:
+    "Compare os arquivos src/config.ts e src/main.ts: o que cada um faz? " +
+    "Leia os dois antes de responder.",
+
+  // O `state` é de onde a execução parte. Aqui só o `memory` — conteúdo
+  // durável, projetado numa mensagem `system`. Num segundo turno de conversa,
+  // é aqui que também entraria o `history` do turno anterior.
+  state: {
+    memory: ["userId: 123", "sessionId: abc"],
   },
 });
 

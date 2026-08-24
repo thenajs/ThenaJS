@@ -16,7 +16,7 @@ import { MeuWorkflow } from "./workflows/meu.workflow.js";
 const app = Thena.create(MeuWorkflow, { log: true });
 await app.use(thenaFlow());
 
-await app.run({ input: { message: "Olá" } });
+await app.run({ prompt: "Olá" });
 ```
 
 Abra <http://127.0.0.1:4100>. Os nós aparecem conforme acontecem; clique em um

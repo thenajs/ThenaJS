@@ -22,7 +22,7 @@ describe("onToken", () => {
     const app = Thena.create(Fluxo, {});
 
     const pedacos: string[] = [];
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     exec.onToken((t) => pedacos.push(t));
     const texto = await exec;
     await app.dispose();
@@ -36,7 +36,7 @@ describe("onToken", () => {
     const { Fluxo } = fluxo("um dois tres");
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     await exec; // assina só depois de tudo pronto
 
     const pedacos: string[] = [];
@@ -61,7 +61,7 @@ describe("onToken", () => {
     ]);
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const pedacos: string[] = [];
     exec.onToken((t) => pedacos.push(t));
     await exec;
@@ -77,7 +77,7 @@ describe("onToken", () => {
     const provider = new FakeProvider([{ content: "a b c d e" }], { delayMs: 20 });
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const pedacos: string[] = [];
     const stop = exec.onToken((t) => pedacos.push(t));
     stop();
@@ -91,7 +91,7 @@ describe("onToken", () => {
     const { Fluxo } = fluxo("intacto");
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     exec.onToken(() => {
       throw new Error("assinante ruim");
     });
@@ -106,7 +106,7 @@ describe("textStream", () => {
     const { Fluxo } = fluxo("um dois tres");
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const pedacos: string[] = [];
     for await (const t of exec.textStream) pedacos.push(t);
 
@@ -118,7 +118,7 @@ describe("textStream", () => {
     const { Fluxo } = fluxo("texto");
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const events: unknown[] = [];
     const tokens: string[] = [];
     exec.onEvent((e) => events.push(e));
@@ -136,7 +136,7 @@ describe("o sink é o que liga o streaming", () => {
   it("com observe, o provider recebe o sink e transmite", async () => {
     const { provider, Fluxo } = fluxo("x");
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "vai" }, observe: true }).result;
+    await app.run({ prompt: "vai", observe: true }).result;
     await app.dispose();
 
     expect(provider.chamadas[0].streaming).toBe(true);
@@ -145,7 +145,7 @@ describe("o sink é o que liga o streaming", () => {
   it("SEM observador, o provider NÃO recebe sink — nada de stream à toa", async () => {
     const { provider, Fluxo } = fluxo("x");
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // O handle já ofereceu um sink em toda run, e isso fazia o provider pedir
@@ -158,7 +158,7 @@ describe("o sink é o que liga o streaming", () => {
     const { provider, Fluxo } = fluxo("x");
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "olheiro", onEvent: () => {} });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(provider.chamadas[0].streaming).toBe(true);

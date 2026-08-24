@@ -51,6 +51,31 @@ describe("camadas", () => {
   });
 
   /**
+   * `VectorStore` mora no **engine**, não no core. Um satélite de banco vetorial
+   * que importe `@thenajs/core` arrasta decorators, DI, bootstrap e report para
+   * quem só queria o store.
+   *
+   * O teste acima não pega isto: ele olha a seta saindo de dentro do engine, e
+   * esta é a seta entrando pelos satélites. Foi exatamente por aí que ela
+   * inverteu — o `qdrant-client` importava `VectorStore` do core, que só o
+   * reexporta.
+   */
+  it("um satélite de store depende do engine, não do core", () => {
+    const IMPORTA_CORE = /(?:from|import|require)\s*\(?\s*["']@thenajs\/core["']/;
+    const pacote = join(raiz, "packages/qdrant-client");
+
+    const infratores = arquivosTs(join(pacote, "src")).filter((f) =>
+      IMPORTA_CORE.test(readFileSync(f, "utf-8")),
+    );
+    expect(infratores).toEqual([]);
+
+    // O manifesto tem que dizer a mesma coisa que os imports — senão o pacote
+    // publicado continua puxando o core na instalação de quem o usa.
+    const manifesto = JSON.parse(readFileSync(join(pacote, "package.json"), "utf-8"));
+    expect(Object.keys(manifesto.dependencies ?? {})).toEqual(["@thenajs/agentflow"]);
+  });
+
+  /**
    * Uma tool pode disparar um workflow, e um workflow contém tools: importar
    * `runtime/` daqui fecharia o ciclo. É por isso que o `resolveTool` recebe
    * um `createRuntime` de quem o chama, em vez de importar o `WorkflowRuntime`.

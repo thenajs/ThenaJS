@@ -48,7 +48,7 @@ describe("middleware de tool", () => {
     const { Fluxo } = fluxoComTool();
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "espia", tool: espia });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(ordem).toEqual(["antes:eco", "depois:original"]);
@@ -65,7 +65,7 @@ describe("middleware de tool", () => {
 
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(saida).toBe("do cache");
@@ -91,7 +91,7 @@ describe("middleware de tool", () => {
 
     const app = Thena.create(makeWorkflow([Agente]), {});
     await app.use({ name: "auditor", tool: auditor });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // Se o middleware rodasse antes do beforeTool, uma autorização checaria
@@ -125,7 +125,7 @@ describe("middleware de tool", () => {
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
     const saida = await app.run({
-      input: { message: "vai" },
+      prompt: "vai",
       budget: { maxToolCalls: 1 },
     });
     await app.dispose();
@@ -146,9 +146,7 @@ describe("middleware de tool", () => {
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "authz", tool: nega });
 
-    await expect(app.run({ input: { message: "vai" } })).rejects.toThrow(
-      "sem permissão",
-    );
+    await expect(app.run({ prompt: "vai" })).rejects.toThrow("sem permissão");
     await app.dispose();
   });
 
@@ -161,7 +159,7 @@ describe("middleware de tool", () => {
 
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "authz", tool: nega });
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(saida).toBe("Sem permissão para eco.");
@@ -182,7 +180,7 @@ describe("middleware de tool", () => {
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "a", tool: mark("a") });
     await app.use({ name: "b", tool: mark("b") });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(ordem).toEqual(["a:entra", "b:entra", "b:sai", "a:sai"]);
@@ -198,7 +196,7 @@ describe("middleware de chat", () => {
 
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.use({ name: "cache", chat: cache });
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(saida).toBe("do cache");
@@ -228,7 +226,7 @@ describe("middleware de chat", () => {
     );
     await app.use({ name: "cache", chat: cache });
 
-    await app.run({ input: { message: "vai" }, budget: { maxTokens: 100 } });
+    await app.run({ prompt: "vai", budget: { maxTokens: 100 } });
     await app.dispose();
 
     // Se o `contarChat` rodasse por fora do middleware, o 1º turno somaria
@@ -252,7 +250,7 @@ describe("inv.meta — o middleware escreve no report", () => {
       { report: { dir } },
     );
     await app.use({ name: "cache", chat: cache });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // O nó existe (o middleware não o apagou ao curto-circuitar) e carrega o
@@ -275,7 +273,7 @@ describe("inv.meta — o middleware escreve no report", () => {
     const { Fluxo } = fluxoComTool();
     const app = Thena.create(Fluxo, { report: { dir } });
     await app.use({ name: "cache", tool: cache });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const tool = lerArvore(dir).children[0].children[0].children[0];
@@ -295,7 +293,7 @@ describe("inv.meta — o middleware escreve no report", () => {
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", tool: cache });
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("do cache");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("do cache");
     await app.dispose();
   });
 });
@@ -316,7 +314,7 @@ describe("herança em run aninhada", () => {
     const SubTool = class {
       constructor(private readonly runtime: any) {}
       execute() {
-        return this.runtime.run(SubFluxo, { input: { message: "sub" } });
+        return this.runtime.run(SubFluxo, { prompt: "sub" });
       }
     };
     Tool({ name: "sub", description: "sub", schema })(SubTool as never);
@@ -330,7 +328,7 @@ describe("herança em run aninhada", () => {
       {},
     );
     await app.use({ name: "espia", chat: espia });
-    await app.run({ input: { message: "pai" } });
+    await app.run({ prompt: "pai" });
     await app.dispose();
 
     // Duas chamadas ao modelo — a do pai e a do filho — ambas pela cadeia.

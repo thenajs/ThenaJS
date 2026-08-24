@@ -1,4 +1,4 @@
-import { VectorStore } from "@thenajs/core";
+import { VectorStore } from "@thenajs/agentflow";
 import type {
   CollectionOptions,
   VectorDistance,
@@ -7,7 +7,7 @@ import type {
   VectorSearch,
   VectorSelector,
   VectorStoreCredentials,
-} from "@thenajs/core";
+} from "@thenajs/agentflow";
 
 export type QdrantCredentials = VectorStoreCredentials;
 

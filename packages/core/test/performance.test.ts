@@ -45,9 +45,11 @@ describe("round-trips ao modelo", () => {
   });
 
   it("N tools em sequência custam N turnos — o teto de 1 tool por turno", async () => {
-    // Documenta a limitação atual: o provider só honra `toolCalls[0]`, então
-    // ler 3 arquivos são 3 round-trips. Quando tool calls paralelas entrarem,
-    // este número cai para 1 e este teste muda junto — de propósito.
+    // O provider honra um `toolCalls[0]` por turno **por decisão** (ADR-025),
+    // então ler 3 arquivos em turnos separados são 3 round-trips. Quem quer as
+    // 3 numa ida usa a `ParallelTool` — e aí o custo é 1, igual ao que tool
+    // calls nativas dariam. Este número não deve cair sozinho: se cair, alguém
+    // ligou tool calls nativas e contrariou o ADR.
     const provider = new FakeProvider([
       { tool: { name: "eco", arguments: { x: "a" } } },
       { tool: { name: "eco", arguments: { x: "b" } } },
@@ -186,7 +188,7 @@ describe("trabalho repetido por chamada", () => {
       },
     });
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // Duas execuções de tool, duas passagens pela cadeia — e nenhuma a mais.
@@ -203,7 +205,7 @@ describe("memória do report", () => {
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {
       log: (e) => e.data?.response && events.push(String(e.data.response).length),
     });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // O teto de 20 KB por campo é o que impede uma run longa de estourar heap.

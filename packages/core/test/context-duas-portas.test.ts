@@ -73,7 +73,7 @@ describe("as duas portas devolvem a mesma coisa", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "x" }, data: { conta: "acme" } });
+    await app.run({ prompt: "x", data: { conta: "acme" } });
     await app.dispose();
 
     // O que vale desde o `run()` funciona…
@@ -138,8 +138,8 @@ describe("as bordas do Proxy", () => {
     const Fluxo = makeWorkflow([Agente]);
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "1" }, data: { conta: "a" } });
-    await app.run({ input: { message: "2" }, data: { conta: "b" } });
+    await app.run({ prompt: "1", data: { conta: "a" } });
+    await app.run({ prompt: "2", data: { conta: "b" } });
     await app.dispose();
 
     expect(vistos).toEqual(["a", "b"]);
@@ -161,8 +161,8 @@ describe("as bordas do Proxy", () => {
 
     const app = Thena.create(makeWorkflow([Agente]), {});
     await Promise.all([
-      app.run({ input: { message: "x" }, data: { conta: "a" } }),
-      app.run({ input: { message: "x" }, data: { conta: "b" } }),
+      app.run({ prompt: "x", data: { conta: "a" } }),
+      app.run({ prompt: "x", data: { conta: "b" } }),
     ]);
     await app.dispose();
 

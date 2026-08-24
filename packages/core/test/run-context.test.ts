@@ -53,7 +53,7 @@ describe("o ctx da tool traz a execução", () => {
     });
     // O 2º parâmetro sem decorator não é injetado; usamos o decorator abaixo.
     const { app } = await appComTool(comContexto(T));
-    await app.run({ input: { message: "vai" }, data: { conta: "acme" } });
+    await app.run({ prompt: "vai", data: { conta: "acme" } });
     await app.dispose();
 
     expect(visto).toEqual({ state: true, data: true, logs: true });
@@ -66,7 +66,7 @@ describe("o ctx da tool traz a execução", () => {
       return "ok";
     });
     const { app } = await appComTool(comContexto(T));
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     await exec;
     await app.dispose();
 
@@ -80,7 +80,7 @@ describe("o ctx da tool traz a execução", () => {
       return "ok";
     });
     const { app } = await appComTool(comContexto(T));
-    await app.run({ input: { message: "vai" }, budget: { maxChatCalls: 9 } });
+    await app.run({ prompt: "vai", budget: { maxChatCalls: 9 } });
     await app.dispose();
 
     // A tool roda dentro da 1ª chamada ao modelo, que já foi contabilizada.
@@ -109,7 +109,7 @@ describe("ctx.signal", () => {
     });
 
     const { app } = await appComTool(comContexto(T));
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
     setTimeout(() => exec.abort(new Error("parou")), 20);
 
     const fail = await captureError(exec.result);
@@ -145,7 +145,7 @@ describe("ctx.abort()", () => {
     });
     const { app } = await appComTool(comContexto(T));
 
-    const fail = await captureError(app.run({ input: { message: "vai" } }).result);
+    const fail = await captureError(app.run({ prompt: "vai" }).result);
     await app.dispose();
 
     expect((fail as Error).message).toBe("a tool desistiu");
@@ -171,7 +171,7 @@ describe("ctx.stop()", () => {
       {},
     );
 
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     // Não lançou, e o 2º agente foi pulado.
@@ -200,7 +200,7 @@ describe("ctx.stop()", () => {
       { log: (e) => events.push(e) },
     );
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // Sem o `stop`, o loop giraria as 50 voltas: o roteiro do provider repete.
@@ -219,7 +219,7 @@ describe("ctx.onDispose()", () => {
       return "ok";
     });
     const { app } = await appComTool(comContexto(T));
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // Como um `defer`: quem abriu por último fecha primeiro.
@@ -240,7 +240,7 @@ describe("ctx.onDispose()", () => {
       makeWorkflow([makeAgent({ provider, tools: [comContexto(T) as never] })]),
       {},
     );
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(limpou).toBe(true);
@@ -256,7 +256,7 @@ describe("ctx.onDispose()", () => {
     });
     const { app } = await appComTool(comContexto(T));
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBeDefined();
+    await expect(app.run({ prompt: "vai" })).resolves.toBeDefined();
     await app.dispose();
   });
 
@@ -280,13 +280,13 @@ describe("ctx.onDispose()", () => {
       constructor(private readonly runtime: WorkflowRuntime) {}
       async execute(_args: unknown, ctx: Context) {
         ctx.onDispose(() => void ordem.push("pai"));
-        return this.runtime.run<string>(SubFluxo, { input: { message: "sub" } });
+        return this.runtime.run<string>(SubFluxo, { prompt: "sub" });
       }
     };
     Tool({ name: "alvo", description: "alvo", schema })(PaiTool as never);
 
     const { app } = await appComTool(comContexto(PaiTool));
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // O filho fecha quando o sub-workflow acaba; o pai só no fim da run.
@@ -302,7 +302,7 @@ describe("ctx.meta()", () => {
       return "ok";
     });
     const { app } = await appComTool(comContexto(T));
-    await app.run({ input: { message: "vai" }, log: (e) => events.push(e) });
+    await app.run({ prompt: "vai", log: (e) => events.push(e) });
     await app.dispose();
 
     const no = events.find((e) => e.kind === "tool" && e.phase === "end");
@@ -316,7 +316,7 @@ describe("ctx.meta()", () => {
       return "ok";
     });
     const { app } = await appComTool(comContexto(T));
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBeDefined();
+    await expect(app.run({ prompt: "vai" })).resolves.toBeDefined();
     await app.dispose();
   });
 });

@@ -34,7 +34,7 @@ describe("run({ data })", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, {});
-    await app.run({ input: { message: "oi" }, data: { conta: "acme" } });
+    await app.run({ prompt: "oi", data: { conta: "acme" } });
     await app.dispose();
 
     expect(visto).toEqual({ conta: "acme" });
@@ -58,7 +58,7 @@ describe("run({ data })", () => {
       makeWorkflow([makeAgent({ provider, tools: [QuemTool] })]),
       {},
     );
-    await app.run({ input: { message: "oi" }, data: { conta: "acme" } });
+    await app.run({ prompt: "oi", data: { conta: "acme" } });
     await app.dispose();
 
     expect(visto).toEqual({ conta: "acme" });
@@ -68,9 +68,9 @@ describe("run({ data })", () => {
     const provider = new FakeProvider();
     const app = Thena.create(makeWorkflow([makeAgent({ provider })]), {});
     await app.run({
-      input: { message: "oi" },
+      prompt: "oi",
       data: { chaveInterna: "segredo-nunca-visto" },
-      memory: { visivel: "isto o modelo lê" },
+      state: { memory: [JSON.stringify({ visivel: "isto o modelo lê" })] },
     });
     await app.dispose();
 
@@ -95,7 +95,7 @@ describe("run({ data })", () => {
     const SubTool = class {
       constructor(private readonly runtime: any) {}
       execute() {
-        return this.runtime.run(SubFluxo, { input: { message: "sub" } });
+        return this.runtime.run(SubFluxo, { prompt: "sub" });
       }
     };
     Tool({ name: "sub", description: "sub", schema })(SubTool as never);
@@ -107,7 +107,7 @@ describe("run({ data })", () => {
       makeWorkflow([makeAgent({ provider: providerPai, tools: [SubTool as never] })]),
       {},
     );
-    await app.run({ input: { message: "pai" }, data: { conta: "acme" } });
+    await app.run({ prompt: "pai", data: { conta: "acme" } });
     await app.dispose();
 
     expect(vistoNoFilho).toEqual({ conta: "acme" });
@@ -144,8 +144,8 @@ describe("provider como factory", () => {
     class Fluxo {}
 
     const app = Thena.create(Fluxo, {});
-    const a = await app.run({ input: { message: "x" }, data: { conta: "acme" } });
-    const b = await app.run({ input: { message: "x" }, data: { conta: "globex" } });
+    const a = await app.run({ prompt: "x", data: { conta: "acme" } });
+    const b = await app.run({ prompt: "x", data: { conta: "globex" } });
     await app.dispose();
 
     // Duas execuções, dois providers, credenciais diferentes.
@@ -169,8 +169,8 @@ describe("provider como factory", () => {
 
     const app = Thena.create(Fluxo, {});
     const [a, b] = await Promise.all([
-      app.run({ input: { message: "x" }, data: { conta: "acme", atraso: 30 } }),
-      app.run({ input: { message: "x" }, data: { conta: "globex", atraso: 5 } }),
+      app.run({ prompt: "x", data: { conta: "acme", atraso: 30 } }),
+      app.run({ prompt: "x", data: { conta: "globex", atraso: 5 } }),
     ]);
     await app.dispose();
 

@@ -84,7 +84,7 @@ describe("no report", () => {
     const Fluxo = makeWorkflow([makeAgent({ provider, tools: [tool] })]);
 
     const app = Thena.create(Fluxo, { report: { dir } });
-    await app.run({ input: { message: "consulte" } });
+    await app.run({ prompt: "consulte" });
     await app.dispose();
 
     const json = readFileSync(
@@ -107,7 +107,7 @@ describe("no report", () => {
       makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
       { report: { dir } },
     );
-    await app.run({ input: { message: "meu token é ghp_abcdefghijklmnop1234" } });
+    await app.run({ prompt: "meu token é ghp_abcdefghijklmnop1234" });
     await app.dispose();
 
     const chat = lerArvore(dir).children[0].children[0];
@@ -123,7 +123,7 @@ describe("no report", () => {
       makeWorkflow([makeAgent({ provider: new FakeProvider() })]),
       { report: { dir }, redact: false },
     );
-    await app.run({ input: { message: "token ghp_abcdefghijklmnop1234" } });
+    await app.run({ prompt: "token ghp_abcdefghijklmnop1234" });
     await app.dispose();
 
     expect(String(lerArvore(dir).children[0].children[0].data.prompt)).toContain(
@@ -144,7 +144,7 @@ describe("no report", () => {
       },
     );
     await app.run({
-      input: { message: "CPF 12345678901 e token ghp_abcdefghijklmnop1234" },
+      prompt: "CPF 12345678901 e token ghp_abcdefghijklmnop1234",
     });
     await app.dispose();
 
@@ -161,7 +161,7 @@ describe("no report", () => {
       makeWorkflow([makeAgent({ provider: new FakeProvider([{ content: "oi" }]) })]),
       { report: { dir, content: false } },
     );
-    await app.run({ input: { message: "segredo" } });
+    await app.run({ prompt: "segredo" });
     await app.dispose();
 
     const raiz = lerArvore(dir);

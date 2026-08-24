@@ -8,7 +8,7 @@ import type { FlowOptions } from "./types.js";
  * ```ts
  * const app = Thena.create(MeuWorkflow, { log: true });
  * await app.use(thenaFlow({ port: 4100 }));
- * await app.run({ input: { message: "olá" } });
+ * await app.run({ prompt: "olá" });
  * ```
  *
  * O servidor segura o processo aberto depois do `run`, para dar tempo de olhar

@@ -17,7 +17,7 @@ describe("budget", () => {
       makeAgent({ provider }),
     ]);
 
-    const saida = await runWorkflow(Fluxo, "vai", undefined, {
+    const saida = await runWorkflow(Fluxo, "vai", {
       maxChatCalls: 2,
     });
 
@@ -31,7 +31,7 @@ describe("budget", () => {
     const Fluxo = makeWorkflow([makeAgent({ provider }), makeAgent({ provider })]);
 
     await expect(
-      runWorkflow(Fluxo, "vai", undefined, {
+      runWorkflow(Fluxo, "vai", {
         maxChatCalls: 1,
         mode: "throw",
       }),
@@ -50,7 +50,7 @@ describe("budget", () => {
       }),
     ]);
 
-    await runWorkflow(Fluxo, "vai", undefined, {
+    await runWorkflow(Fluxo, "vai", {
       maxChatCalls: 2,
       onExceeded,
     });
@@ -76,7 +76,7 @@ describe("budget", () => {
     ]);
     const Fluxo = makeWorkflow([makeAgent({ provider }), makeAgent({ provider })]);
 
-    const saida = await runWorkflow(Fluxo, "vai", undefined, {
+    const saida = await runWorkflow(Fluxo, "vai", {
       maxTokens: 60,
     });
 

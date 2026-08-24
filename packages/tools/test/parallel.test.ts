@@ -65,7 +65,7 @@ describe("ParallelTool", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(chamadas).toEqual(["eco:a", "grito:b"]);
@@ -87,7 +87,7 @@ describe("ParallelTool", () => {
     const app = Thena.create(Fluxo, {
       log: (e) => e.phase === "start" && nos.push({ kind: e.kind, name: e.name }),
     });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const tools = nos.filter((n) => n.kind === "tool").map((n) => n.name);
@@ -103,7 +103,7 @@ describe("ParallelTool", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     // A boa rodou e o resultado dela chegou ao modelo.
@@ -123,7 +123,7 @@ describe("ParallelTool", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(chamadas).toEqual(["eco:a"]);
@@ -139,7 +139,7 @@ describe("ParallelTool", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const saida = await app.run({ input: { message: "vai" } });
+    const saida = await app.run({ prompt: "vai" });
     await app.dispose();
 
     // `parallel` dentro de `parallel` só aninharia lote em lote, sem ganho.

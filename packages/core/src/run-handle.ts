@@ -1,3 +1,4 @@
+import type { State } from "@thenajs/agentflow";
 import type { ExecutionEvent } from "./observability/recorder.js";
 
 /**
@@ -8,8 +9,8 @@ import type { ExecutionEvent } from "./observability/recorder.js";
  * `run` precise virar dois métodos.
  *
  * ```ts
- * const texto = await app.run({ input });   // resultado
- * const exec = app.run({ input });          // execução
+ * const texto = await app.run({ prompt });   // resultado
+ * const exec = app.run({ prompt });          // execução
  * ```
  *
  * Existe porque uma `Promise` não expressa três usos reais: cancelar, observar
@@ -25,6 +26,24 @@ export interface RunHandle<T> extends PromiseLike<T> {
 
   /** A saída final. Promise comum — compõe com `Promise.all`, `.then`, tudo. */
   readonly result: Promise<T>;
+
+  /**
+   * O estado com que a execução terminou, para alimentar a próxima:
+   *
+   * ```ts
+   * const exec = app.run({ prompt: "leia o config.ts" });
+   * await exec;
+   *
+   * await app.run({
+   *   prompt: "e o segundo?",
+   *   state: await exec.state,
+   * });
+   * ```
+   *
+   * Resolve junto com o resultado. Rejeita se a execução rejeitar — não existe
+   * "estado final" de uma run que falhou no meio.
+   */
+  readonly state: Promise<State>;
 
   /** O signal efetivo: o seu, combinado com o `abort()` deste handle. */
   readonly signal: AbortSignal;
@@ -179,6 +198,8 @@ export function createRunHandle<T>(parts: {
   tokens: Channel<string>;
   /** A execução está sendo observada? Ver `run({ observe })`. */
   observing: boolean;
+  /** De onde ler o estado final — o `runCtx`, que o `runWorkflow` preenche. */
+  finalState: () => State | undefined;
 }): RunHandle<T> {
   const { runId, result, signal, abort, events, tokens, observing } = parts;
 
@@ -186,6 +207,22 @@ export function createRunHandle<T>(parts: {
   // ainda quando a execução falha, e o Node dispara `unhandledRejection`. O
   // erro continua disponível em `.result` — só deixa de ser "não tratado".
   result.catch(() => {});
+
+  // Encadeado no resultado, e não resolvido junto: o estado só existe depois de
+  // o último passo terminar. Uma run que rejeita não tem estado final, e este
+  // promise rejeita com ela — devolver o estado parcial de uma execução que
+  // falhou no meio seria oferecer uma conversa que não aconteceu.
+  const state = result.then(() => {
+    const s = parts.finalState();
+    if (!s) {
+      throw new Error(
+        "[thena] This run published no final state. It is a framework bug — " +
+          "`runWorkflow` sets it before resolving.",
+      );
+    }
+    return s;
+  });
+  state.catch(() => {});
 
   /**
    * Uma execução não observada não emite nada, e um canal silencioso é
@@ -207,6 +244,7 @@ export function createRunHandle<T>(parts: {
   return {
     runId,
     result,
+    state,
     signal,
     abort,
     onEvent: (cb) => {

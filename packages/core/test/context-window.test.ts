@@ -30,7 +30,7 @@ async function rodar(
 
   const app = Thena.create(Fluxo, {});
   if (janela) await app.use({ name: "janela", chat: janela });
-  await app.run({ input: { message: "pergunta inicial" } });
+  await app.run({ prompt: "pergunta inicial" });
   await app.dispose();
 
   return { provider, ultima: provider.chamadas.at(-1)!.messages };
@@ -58,12 +58,12 @@ describe("maxTurnos", () => {
 
     // O prompt do agente sobrevive — cortá-lo quebraria o agente.
     expect(ultima[0].role).toBe("system");
-    expect(ultima[0].content).toContain("agente de teste");
+    expect(ultima[0].content).toContain("test agent");
   });
 
   it("não corta quando o histórico cabe", async () => {
     const { ultima } = await rodar(contextWindow({ maxTurns: 50 }), 3);
-    expect(ultima.some((m) => m.content.includes("omitido"))).toBe(false);
+    expect(ultima.some((m) => m.content.includes("omitted"))).toBe(false);
   });
 });
 
@@ -98,12 +98,12 @@ describe("maxCharsPorTool", () => {
 
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "janela", chat: contextWindow({ maxCharsPerTool: 100 }) });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const obs = provider.chamadas.at(-1)!.messages.find((m) => m.role === "tool");
     expect(obs!.content.length).toBeLessThan(200);
-    expect(obs!.content).toContain("[truncado]");
+    expect(obs!.content).toContain("[truncated]");
   });
 });
 
@@ -135,7 +135,7 @@ describe("pareamento assistant/tool", () => {
 
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "janela", chat: janela });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     return provider.chamadas.at(-1)!.messages;
@@ -178,7 +178,7 @@ describe("pareamento assistant/tool", () => {
 
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "janela", chat: contextWindow({ maxChars: 40 }) });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const enviadas = provider.chamadas.at(-1)!.messages;
@@ -193,7 +193,7 @@ describe("pareamento assistant/tool", () => {
   it("o aviso entra antes do que sobrou, não no meio de um par", async () => {
     const enviadas = await rodarComTool(contextWindow({ maxTurns: 3 }), 5);
 
-    const aviso = enviadas.findIndex((m) => m.content.includes("omitido"));
+    const aviso = enviadas.findIndex((m) => m.content.includes("omitted"));
     expect(aviso).toBeGreaterThanOrEqual(0);
     // Depois do aviso não pode vir um `tool`: seria par quebrado com um system
     // no meio, que é exatamente o mesmo 400 com aparência de conserto.
@@ -221,7 +221,7 @@ describe("pareamento assistant/tool", () => {
       log: (e) => e.kind === "chat" && e.data && events.push(e.data),
     });
     await app.use({ name: "janela", chat: contextWindow({ maxTurns: 3 }) });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const last = events.at(-1)!;
@@ -233,26 +233,42 @@ describe("pareamento assistant/tool", () => {
 describe("o aviso do corte", () => {
   it("entra como system, para o modelo não achar que a conversa começou ali", async () => {
     const { ultima } = await rodar(contextWindow({ maxTurns: 2 }), 6);
-    const warnIndexFailure = ultima.find((m) => m.content.includes("omitido"));
+    const aviso = ultima.find((m) => m.content.includes("omitted"));
 
-    expect(warnIndexFailure).toBeDefined();
-    expect(warnIndexFailure!.role).toBe("system");
+    expect(aviso).toBeDefined();
+    expect(aviso!.role).toBe("system");
   });
 
   it("pode ser trocado", async () => {
     const { ultima } = await rodar(
-      contextWindow({ maxTurns: 2, warnIndexFailure: "…cortado…" }),
+      contextWindow({ maxTurns: 2, notice: "…cortado…" }),
       6,
     );
     expect(ultima.some((m) => m.content === "…cortado…")).toBe(true);
   });
 
-  it("`aviso: false` corta em silêncio", async () => {
+  it("`notice: false` corta em silêncio", async () => {
+    const { ultima } = await rodar(contextWindow({ maxTurns: 2, notice: false }), 6);
+    expect(ultima.some((m) => m.content.includes("omitted"))).toBe(false);
+  });
+
+  // O nome antigo saiu porque descrevia outra coisa — é o tratador de falha ao
+  // gravar o índice do report. Continua aceito para não quebrar quem já o usa.
+  it("o alias `warnIndexFailure` continua funcionando", async () => {
     const { ultima } = await rodar(
-      contextWindow({ maxTurns: 2, warnIndexFailure: false }),
+      contextWindow({ maxTurns: 2, warnIndexFailure: "…antigo…" }),
       6,
     );
-    expect(ultima.some((m) => m.content.includes("omitido"))).toBe(false);
+    expect(ultima.some((m) => m.content === "…antigo…")).toBe(true);
+  });
+
+  it("`notice` vence o alias quando os dois vêm", async () => {
+    const { ultima } = await rodar(
+      contextWindow({ maxTurns: 2, notice: "…novo…", warnIndexFailure: "…antigo…" }),
+      6,
+    );
+    expect(ultima.some((m) => m.content === "…novo…")).toBe(true);
+    expect(ultima.some((m) => m.content === "…antigo…")).toBe(false);
   });
 });
 
@@ -272,7 +288,7 @@ describe("telemetria", () => {
       log: (e) => e.kind === "chat" && e.data && events.push(e.data),
     });
     await app.use({ name: "janela", chat: contextWindow({ maxTurns: 2 }) });
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     const last = events.at(-1)!;

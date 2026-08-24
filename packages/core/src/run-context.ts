@@ -117,9 +117,9 @@ export interface RunContext {
    * deles: o eixo pelo qual você separa execuções é decisão sua, não do
    * framework.
    *
-   * **Não vai para o modelo.** É a diferença para o `run({ memory })`, que é
-   * serializado direto na mensagem `system`: tudo que você põe lá o modelo lê,
-   * e vai parar no report em disco. Aqui não.
+   * **Não vai para o modelo.** É a diferença para o `run({ state })`, cujos
+   * `tasks` e `memory` são serializados direto na mensagem `system`: tudo que
+   * você põe lá o modelo lê, e vai parar no report em disco. Aqui não.
    */
   data: Record<string, unknown>;
 }

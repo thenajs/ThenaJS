@@ -62,7 +62,6 @@ export type {
   WorkflowContext,
   WorkflowApp,
   WorkflowRunOptions,
-  WorkflowInput,
   ParallelStep,
   LoopStep,
   LoopFailure,

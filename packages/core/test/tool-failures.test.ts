@@ -35,7 +35,7 @@ describe("falhas de tool", () => {
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("boom");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("boom");
     await app.dispose();
   });
 
@@ -46,7 +46,7 @@ describe("falhas de tool", () => {
     }));
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("não deu");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("não deu");
     await app.dispose();
   });
 
@@ -56,9 +56,7 @@ describe("falhas de tool", () => {
       {},
     );
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toContain(
-      "não encontrada",
-    );
+    await expect(app.run({ prompt: "vai" })).resolves.toContain("not found");
     await app.dispose();
   });
 
@@ -71,8 +69,8 @@ describe("falhas de tool", () => {
 
     // É a falha mais recuperável de todas: o modelo errou o formato e pode
     // acertar no turno seguinte. Antes ela derrubava a run.
-    const saida = await app.run({ input: { message: "vai" } });
-    expect(saida).toContain("Argumentos inválidos");
+    const saida = await app.run({ prompt: "vai" });
+    expect(saida).toContain("Invalid arguments");
     expect(saida).toContain("eco");
     await app.dispose();
   });
@@ -85,8 +83,8 @@ describe("falhas de tool", () => {
     const Fluxo = makeWorkflow([makeAgent({ provider, tools: [eco()] })]);
     const app = Thena.create(Fluxo, {});
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toContain(
-      "resgatada do texto",
+    await expect(app.run({ prompt: "vai" })).resolves.toContain(
+      "rescued from the response text",
     );
     await app.dispose();
   });
@@ -97,9 +95,7 @@ describe("falhas de tool", () => {
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
-    await expect(app.run({ input: { message: "vai" } })).rejects.toBeInstanceOf(
-      FatalToolError,
-    );
+    await expect(app.run({ prompt: "vai" })).rejects.toBeInstanceOf(FatalToolError);
     await app.dispose();
   });
 
@@ -110,9 +106,7 @@ describe("falhas de tool", () => {
     });
     const app = Thena.create(montar(tool, { name: "eco", arguments: { x: "1" } }), {});
 
-    const fail = await app
-      .run({ input: { message: "vai" } })
-      .catch((e) => e as FatalToolError);
+    const fail = await app.run({ prompt: "vai" }).catch((e) => e as FatalToolError);
 
     expect((fail as FatalToolError).message).toBe("banco indisponível");
     expect((fail as FatalToolError).cause).toBe(original);
@@ -150,7 +144,7 @@ describe("falhas de tool", () => {
     ]);
 
     const app = Thena.create(Fluxo, {});
-    const saida = await app.run({ input: { message: "leia o arquivo" } });
+    const saida = await app.run({ prompt: "leia o arquivo" });
     await app.dispose();
 
     // É o ponto do default: a falha não derruba a run, vira informação.
@@ -175,7 +169,7 @@ describe("erros de controle de fluxo não viram observação", () => {
     const Classe = class {
       constructor(private readonly runtime: WorkflowRuntime) {}
       execute() {
-        return this.runtime.run<string>(SubFluxo, { input: { message: "sub" } });
+        return this.runtime.run<string>(SubFluxo, { prompt: "sub" });
       }
     };
     Tool({ name: "sub", description: "sub", schema })(Classe as never);
@@ -196,7 +190,7 @@ describe("erros de controle de fluxo não viram observação", () => {
     // a mensagem do erro como saída — o modelo "lia" que ficou sem orçamento.
     await expect(
       app.run({
-        input: { message: "vai" },
+        prompt: "vai",
         budget: { maxChatCalls: 1, mode: "throw" },
       }),
     ).rejects.toBeInstanceOf(BudgetExceededError);
@@ -213,7 +207,7 @@ describe("erros de controle de fluxo não viram observação", () => {
       {},
     );
 
-    const runCtx = app.run({ input: { message: "vai" } });
+    const runCtx = app.run({ prompt: "vai" });
     setTimeout(() => runCtx.abort(new Error("chega")), 10);
 
     const fail = await captureError(runCtx.result);
@@ -238,9 +232,7 @@ describe("erros de controle de fluxo não viram observação", () => {
       {},
     );
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe(
-      "quebrou de verdade",
-    );
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("quebrou de verdade");
     await app.dispose();
   });
 });

@@ -20,8 +20,8 @@ export class ReviewerAgent {
   async afterResponse(response: string) {
     this.workflowState.rodadas++;
 
-    // O prompt pede para a resposta terminar com APROVADO ou AJUSTAR.
-    this.workflowState.aprovado = /\bAPROVADO\b/i.test(response);
+    // O prompt pede para a resposta terminar com APPROVED ou ADJUST.
+    this.workflowState.aprovado = /\bAPPROVED\b/i.test(response);
 
     if (!this.workflowState.aprovado) {
       this.workflowState.apontamentos.push(response.trim());

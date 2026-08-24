@@ -47,7 +47,7 @@ describe("sem ninguém observando", () => {
     const { Fluxo } = fluxoQueEspia(espiado);
     const app = Thena.create(Fluxo, {}); // sem report, log ou plugin
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(espiado.ativo).toBe(false);
@@ -57,7 +57,7 @@ describe("sem ninguém observando", () => {
     const { provider, Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(provider.chamadas[0].streaming).toBe(false);
@@ -68,7 +68,7 @@ describe("sem ninguém observando", () => {
     const { Fluxo } = fluxo("a resposta");
     const app = Thena.create(Fluxo, {});
 
-    await expect(app.run({ input: { message: "vai" } })).resolves.toBe("a resposta");
+    await expect(app.run({ prompt: "vai" })).resolves.toBe("a resposta");
     await app.dispose();
   });
 
@@ -78,7 +78,7 @@ describe("sem ninguém observando", () => {
 
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
 
     const vistos: ExecutionEvent[] = [];
     exec.onEvent((e) => vistos.push(e));
@@ -96,7 +96,7 @@ describe("sem ninguém observando", () => {
 
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
-    const exec = app.run({ input: { message: "vai" } });
+    const exec = app.run({ prompt: "vai" });
 
     exec.onEvent(() => {});
     exec.onToken(() => {});
@@ -114,7 +114,7 @@ describe("quem liga a observação", () => {
     const { provider, Fluxo } = fluxoQueEspia(espiado);
     const app = Thena.create(Fluxo, {});
 
-    const exec = app.run({ input: { message: "vai" }, observe: true });
+    const exec = app.run({ prompt: "vai", observe: true });
     const vistos: ExecutionEvent[] = [];
     exec.onEvent((e) => vistos.push(e));
     await exec;
@@ -133,7 +133,7 @@ describe("quem liga a observação", () => {
     const { Fluxo } = fluxoQueEspia(espiado);
     const app = Thena.create(Fluxo, { report: { dir } });
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(espiado.ativo).toBe(true);
@@ -146,7 +146,7 @@ describe("quem liga a observação", () => {
     const events: ExecutionEvent[] = [];
     const app = Thena.create(Fluxo, { log: (e) => events.push(e) });
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(espiado.ativo).toBe(true);
@@ -159,7 +159,7 @@ describe("quem liga a observação", () => {
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "olheiro", onEvent: () => {} });
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     expect(espiado.ativo).toBe(true);
@@ -171,7 +171,7 @@ describe("quem liga a observação", () => {
     const app = Thena.create(Fluxo, {});
     await app.use({ name: "cache", chat: (_inv, next) => next() });
 
-    await app.run({ input: { message: "vai" } });
+    await app.run({ prompt: "vai" });
     await app.dispose();
 
     // Interceptar não é observar: o middleware roda de qualquer jeito, e o
@@ -183,13 +183,13 @@ describe("quem liga a observação", () => {
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, {});
 
-    const comObs = app.run({ input: { message: "1" }, observe: true });
+    const comObs = app.run({ prompt: "1", observe: true });
     const vistos: ExecutionEvent[] = [];
     comObs.onEvent((e) => vistos.push(e));
     await comObs;
 
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const semObs = app.run({ input: { message: "2" } });
+    const semObs = app.run({ prompt: "2" });
     const vistos2: ExecutionEvent[] = [];
     semObs.onEvent((e) => vistos2.push(e));
     await semObs;
@@ -207,7 +207,7 @@ describe("quem liga a observação", () => {
     const { Fluxo } = fluxo();
     const app = Thena.create(Fluxo, { report: { dir } });
 
-    const exec = app.run({ input: { message: "vai" }, observe: false });
+    const exec = app.run({ prompt: "vai", observe: false });
     const vistos: ExecutionEvent[] = [];
     exec.onEvent((e) => vistos.push(e));
     await exec;
@@ -228,8 +228,8 @@ describe("runs concorrentes com observação diferente", () => {
     const appA = Thena.create(makeWorkflow([makeAgent({ provider: lento })]), {});
     const appB = Thena.create(makeWorkflow([makeAgent({ provider: rapido })]), {});
 
-    const a = appA.run({ input: { message: "a" }, observe: true });
-    const b = appB.run({ input: { message: "b" } });
+    const a = appA.run({ prompt: "a", observe: true });
+    const b = appB.run({ prompt: "b" });
     const deA: ExecutionEvent[] = [];
     const deB: ExecutionEvent[] = [];
     a.onEvent((e) => deA.push(e));

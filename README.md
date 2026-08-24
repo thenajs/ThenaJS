@@ -36,7 +36,7 @@ is checked between units of work — not reported after the invoice arrives.
 const app = Thena.create(ReviewWorkflow, { report: true });
 
 const answer = await app.run({
-  input: { message: "Review src/" },
+  prompt: "Review src/",
   budget: {
     maxCostUsd: 0.5, // hard ceiling, in money
     maxChatCalls: 20, // model round-trips
@@ -72,8 +72,14 @@ Fewer knobs, and the ones that exist mean something.
 ## Install
 
 ```bash
-npm i @thenajs/core
+npm i @thenajs/core zod
 ```
+
+**zod 4 is required.** Tool schemas are zod schemas (`@Tool({ schema })`), and
+the framework converts them with `z.toJSONSchema`, which only exists in v4. If
+your project already pins zod 3, the install fails — that is deliberate: two
+copies of zod in one tree crash at the first model call, deep inside zod, with
+an error nobody can trace back to here.
 
 Or scaffold a whole project:
 
@@ -99,7 +105,7 @@ class ReviewerAgent {}
 class ReviewWorkflow {}
 
 const app = Thena.create(ReviewWorkflow, {});
-console.log(await app.run({ input: { message: "Review src/" } }));
+console.log(await app.run({ prompt: "Review src/" }));
 ```
 
 The prompt lives in a markdown file next to the class, so it can be reviewed

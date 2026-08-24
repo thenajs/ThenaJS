@@ -21,9 +21,7 @@ the `docs/` submodule (bilingual, 71 pages per language). See ADR-020.
 
 Two things to know before touching anything:
 
-1. `npm test` is 429 tests in about a second. Run it first — it is the only
-   claim about this repo that cannot be out of date. Note that `npm run
-   format:check` is currently **failing** on `main` for a pre-existing reason —
-   see `.claude/CURRENT_STATE.md` before you assume you broke it.
+1. `npm test` is 501 tests in about a second. Run it first — it is the only
+   claim about this repo that cannot be out of date.
 2. `git status` shows ` M docs`. That is a **git submodule pointer with
    uncommitted work**. Never reset, checkout or `submodule update` it.
