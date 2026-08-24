@@ -4,7 +4,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Em `0.x`, mudanças que quebram compatibilidade sobem o **minor** — é o que impede
 que `^0.x.y` as instale sozinho.
 
-## [0.12.0] — não lançado
+## [0.12.0] — 2026-08-24
 
 ### ⚠️ Quebras
 
