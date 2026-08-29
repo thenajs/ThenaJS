@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { Agent, Tool, Workflow, Thena, context, runWorkflow } from "@thenajs/core";
+import {
+  Agent,
+  DefaultAgentContract,
+  Tool,
+  Workflow,
+  Thena,
+  context,
+  runWorkflow,
+} from "@thenajs/core";
 import type { AgentContext } from "@thenajs/core";
 import { FakeProvider, PROMPT, makeAgent, makeWorkflow } from "./harness.js";
 
@@ -24,7 +32,7 @@ describe("run({ data })", () => {
     let visto: unknown;
     const provider = new FakeProvider();
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       beforePrompt() {
         visto = context().data;
@@ -83,7 +91,12 @@ describe("run({ data })", () => {
     let vistoNoFilho: unknown;
     const providerFilho = new FakeProvider();
 
-    @Agent({ provider: providerFilho, prompt: PROMPT, tools: [] })
+    @Agent({
+      provider: providerFilho,
+      prompt: PROMPT,
+      tools: [],
+      contract: DefaultAgentContract,
+    })
     class Filho {
       beforePrompt() {
         vistoNoFilho = context().data;
@@ -138,6 +151,7 @@ describe("provider como factory", () => {
       },
       prompt: PROMPT,
       tools: [],
+      contract: DefaultAgentContract,
     })
     class Agente {}
     @Workflow({ steps: [Agente] })
@@ -162,6 +176,7 @@ describe("provider como factory", () => {
         }),
       prompt: PROMPT,
       tools: [],
+      contract: DefaultAgentContract,
     })
     class Agente {}
     @Workflow({ steps: [Agente] })

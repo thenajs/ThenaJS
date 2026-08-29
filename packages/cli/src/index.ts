@@ -2,7 +2,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { agentMdTemplate, agentTsTemplate, projectFiles } from "./templates.js";
+import {
+  agentContractTsTemplate,
+  agentMdTemplate,
+  agentTsTemplate,
+  projectFiles,
+} from "./templates.js";
 
 function version(): string {
   try {
@@ -64,6 +69,11 @@ function generateAgent(name: string): void {
   }
   write(base, `${name}.agent.ts`, agentTsTemplate(name));
   write(base, `${name}.agent.md`, agentMdTemplate(name));
+  write(
+    join(process.cwd(), "src", "contracts"),
+    `${name}.contract.ts`,
+    agentContractTsTemplate(name),
+  );
 }
 
 function main(): void {

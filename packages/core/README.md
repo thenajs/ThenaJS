@@ -24,16 +24,53 @@ src/agents/explorer/
 ```
 
 ```ts
-import { Agent } from "@thenajs/core";
+import { Agent, DefaultAgentContract } from "@thenajs/core";
 import { LocalOllama } from "../../providers/ollama.provider.js";
 
 @Agent({
   provider: LocalOllama,
   tools: [ReadFileTool],
   prompt: "./explorer.agent.md",
+  contract: DefaultAgentContract,
 })
 export class ExplorerAgent {}
 ```
+
+### Contrato do agente
+
+Todo agente declara um contrato. Ele é a única camada que decide o que chega ao
+modelo; sem contrato, `@Agent` falha na definição da classe.
+
+```ts
+import type { AgentContract, AgentContractContext } from "@thenajs/core";
+
+class ExplorerContract implements AgentContract {
+  async build(ctx: AgentContractContext) {
+    const documents = await search(ctx.input);
+    return {
+      instructions: ctx.prompt,
+      memory: ctx.memory,
+      history: ctx.history,
+      documents,
+    };
+  }
+}
+
+@Agent({
+  provider: LocalOllama,
+  prompt: "./explorer.agent.md",
+  contract: ExplorerContract,
+})
+export class ExplorerAgent {}
+```
+
+O retorno pode ser `Message[]`, enviado diretamente ao provider, ou qualquer
+valor serializável em JSON, enviado como uma mensagem `user`. O `build()` pode
+ser assíncrono para consultar banco vetorial, banco relacional ou APIs. Somente
+o que ele retorna chega ao modelo.
+
+Para adotar explicitamente a projeção convencional do framework durante uma
+migração, use `contract: DefaultAgentContract`.
 
 ## Um workflow
 
@@ -66,7 +103,7 @@ console.log(await app.run({ prompt: "Revise o diretório src/" }));
 
 ## API
 
-**Decorators** — `@Agent`, `@Workflow`, `@Tool`
+**Decorators** — `@Agent`, `@Workflow`, `@Tool`, `AgentContract`
 
 **Injeção por parâmetro** — `@input()`, `@context()`, `@state()`, `@memory(Store)`
 

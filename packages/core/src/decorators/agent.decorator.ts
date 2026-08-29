@@ -31,6 +31,9 @@ function resolveMarkdownPath(source: AgentConfig["prompt"]): string {
  * caminho informado em `config.prompt` (obrigatório).
  */
 export function Agent(config: AgentConfig): ClassDecorator {
+  if (!config.contract) {
+    throw new Error("[@Agent] The 'contract' field is required.");
+  }
   // Resolvido aqui (fábrica), pois este ponto é chamado de forma síncrona
   // a partir do módulo `.agent.ts` durante o carregamento.
   const mdPath = resolveMarkdownPath(config.prompt);
@@ -48,6 +51,7 @@ export function Agent(config: AgentConfig): ClassDecorator {
       tools: config.tools ?? [],
       prompt,
       sampling: config.sampling,
+      contract: config.contract,
     });
   };
 }

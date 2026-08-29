@@ -43,6 +43,7 @@ E injete em qualquer agente:
 @Agent({
   provider: LocalOllamaProvider,   // o embed() dele gera os vetores
   prompt: "./assistente.agent.md",
+  contract: DefaultAgentContract,
 })
 export class Assistente {
   constructor(private readonly memory: VectorMemory) {}

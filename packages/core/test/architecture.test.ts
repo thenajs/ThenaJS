@@ -143,6 +143,7 @@ describe("superfície pública do @thenajs/core", () => {
     "BudgetExceededError",
     "DEFAULT_MAX_FAILS",
     "DEFAULT_MAX_ITERATIONS",
+    "DefaultAgentContract",
     "FatalToolError",
     "HttpTransport",
     "OllamaProvider",

@@ -11,7 +11,7 @@ import type {
   VectorSearch,
   VectorSelector,
 } from "@thenajs/agentflow";
-import { Agent, Tool, Workflow } from "@thenajs/core";
+import { Agent, DefaultAgentContract, Tool, Workflow } from "@thenajs/core";
 import type {
   AgentClass,
   AgentConfig,
@@ -186,7 +186,9 @@ export function makeAgent(
 ): AgentClass {
   const Classe = class {};
   Object.assign(Classe.prototype, body);
-  Agent({ prompt: PROMPT, tools: [], ...config })(Classe);
+  Agent({ prompt: PROMPT, tools: [], contract: DefaultAgentContract, ...config })(
+    Classe,
+  );
   return Classe;
 }
 

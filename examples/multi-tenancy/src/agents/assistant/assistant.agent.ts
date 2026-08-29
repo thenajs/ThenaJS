@@ -1,4 +1,4 @@
-import { Agent } from "@thenajs/core";
+import { Agent, DefaultAgentContract } from "@thenajs/core";
 import { providerDoTenant } from "../../providers/ollama.provider";
 import { QuemSouTool } from "../../tools/quem-sou.tool";
 
@@ -7,5 +7,6 @@ import { QuemSouTool } from "../../tools/quem-sou.tool";
   provider: providerDoTenant,
   tools: [QuemSouTool],
   prompt: "./assistant.agent.md",
+  contract: DefaultAgentContract,
 })
 export class AssistantAgent {}

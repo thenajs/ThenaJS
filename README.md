@@ -90,7 +90,13 @@ npx @thenajs/cli create my-agent
 ## An agent in fifteen lines
 
 ```ts
-import { Agent, Thena, Workflow, OpenAIProvider } from "@thenajs/core";
+import {
+  Agent,
+  DefaultAgentContract,
+  Thena,
+  Workflow,
+  OpenAIProvider,
+} from "@thenajs/core";
 
 class GPT extends OpenAIProvider {
   constructor() {
@@ -98,7 +104,11 @@ class GPT extends OpenAIProvider {
   }
 }
 
-@Agent({ provider: GPT, prompt: "./reviewer.agent.md" })
+@Agent({
+  provider: GPT,
+  prompt: "./reviewer.agent.md",
+  contract: DefaultAgentContract,
+})
 class ReviewerAgent {}
 
 @Workflow({ steps: [ReviewerAgent] })

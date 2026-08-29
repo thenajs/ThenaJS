@@ -60,6 +60,22 @@ export type ToolClass = new (...args: any[]) => {
 /** Tool aceita no decorator do agente: um objeto `ToolType` ou a classe da tool. */
 export type ToolInput = ToolType | ToolClass;
 
+/** Classe de contrato instanciada uma vez por execução do agente. */
+export type AgentContractClass<TOutput = unknown> = new (
+  ...args: any[]
+) => AgentContract<TOutput>;
+
+/**
+ * Decide, explicitamente, o contexto enviado ao modelo em cada turno.
+ *
+ * `Message[]` segue para o provider sem transformação. Qualquer outro valor é
+ * serializado como JSON e enviado numa única mensagem `user`. O método pode ser
+ * assíncrono para consultar memória vetorial, banco de dados ou APIs.
+ */
+export interface AgentContract<TOutput = unknown> {
+  build(ctx: AgentContractContext): TOutput | Promise<TOutput>;
+}
+
 /** Configuração passada para `@Agent({ ... })`. */
 export interface AgentConfig {
   /** Provider criado/utilizado através do `@thenajs/agentflow`. */
@@ -79,6 +95,8 @@ export interface AgentConfig {
    * usando o mesmo provider.
    */
   sampling?: SamplingParams;
+  /** Política obrigatória que constrói exatamente o contexto enviado ao modelo. */
+  contract: AgentContractClass;
 }
 
 /**
@@ -90,6 +108,7 @@ export interface AgentMetadata {
   tools: ToolInput[];
   prompt: string;
   sampling?: SamplingParams;
+  contract: AgentContractClass;
 }
 
 /** Classe de agente decorada com `@Agent`. */
@@ -134,6 +153,15 @@ export type AgentContext<D extends RunData = RunData> = PipelineContext &
      */
     budget?: BudgetUsage;
   } & Record<string, unknown>;
+
+/** Vista somente-leitura entregue ao `AgentContract.build()`. */
+export type AgentContractContext<D extends RunData = RunData> = AgentContext<D> & {
+  readonly prompt: string;
+  readonly input: string;
+  readonly memory: readonly string[];
+  readonly tasks: readonly string[];
+  readonly history: readonly import("@thenajs/agentflow").Message[];
+};
 
 /**
  * A forma do `run({ data })`.

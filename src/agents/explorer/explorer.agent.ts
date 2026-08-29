@@ -1,4 +1,4 @@
-import { Agent } from "@thenajs/core";
+import { Agent, DefaultAgentContract } from "@thenajs/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 import { ReadFileTool } from "../../tools/read-file.tool.js";
 import { listDir } from "../../tools/fs.tools.js";
@@ -21,5 +21,6 @@ import { ParallelTool } from "@thenajs/tools";
   provider: LocalOllamaProvider,
   tools: [ReadFileTool, listDir, ParallelTool],
   prompt: "./explorer.agent.md",
+  contract: DefaultAgentContract,
 })
 export class ExplorerAgent {}
