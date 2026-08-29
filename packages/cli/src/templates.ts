@@ -35,22 +35,18 @@ export class ${className} {}
 
 /** Contrato explícito gerado junto de cada agente. */
 export function agentContractTsTemplate(name: string): string {
-  return `import type { AgentContract, AgentContractContext, Message } from "@thenajs/core";
+  return `import type {
+  AgentContract,
+  AgentContractContext,
+} from "@thenajs/core";
 
-export class ${pascal(name)}AgentContract implements AgentContract<Message[]> {
-  build(ctx: AgentContractContext): Message[] {
-    const state = [
-      ctx.memory.join("\\n"),
-      ctx.tasks.length
-        ? "Tasks:\\n" + ctx.tasks.map((task) => \`- \${task}\`).join("\\n")
-        : "",
-    ].filter(Boolean).join("\\n\\n");
-
-    return [
-      { role: "system", content: ctx.prompt },
-      ...(state ? [{ role: "system" as const, content: state }] : []),
-      ...ctx.history,
-    ];
+export class ${pascal(name)}AgentContract implements AgentContract {
+  build(ctx: AgentContractContext) {
+    return {
+      instructions: ctx.prompt,
+      memory: ctx.memory,
+      conversation: ctx.history,
+    };
   }
 }
 `;
@@ -76,7 +72,7 @@ export interface ScaffoldFile {
 }
 
 /** Versões dos pacotes @thenajs referenciadas pelo projeto gerado. */
-const THENA_VERSION = "0.13.0";
+const THENA_VERSION = "0.13.1";
 
 /** Todos os arquivos de um projeto ThenaJS novo. */
 export function projectFiles(name: string): ScaffoldFile[] {
