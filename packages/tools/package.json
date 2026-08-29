@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/tools",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Tools prontas para agentes ThenaJS (ex.: ParallelTool).",
   "license": "MIT",
   "author": "castroneto",
