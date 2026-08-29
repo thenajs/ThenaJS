@@ -1,6 +1,6 @@
 {
   "name": "@thenajs/flow",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Visualizador ao vivo da execução de agentes ThenaJS — grafo em tempo real no navegador.",
   "license": "MIT",
   "author": "castroneto",
