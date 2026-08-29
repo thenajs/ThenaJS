@@ -61,8 +61,9 @@ export type ToolClass = new (...args: any[]) => {
 export type ToolInput = ToolType | ToolClass;
 
 /** Classe de contrato instanciada uma vez por execução do agente. */
-export type AgentContractClass<TOutput = unknown> =
-  new (...args: any[]) => AgentContract<TOutput>;
+export type AgentContractClass<TOutput = unknown> = new (
+  ...args: any[]
+) => AgentContract<TOutput>;
 
 /**
  * Decide, explicitamente, o contexto enviado ao modelo em cada turno.

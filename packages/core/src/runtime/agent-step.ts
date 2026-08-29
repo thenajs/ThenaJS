@@ -89,27 +89,15 @@ export function buildAgentStep(
    *
    * Esse fallback continua existindo somente no Agent.
    */
-  const agentPoints = pointsOf(
-    AgentClass,
-    CONSTRUCTOR,
-  );
+  const agentPoints = pointsOf(AgentClass, CONSTRUCTOR);
 
   const agentArgs = agentPoints
     ? agentPoints.map((point, index) =>
-        point
-          ? resolvePoint(
-              point,
-              available,
-              AgentClass.name,
-              index,
-            )
-          : undefined,
+        point ? resolvePoint(point, available, AgentClass.name, index) : undefined,
       )
     : memories;
 
-  const instance = new (
-    AgentClass as new (...args: any[]) => any
-  )(...agentArgs);
+  const instance = new (AgentClass as new (...args: any[]) => any)(...agentArgs);
 
   /*
    * Contract DI
@@ -125,385 +113,269 @@ export function buildAgentStep(
    *   @state() state: WorkflowState,
    * ) {}
    */
-  const contractPoints = pointsOf(
-    meta.contract,
-    CONSTRUCTOR,
-  );
+  const contractPoints = pointsOf(meta.contract, CONSTRUCTOR);
 
   const contractArgs = contractPoints
     ? contractPoints.map((point, index) =>
-        point
-          ? resolvePoint(
-              point,
-              available,
-              meta.contract.name,
-              index,
-            )
-          : undefined,
+        point ? resolvePoint(point, available, meta.contract.name, index) : undefined,
       )
     : [];
 
-  const contract = new (
-    meta.contract as new (
-      ...args: any[]
-    ) => AgentContract
-  )(...contractArgs);
+  const contract = new (meta.contract as new (...args: any[]) => AgentContract)(
+    ...contractArgs,
+  );
 
   const agentName = AgentClass.name;
 
   return (ctx: PipelineContext) =>
-    currentRun().recorder.around(
-      "agent",
-      agentName,
-      async () => {
-        const runCtx = currentRun();
-        const agentCtx = ctx as AgentContext;
+    currentRun().recorder.around("agent", agentName, async () => {
+      const runCtx = currentRun();
+      const agentCtx = ctx as AgentContext;
+
+      /*
+       * Projeta os controles da execução no contexto deste passo.
+       */
+      attachRunToStep(agentCtx, runCtx);
+
+      /*
+       * Checkpoints antes de iniciar um novo turno.
+       */
+      throwIfAborted(runCtx);
+
+      if (runCtx.stopRequest.requested || runCtx.budget.checkpoint()) {
+        return ctx;
+      }
+
+      /*
+       * O input do agente é o conteúdo do último item do history.
+       */
+      const last = ctx.state.history.at(-1) as Message | string | undefined;
+
+      const input = typeof last === "string" ? last : (last?.content ?? "");
+
+      /*
+       * API disponível dentro da própria classe Agent.
+       */
+      instance.context = ctx;
+      instance.provider = provider;
+      instance.tools = baseTools;
+      instance.prompt = systemPrompt;
+
+      /*
+       * Escape hatch.
+       *
+       * Se o agente implementa run(), ele assume controle total
+       * e o fluxo automático de hooks/provider é ignorado.
+       */
+      if (typeof instance.run === "function") {
+        const out = await instance.run(input, ctx);
+
+        ctx.output = out;
+
+        agentCtx.turn = {
+          calledTool: false,
+          response: String(out ?? ""),
+        };
+
+        ctx.state.append("history", {
+          role: "assistant",
+          content: String(out ?? ""),
+        });
+
+        return ctx;
+      }
+
+      try {
+        /*
+         * Prompt hook.
+         */
+        let system = systemPrompt;
+
+        if (typeof instance.beforePrompt === "function") {
+          const replaced = await instance.beforePrompt(system, agentCtx);
+
+          if (replaced !== undefined) {
+            system = replaced;
+          }
+        }
 
         /*
-         * Projeta os controles da execução no contexto deste passo.
+         * Escopo de DI específico desta invocação.
+         *
+         * `peers` será preenchido depois que as tools forem
+         * embrulhadas pelo runtime.
          */
-        attachRunToStep(
-          agentCtx,
-          runCtx,
+        const stepAvailable: Injectable = {
+          ...available,
+        };
+
+        const tools = baseTools.map((tool) =>
+          buildToolStep(tool, instance, agentCtx, stepAvailable),
+        );
+
+        stepAvailable.peers = tools;
+
+        /*
+         * O Contract é a ÚNICA porta entre estado/runtime
+         * e o contexto enviado ao modelo.
+         *
+         * Nada de prompt, memory, tasks ou history é
+         * acrescentado implicitamente depois daqui.
+         */
+        const contractCtx = Object.create(agentCtx) as AgentContractContext;
+
+        Object.defineProperties(contractCtx, {
+          prompt: {
+            value: system,
+            enumerable: true,
+          },
+
+          input: {
+            value: input,
+            enumerable: true,
+          },
+
+          memory: {
+            value: ctx.state.memory,
+            enumerable: true,
+          },
+
+          tasks: {
+            value: ctx.state.tasks,
+            enumerable: true,
+          },
+
+          history: {
+            value: ctx.state.history,
+            enumerable: true,
+          },
+        });
+
+        /*
+         * Resolve a percepção do modelo.
+         */
+        const modelContext = await contract.build(contractCtx);
+
+        /*
+         * Message[] é enviado diretamente.
+         *
+         * Qualquer outro resultado é serializado e vira
+         * uma única mensagem user.
+         */
+        const messages: Message[] = isMessageArray(modelContext)
+          ? modelContext
+          : [
+              {
+                role: "user",
+                content: serializeContractOutput(modelContext, agentName),
+              },
+            ];
+
+        const invocation: ChatInvocation = {
+          messages,
+          tools,
+          sampling: meta.sampling,
+          signal: runCtx.signal,
+          onToken: runCtx.onToken,
+          agent: instance,
+          ctx: agentCtx,
+          run: runCtx,
+
+          meta: (data) => {
+            if (invocation.node) {
+              runCtx.recorder.meta(invocation.node, data);
+            }
+          },
+        };
+
+        /*
+         * Middleware + provider.
+         */
+        const chatChain = compose(chatMiddlewares(runCtx.middleware.chat));
+
+        const turn = await chatChain(invocation, () =>
+          provider.chat({
+            tools: invocation.tools,
+            messages: invocation.messages,
+            sampling: invocation.sampling,
+            signal: invocation.signal,
+            onToken: invocation.onToken,
+          }),
         );
 
         /*
-         * Checkpoints antes de iniciar um novo turno.
+         * Atualiza consumo.
+         */
+        agentCtx.budget = runCtx.budget.usage();
+
+        /*
+         * Runtime continua responsável por registrar
+         * o resultado real do turno no history.
+         */
+        ctx.state.append("history", turn.assistant);
+
+        if (turn.tool) {
+          ctx.state.append("history", turn.tool);
+        }
+
+        /*
+         * Resposta do passo.
+         */
+        let response = turn.tool?.content ?? turn.assistant.content;
+
+        if (typeof instance.afterResponse === "function") {
+          const replaced = await instance.afterResponse(response, agentCtx);
+
+          if (replaced !== undefined) {
+            response = replaced;
+          }
+        }
+
+        /*
+         * Informações utilizadas por loops/until.
+         */
+        agentCtx.turn = {
+          calledTool: Boolean(turn.tool),
+
+          toolName: turn.assistant.toolCalls?.[0]?.name,
+
+          toolError: turn.tool?.isError,
+
+          toolCallSource: turn.assistant.toolCalls?.[0]?.source,
+
+          response,
+        };
+
+        ctx.output = response;
+
+        return ctx;
+      } catch (error) {
+        /*
+         * Abort não é erro recuperável do Agent.
          */
         throwIfAborted(runCtx);
 
-        if (
-          runCtx.stopRequest.requested ||
-          runCtx.budget.checkpoint()
-        ) {
-          return ctx;
-        }
-
         /*
-         * O input do agente é o conteúdo do último item do history.
+         * Hook de recuperação.
          */
-        const last = ctx.state.history.at(-1) as
-          | Message
-          | string
-          | undefined;
+        if (typeof instance.onError === "function") {
+          const fallback = await instance.onError(error as Error, agentCtx);
 
-        const input =
-          typeof last === "string"
-            ? last
-            : (last?.content ?? "");
+          if (fallback !== undefined) {
+            ctx.output = fallback;
 
-        /*
-         * API disponível dentro da própria classe Agent.
-         */
-        instance.context = ctx;
-        instance.provider = provider;
-        instance.tools = baseTools;
-        instance.prompt = systemPrompt;
-
-        /*
-         * Escape hatch.
-         *
-         * Se o agente implementa run(), ele assume controle total
-         * e o fluxo automático de hooks/provider é ignorado.
-         */
-        if (typeof instance.run === "function") {
-          const out = await instance.run(
-            input,
-            ctx,
-          );
-
-          ctx.output = out;
-
-          agentCtx.turn = {
-            calledTool: false,
-            response: String(out ?? ""),
-          };
-
-          ctx.state.append(
-            "history",
-            {
+            ctx.state.append("history", {
               role: "assistant",
-              content: String(out ?? ""),
-            },
-          );
+              content: String(fallback),
+            });
 
-          return ctx;
+            return ctx;
+          }
         }
 
-        try {
-          /*
-           * Prompt hook.
-           */
-          let system = systemPrompt;
-
-          if (
-            typeof instance.beforePrompt ===
-            "function"
-          ) {
-            const replaced =
-              await instance.beforePrompt(
-                system,
-                agentCtx,
-              );
-
-            if (replaced !== undefined) {
-              system = replaced;
-            }
-          }
-
-          /*
-           * Escopo de DI específico desta invocação.
-           *
-           * `peers` será preenchido depois que as tools forem
-           * embrulhadas pelo runtime.
-           */
-          const stepAvailable: Injectable = {
-            ...available,
-          };
-
-          const tools = baseTools.map((tool) =>
-            buildToolStep(
-              tool,
-              instance,
-              agentCtx,
-              stepAvailable,
-            ),
-          );
-
-          stepAvailable.peers = tools;
-
-          /*
-           * O Contract é a ÚNICA porta entre estado/runtime
-           * e o contexto enviado ao modelo.
-           *
-           * Nada de prompt, memory, tasks ou history é
-           * acrescentado implicitamente depois daqui.
-           */
-          const contractCtx =
-            Object.create(
-              agentCtx,
-            ) as AgentContractContext;
-
-          Object.defineProperties(
-            contractCtx,
-            {
-              prompt: {
-                value: system,
-                enumerable: true,
-              },
-
-              input: {
-                value: input,
-                enumerable: true,
-              },
-
-              memory: {
-                value: ctx.state.memory,
-                enumerable: true,
-              },
-
-              tasks: {
-                value: ctx.state.tasks,
-                enumerable: true,
-              },
-
-              history: {
-                value: ctx.state.history,
-                enumerable: true,
-              },
-            },
-          );
-
-          /*
-           * Resolve a percepção do modelo.
-           */
-          const modelContext =
-            await contract.build(
-              contractCtx,
-            );
-
-          /*
-           * Message[] é enviado diretamente.
-           *
-           * Qualquer outro resultado é serializado e vira
-           * uma única mensagem user.
-           */
-          const messages: Message[] =
-            isMessageArray(modelContext)
-              ? modelContext
-              : [
-                  {
-                    role: "user",
-                    content:
-                      serializeContractOutput(
-                        modelContext,
-                        agentName,
-                      ),
-                  },
-                ];
-
-          const invocation: ChatInvocation = {
-            messages,
-            tools,
-            sampling: meta.sampling,
-            signal: runCtx.signal,
-            onToken: runCtx.onToken,
-            agent: instance,
-            ctx: agentCtx,
-            run: runCtx,
-
-            meta: (data) => {
-              if (invocation.node) {
-                runCtx.recorder.meta(
-                  invocation.node,
-                  data,
-                );
-              }
-            },
-          };
-
-          /*
-           * Middleware + provider.
-           */
-          const chatChain = compose(
-            chatMiddlewares(
-              runCtx.middleware.chat,
-            ),
-          );
-
-          const turn = await chatChain(
-            invocation,
-            () =>
-              provider.chat({
-                tools:
-                  invocation.tools,
-                messages:
-                  invocation.messages,
-                sampling:
-                  invocation.sampling,
-                signal:
-                  invocation.signal,
-                onToken:
-                  invocation.onToken,
-              }),
-          );
-
-          /*
-           * Atualiza consumo.
-           */
-          agentCtx.budget =
-            runCtx.budget.usage();
-
-          /*
-           * Runtime continua responsável por registrar
-           * o resultado real do turno no history.
-           */
-          ctx.state.append(
-            "history",
-            turn.assistant,
-          );
-
-          if (turn.tool) {
-            ctx.state.append(
-              "history",
-              turn.tool,
-            );
-          }
-
-          /*
-           * Resposta do passo.
-           */
-          let response =
-            turn.tool?.content ??
-            turn.assistant.content;
-
-          if (
-            typeof instance.afterResponse ===
-            "function"
-          ) {
-            const replaced =
-              await instance.afterResponse(
-                response,
-                agentCtx,
-              );
-
-            if (replaced !== undefined) {
-              response = replaced;
-            }
-          }
-
-          /*
-           * Informações utilizadas por loops/until.
-           */
-          agentCtx.turn = {
-            calledTool: Boolean(
-              turn.tool,
-            ),
-
-            toolName:
-              turn.assistant
-                .toolCalls?.[0]
-                ?.name,
-
-            toolError:
-              turn.tool?.isError,
-
-            toolCallSource:
-              turn.assistant
-                .toolCalls?.[0]
-                ?.source,
-
-            response,
-          };
-
-          ctx.output = response;
-
-          return ctx;
-        } catch (error) {
-          /*
-           * Abort não é erro recuperável do Agent.
-           */
-          throwIfAborted(
-            runCtx,
-          );
-
-          /*
-           * Hook de recuperação.
-           */
-          if (
-            typeof instance.onError ===
-            "function"
-          ) {
-            const fallback =
-              await instance.onError(
-                error as Error,
-                agentCtx,
-              );
-
-            if (
-              fallback !== undefined
-            ) {
-              ctx.output =
-                fallback;
-
-              ctx.state.append(
-                "history",
-                {
-                  role: "assistant",
-                  content: String(
-                    fallback,
-                  ),
-                },
-              );
-
-              return ctx;
-            }
-          }
-
-          throw error;
-        }
-      },
-    );
+        throw error;
+      }
+    });
 }
 
 function isMessageArray(value: unknown): value is Message[] {
