@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   Agent,
+  DefaultAgentContract,
   Tool,
   Workflow,
   Thena,
@@ -138,7 +139,7 @@ describe("@state no construtor do agente", () => {
       { content: "APROVADO" },
     ]);
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Revisor {
       constructor(@state() private readonly workflowState: EstadoDeTeste) {}
       async afterResponse(response: string) {
@@ -177,7 +178,7 @@ describe("@state no construtor do agente", () => {
     const fazerFluxo = () => {
       const provider = new FakeProvider([{ content: "APROVADO" }]);
 
-      @Agent({ provider, prompt: PROMPT, tools: [] })
+      @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
       class Revisor {
         constructor(@state() private readonly workflowState: EstadoDeTeste) {}
         async afterResponse(r: string) {
@@ -218,7 +219,7 @@ describe("mensagens de erro da injeção", () => {
   it("@context() no construtor explica que o contexto ainda não existe", async () => {
     const provider = new FakeProvider();
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Cedo {
       constructor(@context() private readonly ctx: AgentContext) {}
     }
@@ -234,7 +235,7 @@ describe("mensagens de erro da injeção", () => {
   it("@state() sem state no @Workflow diz o que acrescentar", async () => {
     const provider = new FakeProvider();
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class PedeEstado {
       constructor(@state() private readonly s: EstadoDeTeste) {}
     }
@@ -250,7 +251,7 @@ describe("mensagens de erro da injeção", () => {
   it("@memory(Store) com store não registrado nomeia a classe", async () => {
     const provider = new FakeProvider();
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class PedeMemoria {
       constructor(@memory(FakeVectorStoreB) private readonly m: VectorMemory) {}
     }

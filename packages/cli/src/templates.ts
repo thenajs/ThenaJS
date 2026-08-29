@@ -21,13 +21,38 @@ export function agentTsTemplate(name: string): string {
   const className = classNameFromAgent(name);
   return `import { Agent } from "@thenajs/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider";
+import { ${pascal(name)}AgentContract } from "../../contracts/${name}.contract";
 
 @Agent({
   provider: LocalOllamaProvider,
   tools: [],
   prompt: "./${name}.agent.md",
+  contract: ${pascal(name)}AgentContract,
 })
 export class ${className} {}
+`;
+}
+
+/** Contrato explícito gerado junto de cada agente. */
+export function agentContractTsTemplate(name: string): string {
+  return `import type { AgentContract, AgentContractContext, Message } from "@thenajs/core";
+
+export class ${pascal(name)}AgentContract implements AgentContract<Message[]> {
+  build(ctx: AgentContractContext): Message[] {
+    const state = [
+      ctx.memory.join("\\n"),
+      ctx.tasks.length
+        ? "Tasks:\\n" + ctx.tasks.map((task) => \`- \${task}\`).join("\\n")
+        : "",
+    ].filter(Boolean).join("\\n\\n");
+
+    return [
+      { role: "system", content: ctx.prompt },
+      ...(state ? [{ role: "system" as const, content: state }] : []),
+      ...ctx.history,
+    ];
+  }
+}
 `;
 }
 
@@ -138,8 +163,10 @@ O \`build\` copia os \`*.agent.md\` para o \`dist/\` ao lado dos \`.js\`, para o
 \`\`\`
 src/
   agents/assistant/       # a lógica (.ts) + o prompt (.md)
-  providers/              # como falar com o modelo
   workflows/              # orquestração dos agentes
+  tools/                  # capacidades que os agentes podem chamar
+  contracts/              # o contexto enviado por cada agente ao modelo
+  providers/              # como falar com o modelo
   config.ts               # log / report
   main.ts                 # ponto de entrada
 \`\`\`
@@ -197,15 +224,22 @@ export class LocalOllamaProvider extends OllamaProvider {
       path: "src/agents/assistant/assistant.agent.ts",
       content: `import { Agent } from "@thenajs/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider";
+import { AssistantAgentContract } from "../../contracts/assistant.contract";
 
 @Agent({
   provider: LocalOllamaProvider,
   tools: [],
   prompt: "./assistant.agent.md",
+  contract: AssistantAgentContract,
 })
 export class AssistantAgent {}
 `,
     },
+    {
+      path: "src/contracts/assistant.contract.ts",
+      content: agentContractTsTemplate("assistant"),
+    },
+    { path: "src/tools/.gitkeep", content: "" },
     {
       path: "src/agents/assistant/assistant.agent.md",
       content: `# Assistant

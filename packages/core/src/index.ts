@@ -31,6 +31,7 @@ export type { ContextWindowOptions } from "./middleware/context-window.js";
 export type { RuntimeSettings } from "./settings.js";
 export { BudgetExceededError } from "./budget.js";
 export { FatalToolError } from "./tool-error.js";
+export { DefaultAgentContract } from "./default-agent.contract.js";
 export type { RunBudget, BudgetUsage, BudgetExceeded } from "./budget.js";
 export type { ThenaConfig, ReportOptions, LogConfig } from "./config.js";
 /** Mascaramento de segredo no que vai para o report, o log e os plugins. */
@@ -46,6 +47,9 @@ export { getAgentMetadata, getWorkflowMetadata } from "./decorators/metadata.js"
 export type {
   AgentConfig,
   AgentMetadata,
+  AgentContract,
+  AgentContractClass,
+  AgentContractContext,
   AgentClass,
   AgentContext,
   Context,

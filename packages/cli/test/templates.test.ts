@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  agentContractTsTemplate,
   agentMdTemplate,
   agentTsTemplate,
   classNameFromAgent,
@@ -66,6 +67,8 @@ describe("o projeto gerado", () => {
         "src/providers/ollama.provider.ts",
         "src/agents/assistant/assistant.agent.ts",
         "src/agents/assistant/assistant.agent.md",
+        "src/contracts/assistant.contract.ts",
+        "src/tools/.gitkeep",
         "src/workflows/assistant.workflow.ts",
       ]),
     );
@@ -108,6 +111,14 @@ describe("o agente gerado", () => {
     expect(ts).toContain("export class ExplorerAgent {}");
     expect(ts).toContain('prompt: "./explorer.agent.md"');
     expect(ts).toContain('from "@thenajs/core"');
+    expect(ts).toContain("contract: ExplorerAgentContract");
+  });
+
+  it("gera um contrato explícito na pasta contracts", () => {
+    const ts = agentContractTsTemplate("explorer");
+    expect(ts).toContain("export class ExplorerAgentContract");
+    expect(ts).toContain("ctx.memory");
+    expect(ts).toContain("ctx.history");
   });
 
   it("o .md sai com o nome no título, para não nascer anônimo", () => {

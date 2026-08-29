@@ -1,4 +1,4 @@
-import { Agent, state } from "@thenajs/core";
+import { Agent, DefaultAgentContract, state } from "@thenajs/core";
 import { LocalOllamaProvider } from "../../providers/ollama.provider.js";
 import { ExplorerState } from "../../workflows/explorer.state.js";
 
@@ -12,6 +12,7 @@ import { ExplorerState } from "../../workflows/explorer.state.js";
   provider: LocalOllamaProvider,
   tools: [],
   prompt: "./reviewer.agent.md",
+  contract: DefaultAgentContract,
 })
 export class ReviewerAgent {
   // `@state()` entrega a mesma instância que o `until` do loop vai ler.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Agent, Workflow, Thena, memory } from "@thenajs/core";
+import { Agent, DefaultAgentContract, Workflow, Thena, memory } from "@thenajs/core";
 import type { VectorMemory } from "@thenajs/core";
 import { FakeProvider, FakeVectorStore, FakeVectorStoreB, PROMPT } from "./harness.js";
 
@@ -17,7 +17,7 @@ describe("injeção de memória", () => {
     const provider = new FakeProvider();
     let recebidos: VectorMemory[] = [];
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       constructor(a: VectorMemory, b: VectorMemory) {
         recebidos = [a, b];
@@ -42,7 +42,7 @@ describe("injeção de memória", () => {
     const provider = new FakeProvider();
     let recebido: VectorMemory | undefined;
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       // registrado em segundo, pedido em primeiro
       constructor(@memory(FakeVectorStoreB) b: VectorMemory) {
@@ -66,7 +66,7 @@ describe("injeção de memória", () => {
     const provider = new FakeProvider();
     let recebido: VectorMemory | undefined;
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       constructor(@memory() m: VectorMemory) {
         recebido = m;
@@ -90,13 +90,13 @@ describe("injeção de memória", () => {
     const provider = new FakeProvider([{ content: "a" }, { content: "b" }]);
     const stores: unknown[] = [];
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class A {
       constructor(@memory() m: VectorMemory) {
         stores.push(m.store);
       }
     }
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class B {
       constructor(@memory() m: VectorMemory) {
         stores.push(m.store);
@@ -121,7 +121,7 @@ describe("remember / recall", () => {
     const provider = new FakeProvider();
     let mem: VectorMemory | undefined;
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       constructor(@memory() m: VectorMemory) {
         mem = m;
@@ -151,7 +151,7 @@ describe("remember / recall", () => {
     const provider = new FakeProvider();
     let mem: VectorMemory | undefined;
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       constructor(@memory() m: VectorMemory) {
         mem = m;
@@ -181,7 +181,7 @@ describe("remember / recall", () => {
     const provider = new FakeProvider();
     let mem: VectorMemory | undefined;
 
-    @Agent({ provider, prompt: PROMPT, tools: [] })
+    @Agent({ provider, prompt: PROMPT, tools: [], contract: DefaultAgentContract })
     class Agente {
       constructor(@memory() m: VectorMemory) {
         mem = m;

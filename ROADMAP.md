@@ -319,7 +319,46 @@ O que move mais daqui em diante, em ordem de impacto:
    por chave fornecida pelo usuário.
 4. **`ClassLike` no lugar de `Function`** (~1 dia) — 19 assinaturas; hoje
    `Thena.create(() => {})` compila.
-5. **Decorators TC39** — o maior risco de longo prazo, sem urgência imediata.
+5. **Verificadores determinísticos dos invariantes sem guarda** (~meio dia) —
+   ver a seção abaixo. É o item de melhor relação esforço/retorno da lista.
+6. **Decorators TC39** — o maior risco de longo prazo, sem urgência imediata.
+
+---
+
+## Invariantes que hoje ninguém checa
+
+`RULES.md` tem 27 invariantes. Medindo como cada um é guardado: ~22 têm teste,
+1 é garantido pelo toolchain, e **4 não têm guarda nenhuma**. O
+`CURRENT_STATE.md` admite isso em voz alta — *"Both are discipline rules; no
+tool can check them"*.
+
+A frase era verdadeira quando foi escrita, e deixou de ser. As quatro são
+checáveis por **script**, sem modelo nenhum no meio:
+
+| Regra | O que verificar | Como |
+| --- | --- | --- |
+| **R-27** | teste novo que não move a cobertura | `test:coverage` antes e depois do diff; comparar os números do arquivo tocado |
+| **R-22** | refatoração que edita uma assertion | o diff mudou uma linha `expect(...)` **e** código de produção no mesmo commit |
+| **R-23** | teste que não passa pela API pública | `grep` de import de caminho interno (`../src/`, `packages/*/src/`) dentro de `test/` |
+| **R-19** | ordem de `ThenaConfig.stores` alterada | comparar a ordem do array entre base e head; inserção no meio é o defeito |
+
+### Por que sem LLM
+
+Foi assim que os 5 testes redundantes do `transport.test.ts` foram encontrados:
+suspendendo-os e remedindo a cobertura, não pedindo opinião a um modelo. A
+verificação levou dois comandos, é reprodutível e não alucina.
+
+Um agente revisor tem lugar — mas no que **não** tem oráculo mecânico:
+consistência entre `.claude/`, `docs/` e o código (um ADR que contradiz a
+documentação não é achável por `grep`), identificador em português em código
+novo, comentário que explica o *quê* em vez do *porquê*. Essa camada vem
+depois, e sobre estes verificadores, não no lugar deles.
+
+### Onde entram
+
+No CI, ao lado do lint. R-22 e R-19 precisam do diff contra a base, então valem
+em `pull_request`; R-23 e R-27 rodam em qualquer commit. Nenhum precisa de
+segredo — o que também os mantém fora do alcance do problema de PR de fork.
 
 ---
 

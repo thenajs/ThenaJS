@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   Agent,
+  DefaultAgentContract,
   Tool,
   Workflow,
   Thena,
@@ -67,6 +68,7 @@ describe("as duas portas devolvem a mesma coisa", () => {
       },
       prompt: PROMPT,
       tools: [],
+      contract: DefaultAgentContract,
     })
     class Agente {}
     @Workflow({ steps: [Agente] })

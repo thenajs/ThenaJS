@@ -10,7 +10,12 @@ import { chatChain as chatMiddlewares } from "../middleware/chat.js";
 import type { ChatInvocation } from "../middleware/chat.js";
 import { currentRun, requestStop, throwIfAborted } from "../run-context.js";
 import type { RunContext } from "../run-context.js";
-import type { AgentContext, RunControls } from "../types.js";
+import type {
+  AgentContext,
+  AgentContract,
+  AgentContractContext,
+  RunControls,
+} from "../types.js";
 import { buildToolStep } from "./tool-step.js";
 import { WorkflowRuntime } from "./workflow-runtime.js";
 
@@ -81,6 +86,7 @@ export function buildAgentStep(
     : memories;
 
   const instance = new (AgentClass as new (...args: any[]) => any)(...ctorArgs);
+  const contract = Reflect.construct(meta.contract, memories) as AgentContract;
   const agentName = AgentClass.name;
 
   return (ctx: PipelineContext) =>
@@ -151,11 +157,26 @@ export function buildAgentStep(
         // política de erro por chamada, e não em volta do lote.
         stepAvailable.peers = tools;
 
-        // system do agente + projeção do estado (memory/tasks + history).
-        const messages: Message[] = [
-          { role: "system", content: system },
-          ...ctx.state.toMessages(),
-        ];
+        // O contrato é a única porta de contexto para o modelo: não há merge
+        // implícito de prompt, memory, tasks ou history fora dele.
+        const contractCtx = Object.create(agentCtx) as AgentContractContext;
+        Object.defineProperties(contractCtx, {
+          prompt: { value: system, enumerable: true },
+          input: { value: input, enumerable: true },
+          memory: { value: ctx.state.memory, enumerable: true },
+          tasks: { value: ctx.state.tasks, enumerable: true },
+          history: { value: ctx.state.history, enumerable: true },
+        });
+
+        const modelContext = await contract.build(contractCtx);
+        const messages: Message[] = isMessageArray(modelContext)
+          ? modelContext
+          : [
+              {
+                role: "user",
+                content: serializeContractOutput(modelContext, agentName),
+              },
+            ];
 
         const invocation: ChatInvocation = {
           messages,
@@ -225,4 +246,33 @@ export function buildAgentStep(
         throw error;
       }
     });
+}
+
+function isMessageArray(value: unknown): value is Message[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as Message).role === "string" &&
+        typeof (item as Message).content === "string",
+    )
+  );
+}
+
+function serializeContractOutput(value: unknown, agentName: string): string {
+  if (typeof value === "string") return value;
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) {
+      throw new TypeError("build() returned a value that JSON cannot represent");
+    }
+    return serialized;
+  } catch (error) {
+    throw new TypeError(
+      `[thena] Contract for agent "${agentName}" returned a value that could not be serialized.`,
+      { cause: error },
+    );
+  }
 }
